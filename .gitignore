@@ -13,3 +13,11 @@ build_check*.txt
 build_out*.txt
 RELEASE_*.md
 TELEGRAM_POST_*.md
+
+# Portable build tools, caches, private signing material and generated outputs.
+/.toolchain/
+/.gradle-user/
+/app/build/
+*.jks
+*.keystore
+keystore.properties

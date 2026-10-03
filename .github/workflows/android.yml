@@ -1,0 +1,47 @@
+name: Android build and tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Fetch available ByeDPI source only
+        run: git submodule update --init app/src/main/cpp/byedpi
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify runner SDK license provisioning
+        shell: bash
+        run: |
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+          test -s "$ANDROID_HOME/licenses/android-sdk-preview-license" || {
+            echo 'The runner must provision an accepted Android SDK Preview License for NDK r30 beta1.'
+            echo 'This workflow never accepts license agreements automatically.'
+            exit 1
+          }
+      - name: Install pinned tools using runner agreements
+        run: sdkmanager --channel=3 "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198" "cmake;3.22.1" </dev/null
+      - name: Build APK and run JVM tests
+        run: bash ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --console=plain
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-validation
+          path: |
+            app/build/reports/tests/
+            app/build/outputs/apk/debug/*.apk
+          if-no-files-found: ignore

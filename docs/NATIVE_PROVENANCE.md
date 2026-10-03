@@ -1,0 +1,26 @@
+# Native provenance
+
+Imported from rupleide/NetFixMobile commit `19cb13c`. Native binary hashes are in
+`native-binaries.sha256`; all eight inherited HEV/Rust ABI files remain unchanged.
+
+| Component | Imported source | License | Build behavior |
+| --- | --- | --- | --- |
+| ByeDPI | ba532298de7b28cfe854aea83d061369d13ca290; version 17.3 | MIT, hufrea | CMake rebuild |
+| HEV tunnel | c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1 unavailable | Declared upstream MIT, hev | Retain prebuilts |
+| Telegram Rust proxy | native/tgproxy-rust, crate 1.0.0, Cargo.lock | Inherited Android integration GPLv3; Flowseal MIT | Retain prebuilts |
+
+HEV binaries dynamically register the original class
+`com/rupleide/netfix/core/dpibypass/TProxyService` and startup signature
+`(Ljava/lang/String;IZ)V`. A tiny Kotlin bridge remains in this package solely
+for binary compatibility; the Maffinet namespace/applicationId is independent.
+Stock HEV 2.14.4 registers a two-argument start and cannot replace these custom
+binaries without reviewing the Android TV behavior.
+
+`rebuildHevTunnel` is explicit and checks the exact source revision, JNI signature,
+and configured NDK. Normal builds never invoke it or overwrite shipped HEV files.
+Rust uses JNA C exports and is independent of the Kotlin package. ByeDPI JNI
+symbols are rebuilt to match the new package.
+
+The unavailable HEV source and unverified Rust binary/source correspondence are
+release gates. A working APK using the binaries is not a reproducible source build.
+Restore matching sources and third-party notices before public binary distribution.

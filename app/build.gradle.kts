@@ -101,6 +101,12 @@ tasks.register<Exec>("rebuildHevTunnel") {
             )
         }
         val jniSource = sourceDir.resolve("src/hev-jni.c").readText()
+        val sourceRevision = providers.exec {
+            commandLine("git", "-C", sourceDir.absolutePath, "rev-parse", "HEAD")
+        }.standardOutput.asText.get().trim()
+        if (sourceRevision != "c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1") {
+            throw GradleException("HEV source revision $sourceRevision does not match the inherited custom pin.")
+        }
         if (!jniSource.contains("(Ljava/lang/String;IZ)V")) {
             throw GradleException("HEV source does not contain the inherited Smart TV JNI ABI.")
         }
