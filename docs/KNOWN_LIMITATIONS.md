@@ -3,6 +3,10 @@
 This is an alpha development checkout. PLAN.md records completed phases and
 actual validation. Product intent does not imply successful device tests.
 
+The clarified Applications/Telegram/Hosts model supersedes service profiles.
+The previous passing CI is baseline evidence; updated integrated tests and new
+emulator captures are pending until the new run completes.
+
 - **Missing custom HEV source:** gitlink `c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1`
   cannot be fetched from its declared origin. Builds retain the engine bytes with
   a verified 48-byte JNI class-name rebind to Maffinet; this is not a source rebuild.
@@ -21,8 +25,8 @@ actual validation. Product intent does not imply successful device tests.
   claiming support for that environment. The retained HEV binaries themselves
   have 16KB-aligned ELF load segments on all four ABIs.
 - **Connectivity checks:** HTTP/TLS reachability does not prove authentication,
-  media delivery or every feature of a service application. Service domains are
-  initial values and require maintenance.
+  media delivery or every feature of an application. The General base and explicit
+  checking addresses are initial values and require maintenance.
 - **Filtering:** observable supported hostnames can match ByeDPI domain lists;
   IP-only, encrypted-hostname and some UDP traffic may not. Package routing and
   domain filtering have different scopes.
@@ -30,10 +34,16 @@ actual validation. Product intent does not imply successful device tests.
   Selective mode therefore forwards UDP unchanged and confines desync to TCP.
   Advanced host override preserves unrestricted legacy settings explicitly.
 - **Empty routing:** Maffinet refuses a tunnel with no installed selected packages
-  rather than capturing the entire device. Install an enabled profile application
-  or choose an installed application manually for custom domains.
-- **Probe history:** matrices show saved HTTP/TLS results for the tested selection,
-  not continuous availability. HTTP protection/rate limits can cause false failures.
+  rather than capturing the entire device. Select at least one installed Android
+  application explicitly; legacy service flags do not populate this selection.
+- **Probe history:** matrices show saved HTTP/TLS results for the tested hosts and
+  independently configured checking addresses, not continuous availability.
+  Changing that configuration invalidates measured history. HTTP protection/rate
+  limits can cause false failures.
+- **Independent Telegram/DNS:** the standalone Telegram proxy and VPN have
+  separate runtime/desired states; both combinations and failed partial starts
+  need physical-device/background verification. VPN DNS does not configure the
+  separate Telegram proxy.
 - **Native termination:** a worker that still runs after bounded stop/force-close
   blocks another singleton start. Restart the application process before retrying;
   activity recreation alone cannot reset a native worker.

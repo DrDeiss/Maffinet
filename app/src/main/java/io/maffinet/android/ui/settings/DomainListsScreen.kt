@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.data.domains.DomainListRepository
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.ui.components.*
@@ -30,22 +32,26 @@ fun DomainListsScreen(focusRequester: FocusRequester, onBack: () -> Unit) {
     var message by remember { mutableStateOf<String?>(null) }
     var errors by remember { mutableStateOf<List<String>>(emptyList()) }
     var working by remember { mutableStateOf(false) }
+    var showBuiltIn by rememberSaveable { mutableStateOf(false) }
     var revision by remember { mutableIntStateOf(0) }
     val lists = remember(revision) { repository.getLists() }
     val activeDomainCount = remember(revision) { repository.activeDomains().size }
+    val builtInDomains = remember { repository.builtInDomains() }
+    fun configurationLocked(): Boolean = ConnectionCoordinator.isConfigurationLocked(context)
 
     fun save(importText: String? = null) {
-        if (configurationIsLocked() || working) return
+        if (configurationLocked() || working) return
         working = true
         scope.launch {
             try {
                 val result = withContext(Dispatchers.IO) {
-                    if (configurationIsLocked()) throw IllegalStateException("Остановите подключение или проверку.")
+                    if (configurationLocked()) throw IllegalStateException("Остановите подключение или проверку.")
                     if (importText != null) repository.importUserDomains(importText) else repository.saveUserDomains(text)
                 }
                 errors = result.errors.map { "Строка ${it.line}: ${it.input} — ${it.message}" }
                 if (result.isValid) {
                     text = withContext(Dispatchers.IO) { repository.exportUserDomains() }
+                    StrategyTestManager.refreshConfiguration(context)
                     revision++
                     message = "Сохранено доменов: ${result.domains.size}"
                 } else message = "Исправьте строки ниже. Список не изменён."
@@ -56,7 +62,7 @@ fun DomainListsScreen(focusRequester: FocusRequester, onBack: () -> Unit) {
     }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null && !configurationIsLocked()) scope.launch {
+        if (uri != null && !configurationLocked()) scope.launch {
             try {
                 val imported = withContext(Dispatchers.IO) {
                     context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
@@ -87,30 +93,35 @@ fun DomainListsScreen(focusRequester: FocusRequester, onBack: () -> Unit) {
         }
     }
 
-    ProductScreen("Domain lists", focusRequester, onBack = onBack,
-        subtitle = "Списки определяют домены для обхода. Маршрут приложений настраивается отдельно.") {
+    ProductScreen("Hosts", focusRequester, onBack = onBack,
+        subtitle = "Домены для DPI bypass: встроенный General и ваше дополнение User. Выбор приложений не меняет hosts.") {
         ProductCard {
-            Text("Встроенные списки", style = MaterialTheme.typography.titleLarge)
-            lists.filter { it.id != "user" }.forEach { list ->
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(list.name)
-                    Text("${list.domains.size} · ${if (list.isActive) "включён" else "выключен"}", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+            Text("General · встроенный список", style = MaterialTheme.typography.titleLarge)
+            Text("Базовых доменов: ${builtInDomains.size}. Применяются всегда; User расширяет список.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedButton({ showBuiltIn = !showBuiltIn }, Modifier.fillMaxWidth()) {
+                Text(if (showBuiltIn) "Скрыть General" else "Показать General")
+            }
+            if (showBuiltIn) builtInDomains.forEach { domain ->
+                Text(domain, style = MaterialTheme.typography.bodyMedium)
             }
             Text("Активных доменов: $activeDomainCount", style = MaterialTheme.typography.bodySmall)
         }
         ProductCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("User domains", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Text("User · ваши домены", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
                 Switch(enabled, enabled = !locked && !working, onCheckedChange = { value ->
-                    if (!configurationIsLocked()) {
+                    if (!configurationLocked()) {
                         repository.setUserDomainsEnabled(value)
+                        StrategyTestManager.refreshConfiguration(context)
                         enabled = value
                         revision++
                     }
                 })
             }
             Text("Один домен в строке. Можно добавлять, изменять и удалять строки. Комментарии начинаются с #.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Сохранённых доменов: ${lists.first { it.id == "user" }.domains.size}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(text, { text = it; errors = emptyList(); message = null },
                 modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 360.dp), enabled = !locked && !working,

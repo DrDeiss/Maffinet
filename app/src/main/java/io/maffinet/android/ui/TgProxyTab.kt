@@ -60,6 +60,14 @@ fun TgProxyTab(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val locked = io.maffinet.android.ui.components.rememberConfigurationLocked()
+    if (locked) {
+        io.maffinet.android.ui.components.ProductScreen("Telegram-прокси", focusRequester,
+            subtitle = "Остановите подключение или проверку, чтобы изменить настройки.") {
+            Text("Порт: ${TgProxyController.getPort(context)}")
+        }
+        return
+    }
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val scrollState = rememberScrollState()
@@ -145,6 +153,7 @@ fun TgProxyTab(
             MaffinetTextField(
                 value = port,
                 onValueChange = { value ->
+                    if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@MaffinetTextField
                     val filtered = value.filter { it.isDigit() }
                     if (filtered.length <= 5) {
                         port = filtered
@@ -179,6 +188,7 @@ fun TgProxyTab(
                 MaffinetSwitch(
                     checked = isDcAuto,
                     onCheckedChange = { checked ->
+                        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@MaffinetSwitch
                         isDcAuto = checked
                         if (checked) {
                             dcIps = ""
@@ -193,6 +203,7 @@ fun TgProxyTab(
                 MaffinetTextField(
                     value = dcIps,
                     onValueChange = { value ->
+                        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@MaffinetTextField
                         dcIps = value
                         TgProxyController.setDcIps(context, value)
                     },
@@ -249,6 +260,7 @@ fun TgProxyTab(
                                 interactionSource = remember { MutableInteractionSource() },
                                 indication = null
                             ) {
+                                if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@clickable
                                 poolSize = size
                                 TgProxyController.setPoolSize(context, size)
                             },
@@ -369,6 +381,7 @@ fun TgProxyTab(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = ripple()
                         ) {
+                            if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@clickable
                             secretKey = TgProxyController.regenerateSecret(context)
                             Toast.makeText(context, "Ключ обновлен", Toast.LENGTH_SHORT).show()
                         }
@@ -440,6 +453,7 @@ fun TgProxyTab(
                 MaffinetSwitch(
                     checked = cfEnabled,
                     onCheckedChange = { checked ->
+                        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@MaffinetSwitch
                         cfEnabled = checked
                         TgProxyController.setCfEnabled(context, checked)
                     }
@@ -465,6 +479,7 @@ fun TgProxyTab(
                 MaffinetSwitch(
                     checked = cfPriority,
                     onCheckedChange = { checked ->
+                        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) return@MaffinetSwitch
                         cfPriority = checked
                         TgProxyController.setCfPriority(context, checked)
                     },

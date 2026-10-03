@@ -159,6 +159,7 @@ fun YoutubeTab(
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.RESUMED) {
             smartTubeInstalled.value = io.maffinet.android.core.update.UpdateManager.isSmartTubeInstalled(context)
+            StrategyTestManager.refreshConfiguration(context)
         }
     }
 
@@ -258,46 +259,22 @@ fun YoutubeTab(
         }
     }
 
-    fun startAll() {
-        val prefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean("service_enabled", true)
-            .apply()
-        try {
-            android.service.quicksettings.TileService.requestListeningState(
-                context,
-                android.content.ComponentName(context, io.maffinet.android.service.MaffinetTileService::class.java)
-            )
-        } catch (_: Exception) {}
-        if (appStatus.first == AppStatus.Running) {
-            ServiceManager.restart(context, Mode.VPN)
-        } else {
-            ServiceManager.start(context, Mode.VPN)
+    fun startApplications(): Boolean {
+        return try {
+            val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
+            check(settings.applicationsEnabled()) { "Для ручной проверки включите «Приложения» на главном экране" }
+            io.maffinet.android.core.connection.ConnectionCoordinator.installedApplicationSelection(context, settings)
+            if (appStatus.first == AppStatus.Running) ServiceManager.restart(context, Mode.VPN)
+            else ServiceManager.start(context, Mode.VPN)
+            true
+        } catch (error: Exception) {
+            android.widget.Toast.makeText(context, error.message ?: "Не удалось запустить VPN", android.widget.Toast.LENGTH_LONG).show()
+            false
         }
-        io.maffinet.android.core.tgproxy.TgProxyController.startAsync(
-            context = context,
-            onSuccess = {},
-            onError = {}
-        )
     }
 
-    fun stopAll() {
-        val prefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean("service_enabled", false)
-            .apply()
-        try {
-            android.service.quicksettings.TileService.requestListeningState(
-                context,
-                android.content.ComponentName(context, io.maffinet.android.service.MaffinetTileService::class.java)
-            )
-        } catch (_: Exception) {}
+    fun stopApplications() {
         ServiceManager.stop(context)
-        val intent = Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-            action = io.maffinet.android.data.STOP_ACTION
-        }
-        context.startService(intent)
-        io.maffinet.android.core.tgproxy.TgProxyController.stop()
     }
 
     var showVpnDeniedDialog by remember { mutableStateOf(false) }
@@ -317,12 +294,9 @@ fun YoutubeTab(
     ) { result ->
         if (result.resultCode == android.app.Activity.RESULT_OK) {
             showVpnDeniedDialog = false
-            startAll()
-            if (!isSetupComplete && testStarted) {
+            if (startApplications()) {
                 launchYoutubeApp()
-                saveHasLaunchedTest(true)
-            } else {
-                launchYoutubeApp()
+                if (!isSetupComplete && testStarted) saveHasLaunchedTest(true)
             }
         } else {
             showVpnDeniedDialog = true
@@ -1080,8 +1054,7 @@ fun YoutubeTab(
                                     if (intent != null) {
                                         vpnLauncher.launch(intent)
                                     } else {
-                                        startAll()
-                                        launchYoutubeApp()
+                                        if (startApplications()) launchYoutubeApp()
                                     }
                                 } else {
                                     launchYoutubeApp()
@@ -1957,9 +1930,10 @@ fun YoutubeTab(
                                     if (intent != null) {
                                         vpnLauncher.launch(intent)
                                     } else {
-                                        startAll()
-                                        launchYoutubeApp()
-                                        saveHasLaunchedTest(true)
+                                        if (startApplications()) {
+                                            launchYoutubeApp()
+                                            saveHasLaunchedTest(true)
+                                        }
                                     }
                                 }
                                 .padding(vertical = 14.dp),
@@ -2113,7 +2087,7 @@ fun YoutubeTab(
                                             .putString("manual_status_$normalized", "failed")
                                             .putBoolean("was_manual_selection", false)
                                             .apply()
-                                        stopAll()
+                                        stopApplications()
                                         io.maffinet.android.core.dpibypass.StrategyTestManager.appliedStrategy = null
                                         if (wasManual) {
                                             saveManualMode(true)
@@ -2190,7 +2164,7 @@ fun YoutubeTab(
                                     ) {
                                         sharedPrefs.edit().putString("youtube_mode", "smarttube").apply()
                                         youtubeMode = "smarttube"
-                                        stopAll()
+                                        stopApplications()
                                         saveIsSetupComplete(false)
                                         saveCurrentTestIndex(0)
                                         saveHasLaunchedTest(false)
@@ -2302,12 +2276,9 @@ fun YoutubeTab(
                 if (intent != null) {
                     vpnLauncher.launch(intent)
                 } else {
-                    startAll()
-                    if (!isSetupComplete && testStarted) {
+                    if (startApplications()) {
                         launchYoutubeApp()
-                        saveHasLaunchedTest(true)
-                    } else {
-                        launchYoutubeApp()
+                        if (!isSetupComplete && testStarted) saveHasLaunchedTest(true)
                     }
                 }
             }
@@ -2326,7 +2297,7 @@ fun YoutubeTab(
                 bold = true
             ) {
                 showTestingTypeDialog = false
-                stopAll()
+                stopApplications()
                 val strategy = presets.getOrNull(0) ?: "-i 127.0.0.1 -p 1080"
                 io.maffinet.android.core.debug.AppDebugManager.log("Выбран пошаговый перебор стратегий YouTube")
                 sharedPrefs.edit()
@@ -2345,7 +2316,7 @@ fun YoutubeTab(
                 label = "Провести сканирование ещё раз"
             ) {
                 showTestingTypeDialog = false
-                stopAll()
+                stopApplications()
                 io.maffinet.android.core.debug.AppDebugManager.log("Запущен автоподбор стратегий YouTube (сканирование)")
                 io.maffinet.android.core.dpibypass.StrategyTestManager.appliedStrategy = null
                 saveIsSetupComplete(false)

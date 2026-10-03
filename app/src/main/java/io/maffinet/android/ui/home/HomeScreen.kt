@@ -1,5 +1,7 @@
 package io.maffinet.android.ui.home
 
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -7,97 +9,114 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.maffinet.android.R
 import io.maffinet.android.BuildConfig
+import io.maffinet.android.R
+import io.maffinet.android.core.connection.ModeConnectionState
 import io.maffinet.android.core.dpibypass.StrategyTestManager
-import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
-import io.maffinet.android.ui.components.ProductCard
-import io.maffinet.android.ui.components.ProductScreen
+import io.maffinet.android.ui.components.*
 import io.maffinet.android.ui.formatTimer
-import androidx.compose.ui.platform.LocalContext
-import io.maffinet.android.ui.components.configurationIsLocked
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
-fun HomeScreen(
-    connected: Boolean,
-    connecting: Boolean,
-    vpnEnabled: Boolean,
-    elapsedSeconds: Int,
-    focusRequester: FocusRequester,
-    onConnect: () -> Unit,
-    onBackground: () -> Unit,
-    onNavigate: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) {
+fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState, elapsedSeconds: Int,
+    error: String?, focusRequester: FocusRequester, onConnect: () -> Unit, onBackground: () -> Unit,
+    onNavigate: (Int) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
+    val preferences = remember { context.getSharedPreferences(context.packageName + "_preferences", 0) }
     val settings = remember { MaffinetSettingsRepository(context) }
-    var selected by remember { mutableStateOf(settings.enabledServiceIds()) }
-    val locked = connected || connecting || StrategyTestManager.isTesting
-    val command = settings.getString("byedpi_cmd_args", "")
-    val evaluation = StrategyTestManager.matrixResults[command]
-    val relevantEvaluation = evaluation?.takeIf { it.services.map { service -> service.serviceId }.toSet() == selected }
+    var revision by remember { mutableIntStateOf(0) }
+    DisposableEffect(preferences) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
+        preferences.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { preferences.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    val applicationsEnabled = remember(revision) { settings.applicationsEnabled() }
+    val telegramEnabled = remember(revision) { settings.telegramEnabled() }
+    val selectedApps = remember(revision) { settings.manualApplications() }
+    val dns = remember(revision) { settings.getString("custom_dns_preset", DnsPresets.DEFAULT) }
+    val locked = rememberConfigurationLocked()
+    val active = vpnState in ACTIVE_STATES || telegramState in ACTIVE_STATES || settings.anyModeRequested()
+    val connected = (!applicationsEnabled || vpnState == ModeConnectionState.Running) &&
+        (!telegramEnabled || telegramState == ModeConnectionState.Running) && (applicationsEnabled || telegramEnabled)
+    val starting = vpnState == ModeConnectionState.Starting || telegramState == ModeConnectionState.Starting
+    var showApps by remember { mutableStateOf(false) }
+    var showDns by remember { mutableStateOf(false) }
+    var installedApps by remember { mutableStateOf<List<PackageInfo>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        installedApps = withContext(Dispatchers.IO) {
+            context.packageManager.getInstalledPackages(PackageManager.GET_META_DATA)
+                .filter { it.packageName != context.packageName }
+                .sortedBy { it.applicationInfo?.loadLabel(context.packageManager)?.toString()?.lowercase() ?: it.packageName }
+        }
+    }
+    DisposableEffect(showApps, showDns) {
+        io.maffinet.android.data.isActionSheetVisibleGlobal = showApps || showDns
+        onDispose { io.maffinet.android.data.isActionSheetVisibleGlobal = false }
+    }
     ProductScreen("Maffinet", focusRequester, modifier,
         subtitle = if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) stringResource(R.string.fork_marking) else null) {
-        Button(
-            onClick = onConnect,
-            modifier = Modifier.fillMaxWidth().height(164.dp),
-            enabled = !StrategyTestManager.isTesting,
-            shape = RoundedCornerShape(32.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = if (connected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = if (connected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-            )
-        ) {
+        Button(onClick = onConnect, modifier = Modifier.fillMaxWidth().height(164.dp).testTag("connect"),
+            enabled = !StrategyTestManager.isTesting, shape = RoundedCornerShape(32.dp)) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Icon(painterResource(R.drawable.ic_power), null, Modifier.size(40.dp))
-                Text(when { connecting -> "Подключение…"; connected -> "Подключено"; else -> "Подключиться" },
+                Text(when { starting -> "Подключение…"; connected -> "Подключено"; active -> "Остановить"; else -> "Подключиться" },
                     style = MaterialTheme.typography.titleLarge)
-                Text(if (connected) formatTimer(elapsedSeconds) else if (vpnEnabled) "Выбранные приложения" else "Telegram-прокси",
-                    style = MaterialTheme.typography.bodySmall)
+                Text(if (connected) formatTimer(elapsedSeconds) else if (active) "Нажмите, чтобы остановить" else "Запустить выбранные режимы")
             }
         }
+        if (!applicationsEnabled && !telegramEnabled) Text("Включите «Приложения» или «Telegram», чтобы подключиться.")
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         ProductCard {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Сервисы", style = MaterialTheme.typography.titleLarge)
-                TextButton({ onNavigate(5) }) { Text("Все") }
-            }
-            ServiceCatalog.profiles.forEach { profile ->
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(profile.name, Modifier.weight(1f), fontWeight = FontWeight.Medium)
-                    Switch(checked = profile.id in selected, enabled = !locked, onCheckedChange = { enabled ->
-                        if (!configurationIsLocked()) {
-                            settings.setServiceEnabled(profile.id, enabled)
-                            selected = settings.enabledServiceIds()
-                        }
-                    })
-                }
-            }
-            if (locked) Text("Остановите подключение или проверку, чтобы изменить выбор.",
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (!vpnEnabled) {
-                Text("Включён режим только Telegram-прокси. Для выбранных сервисов требуется режим VPN.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                TextButton({ onNavigate(7) }) { Text("Изменить режим подключения") }
-            }
-        }
-        ProductCard {
-            Text("Стратегия", style = MaterialTheme.typography.titleLarge)
-            Text(if (settings.getBoolean("strategy_manual_mode", false)) "Ручной выбор" else "Auto", fontWeight = FontWeight.SemiBold)
-            Text(StrategyTestManager.getActiveStrategyName(context), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextButton({ onNavigate(2) }) { Text("Проверить стратегии") }
-        }
-        ProductCard {
-            Text("Статус", style = MaterialTheme.typography.titleLarge)
-            Text(relevantEvaluation?.let { "Последняя проверка: ${it.passedServices} / ${it.totalServices} сервисов доступны по HTTP/TLS" }
-                ?: "Выбрано сервисов: ${selected.size}. Доступность ещё не проверена.")
-            Text("Проверка HTTP/TLS показывает доступность сайта, а не все функции приложения.",
+            ModeRow("Приложения", applicationsEnabled, locked, "applications-mode") { settings.setApplicationsEnabled(it) }
+            Text("VPN / ByeDPI: ${stateLabel(vpnState)}", Modifier.testTag("vpn-status"))
+            ProductSettingLink("Выбрать приложения", "Выбрано: ${selectedApps.size}", { showApps = true }, !locked)
+            ModeRow("Telegram", telegramEnabled, locked, "telegram-mode") { settings.setTelegramEnabled(it) }
+            Text("Telegram-прокси: ${stateLabel(telegramState)}", Modifier.testTag("telegram-status"))
+            ProductSettingLink("Настройки Telegram", "Отдельный MTProto-прокси", { onNavigate(1) }, !locked)
+            if (locked) Text("Остановите подключение или проверку, чтобы изменить настройки.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        ProductSettingLink("DNS", dns, { showDns = true }, !locked)
+        Text("DNS применяется к VPN для выбранных приложений.", style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ProductSettingLink("Стратегия", StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
+        ProductSettingLink("Hosts", "Встроенный список и ваши домены", { onNavigate(9) })
         TextButton(onBackground, Modifier.fillMaxWidth(), enabled = !StrategyTestManager.isTesting) { Text("Работать в фоне и выйти") }
     }
+    MaffinetAppsSheet(showApps, { showApps = false }, R.drawable.ic_settings, "Выбрать приложения",
+        "Через VPN идут только выбранные приложения. Пустой выбор не запускает VPN.", installedApps, selectedApps,
+        onAppToggled = { pkg ->
+            if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context) && pkg != context.packageName)
+                settings.setManualApplications(if (pkg in selectedApps) selectedApps - pkg else selectedApps + pkg)
+        })
+    MaffinetDnsSheet(showDns, { showDns = false }, R.drawable.ic_settings, "DNS для VPN",
+        "Пресет для выбранных Android-приложений", DnsPresets.values, dns, onPresetSelected = {
+            if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) settings.setString("custom_dns_preset", it)
+            showDns = false
+        })
+}
+
+@Composable
+private fun ModeRow(title: String, checked: Boolean, locked: Boolean, tag: String, onChange: (Boolean) -> Unit) {
+    val context = LocalContext.current
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+        Switch(checked, { if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) onChange(it) }, Modifier.testTag(tag), enabled = !locked)
+    }
+}
+
+private val ACTIVE_STATES = setOf(ModeConnectionState.Starting, ModeConnectionState.Running, ModeConnectionState.Stopping)
+private fun stateLabel(state: ModeConnectionState) = when (state) {
+    ModeConnectionState.Stopped -> "остановлен"
+    ModeConnectionState.Starting -> "запускается"
+    ModeConnectionState.Running -> "работает"
+    ModeConnectionState.Stopping -> "останавливается"
+    ModeConnectionState.Failed -> "ошибка запуска; остановите и повторите"
 }

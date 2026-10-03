@@ -1,6 +1,21 @@
 # Alpha device validation
 
-## Completed emulator validation
+## Current independent-mode validation
+
+Applications/Telegram choices, explicit `selected_apps` routing, independent
+General/User hosts and configurable strategy checking addresses supersede the
+service-catalog UI tested below. Updated JVM/Android/native/Lint checks and new
+emulator screenshots are pending until the updated CI run. Preserve the previous
+run as baseline evidence, not proof of the clarified model.
+
+Required updated emulator checks: all three nonempty mode combinations and both
+off; partial/failed starts; STOP/repeat start; preserved app selection and empty
+allowlist rejection; General/User independence from app/service flags; saved User
+enable/edit/import/export; VPN DNS persistence; strategy snapshot invalidation;
+background/boot/watchdog desired-state isolation; Home/Strategies/Settings/Hosts
+and direct app/Telegram/DNS controls. Physical acceptance remains separate.
+
+## Historical completed emulator baseline
 
 Source: `30ee86a15a6ed889f719a24b10a2577bcb5d6e6b`.
 [CI run 37144128664](https://github.com/DrDeiss/Maffinet/actions/runs/37144128664),
@@ -58,16 +73,19 @@ Phone and Android TV checks are distinct. All physical-device rows remain unveri
 | First launch | Maffinet branding; notice deferred in debug and shown in release | Pending |
 | VPN permission/start/stop | Consent, foreground notice, complete cleanup | Pending |
 | YouTube regression | Known working strategy reaches web/media | Pending |
-| Service routing | Installed enabled packages enter allowed routing | Pending |
-| Manual selections | Explicit app choices combine with service routing | Pending |
-| Domain lists | Built-in/service/user domains reach ByeDPI arguments | Pending |
+| Mode combinations | Applications only, Telegram only, both; both off explains requirement | Pending |
+| Partial startup/errors | One failed mode does not stop the other; each runtime state is truthful | Pending |
+| Explicit routing | Only installed `selected_apps` packages enter allowlist; own app excluded; empty selection rejects VPN | Pending |
+| Saved app choices | Update/restart retains choices; service flags never insert packages | Pending |
+| Hosts independence | Fixed General plus enabled User reach ByeDPI; app/service changes leave hosts unchanged | Pending |
 | User list | Add/edit/remove/toggle/import/export persist after restart | Pending |
-| Multi-service probes | Results show each selected service and coverage | Pending |
+| Independent probes | Results show configured checking addresses; changed hosts/targets invalidate history | Pending |
 | Auto | Coverage ranks before latency deterministically | Pending |
-| DNS/IPv6 | Existing resolver and IPv6 controls work | Pending |
+| DNS/IPv6 | Existing VPN resolver and IPv6 controls work; DNS does not configure Telegram proxy | Pending |
 | Network transition | Wi-Fi/mobile switch reconnects a working tunnel | Pending |
-| Background/reboot | Foreground service and optional boot start work | Pending |
-| Proxy mode | Existing ByeDPI and Telegram proxy controls work | Pending |
+| Background/reboot/watchdog | Recover only each requested mode; STOP does not resurrect either engine | Pending |
+| Repeat/independent STOP | Repeated native starts clean up; engine-specific STOP leaves the other mode intact | Pending |
+| Telegram only | Existing MTProto settings/connectivity work with Applications disabled | Pending |
 | Strategies | Existing imports/exports and legacy placeholders work | Pending |
 | TV | Remote focus, navigation, connect and back work | Pending |
 

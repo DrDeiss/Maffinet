@@ -91,7 +91,6 @@ import io.maffinet.android.ui.InfoTab
 import io.maffinet.android.ui.YoutubeTab
 import io.maffinet.android.ui.OnboardingFlow
 import io.maffinet.android.ui.theme.MaffinetTheme
-import io.maffinet.android.ui.services.ServicesScreen
 import io.maffinet.android.ui.strategies.StrategiesScreen
 import io.maffinet.android.ui.settings.SettingsScreen
 import io.maffinet.android.ui.settings.AdvancedScreen
@@ -148,20 +147,12 @@ class MainActivity : ComponentActivity() {
             }
             val isSmartTv = prefs.getBoolean("is_smart_tv", false)
             var setupDone by remember { mutableStateOf(prefs.getBoolean("wizard_is_setup_complete", false)) }
-            var wantsYoutubeBypass by remember { mutableStateOf(prefs.getBoolean("wants_youtube_bypass", true)) }
-            var telegramProxyEnabledByUser by remember { mutableStateOf(prefs.getBoolean("telegram_proxy_enabled_by_user", true)) }
             var selectedTab by remember { mutableIntStateOf(0) }
 
             androidx.compose.runtime.DisposableEffect(prefs) {
                 val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
                     if (key == "wizard_is_setup_complete") {
                         setupDone = sharedPreferences.getBoolean("wizard_is_setup_complete", false)
-                    }
-                    if (key == "wants_youtube_bypass") {
-                        wantsYoutubeBypass = sharedPreferences.getBoolean("wants_youtube_bypass", true)
-                    }
-                    if (key == "telegram_proxy_enabled_by_user") {
-                        telegramProxyEnabledByUser = sharedPreferences.getBoolean("telegram_proxy_enabled_by_user", true)
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -174,19 +165,18 @@ class MainActivity : ComponentActivity() {
             val navBarFocusRequester = remember { FocusRequester() }
             val activeNavItems = listOf(
                 0 to NavItem("Главная", R.drawable.ic_home),
-                5 to NavItem("Сервисы", R.drawable.ic_star_custom),
                 2 to NavItem("Стратегии", R.drawable.ic_bolt),
                 3 to NavItem("Настройки", R.drawable.ic_settings)
             )
-            val primaryTab = if (selectedTab in listOf(0, 5, 2, 3)) selectedTab else 3
+            val primaryTab = if (selectedTab in listOf(0, 2, 3)) selectedTab else 3
             val navigate: (Int) -> Unit = { index ->
                 val testing = io.maffinet.android.core.dpibypass.StrategyTestManager.isTesting
-                val configurationLocked = io.maffinet.android.ui.components.configurationIsLocked()
+                val configurationLocked = io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)
                 if ((testing && index in listOf(1, 6, 7)) || (configurationLocked && index in listOf(1, 7))) {
                     android.widget.Toast.makeText(context, "Остановите подключение или проверку, чтобы изменять эти настройки", android.widget.Toast.LENGTH_SHORT).show()
-                } else selectedTab = index.coerceIn(0, 9)
+                } else selectedTab = (if (index == 5) 0 else index.coerceIn(0, 9))
             }
-            BackHandler(enabled = onboardingCompleted && selectedTab !in listOf(0, 5, 2, 3)) { selectedTab = 3 }
+            BackHandler(enabled = onboardingCompleted && selectedTab !in listOf(0, 2, 3)) { selectedTab = 3 }
             LaunchedEffect(selectedTab) {
                 // Preserve old callback destinations while nesting legacy controls under Settings.
                 io.maffinet.android.data.onNavigateToTab = navigate
@@ -204,57 +194,14 @@ class MainActivity : ComponentActivity() {
                 }
                 val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                 io.maffinet.android.data.performanceModeGlobal = prefs.getBoolean("performance_mode", false)
-                if (prefs.getBoolean("service_enabled", false)) {
+                val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
+                if (settings.anyModeRequested()) {
                     prefs.edit().putBoolean("econom_mode", false).apply()
-                    io.maffinet.android.service.WatchdogWorker.schedulePeriodicWork(context)
-                    io.maffinet.android.service.WatchdogReceiver.scheduleWatchdogAlarm(context)
+                    io.maffinet.android.core.connection.ConnectionCoordinator.recover(context)
                 }
-                val autoConnect = prefs.getBoolean("auto_connect_on_start", false)
-                if (autoConnect) {
-                    val wantsYoutube = prefs.getBoolean("wants_youtube_bypass", true)
-                    val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
-                    prefs.edit().putBoolean("service_enabled", true).apply()
-                    if (wantsYoutube) {
-                        if (android.net.VpnService.prepare(context) == null) {
-                            io.maffinet.android.core.dpibypass.ServiceManager.start(context, io.maffinet.android.data.Mode.VPN)
-                        }
-                    }
-                    if (wantsTelegram) {
-                        val openTg = prefs.getBoolean("open_tg_on_connect", true)
-                        if (wantsYoutube) {
-                            val alreadyConfigured = prefs.getBoolean("tg_proxy_configured", false)
-                            if (openTg && !alreadyConfigured) {
-                                io.maffinet.android.core.tgproxy.TgProxyController.startAsync(
-                                    context,
-                                    onSuccess = {
-                                        val port = io.maffinet.android.core.tgproxy.TgProxyController.getPort(context)
-                                        val secret = io.maffinet.android.core.tgproxy.TgProxyController.getOrGenerateSecret(context)
-                                        val url = io.maffinet.android.core.tgproxy.TgProxyController.getTgProxyUrl(
-                                            io.maffinet.android.core.tgproxy.TgProxyController.DEFAULT_BIND_IP,
-                                            port,
-                                            secret
-                                        )
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        }
-                                        try {
-                                            context.startActivity(intent)
-                                            prefs.edit().putBoolean("tg_proxy_configured", true).apply()
-                                        } catch (_: Exception) {}
-                                    },
-                                    onError = {}
-                                )
-                            } else {
-                                io.maffinet.android.core.tgproxy.TgProxyController.startAsync(context, {}, {})
-                            }
-                        } else {
-                            val intent = Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                                action = io.maffinet.android.data.START_ACTION
-                                putExtra("open_tg", openTg)
-                            }
-                            androidx.core.content.ContextCompat.startForegroundService(context, intent)
-                        }
-                    }
+                if (prefs.getBoolean("auto_connect_on_start", false)) {
+                    io.maffinet.android.core.connection.ConnectionCoordinator.startSelected(context,
+                        openTelegram = prefs.getBoolean("open_tg_on_connect", true))
                 }
             }
 
@@ -267,8 +214,6 @@ class MainActivity : ComponentActivity() {
                                 prefs.edit().putBoolean("onboarding_completed", true).commit()
                                 Log.e("MaffinetDebug", "MainActivity: onboarding_completed applied, memory cache is: " + prefs.getBoolean("onboarding_completed", false))
                                 onboardingCompleted = true
-                                wantsYoutubeBypass = prefs.getBoolean("wants_youtube_bypass", true)
-                                telegramProxyEnabledByUser = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
                                 selectedTab = 0
                             }
                         )
@@ -319,7 +264,6 @@ class MainActivity : ComponentActivity() {
                                         2 -> StrategiesScreen(tabFocusRequesters[2], navigate)
                                         3 -> SettingsScreen(tabFocusRequesters[3], navigate)
                                         4 -> InfoTab(focusRequester = tabFocusRequesters[4], navBarFocusRequester = navBarFocusRequester)
-                                        5 -> ServicesScreen(tabFocusRequesters[5], navigate)
                                         6 -> YoutubeTab(focusRequester = tabFocusRequesters[6], navBarFocusRequester = navBarFocusRequester)
                                         7 -> SettingsTab(focusRequester = tabFocusRequesters[7], navBarFocusRequester = navBarFocusRequester)
                                         8 -> AdvancedScreen(tabFocusRequesters[8], { selectedTab = 3 }, navigate)

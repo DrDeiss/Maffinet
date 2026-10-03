@@ -69,10 +69,10 @@ fun AdvancedScreen(focusRequester: FocusRequester, onBack: () -> Unit, onNavigat
         }
         ProductCard {
             Text("Host filtering", style = MaterialTheme.typography.titleLarge)
-            ExpertSwitch("Переопределить фильтр сервисов", override, !locked) { override = it }
-            Text(if (override && commandMode) "Автоматический фильтр сервисов выключен. В командном режиме задайте host filtering аргументом -H в команде. UI host mode ниже не используется."
+            ExpertSwitch("Переопределить фильтр Hosts", override, !locked) { override = it }
+            Text(if (override && commandMode) "Автоматический фильтр Hosts выключен. В командном режиме задайте host filtering аргументом -H в команде. UI host mode ниже не используется."
                 else if (override) "Применяются ваши UI host mode и host lists. Disable отключает выборочный фильтр."
-                else "Maffinet применяет активные домены выбранных сервисов и пользовательского списка.",
+                else "Maffinet применяет активные активные Hosts и пользовательского списка.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             ExpertChoice("Hosts mode · UI", hostsMode, listOf("disable", "whitelist", "blacklist"), !locked && override && !commandMode) { hostsMode = it }
             if (hostsMode != "disable") OutlinedTextField(if (hostsMode == "whitelist") whitelist else blacklist,

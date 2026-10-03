@@ -1,7 +1,7 @@
 # Maffinet
 
-Maffinet is an Android application for local, selective DPI bypass with service
-profiles, editable domain lists and automatic strategy testing.
+Maffinet is an Android application for local, selective DPI bypass with explicit
+application routing, a separate Telegram proxy, editable hosts and strategy testing.
 
 During UI development, debug builds defer the upstream notice and attribution
 using `BuildConfig.SHOW_UPSTREAM_ATTRIBUTION=false`. Release builds set it to
@@ -18,44 +18,54 @@ installation alongside NetFix Mobile.
 
 ## Interface
 
-Original captures from the passing AOSP API29 emulator run, source
-`30ee86a15a6ed889f719a24b10a2577bcb5d6e6b`. Development UI defers upstream
-reminders:
-
-<img src="docs/screenshots/home-api29.png" width="270" alt="Maffinet Home with connection and service controls"> <img src="docs/screenshots/services-api29.png" width="270" alt="Maffinet service profiles">
+Home retains Maffinet's large connection button and exposes Applications,
+installed-app selection, Telegram, DNS, Strategy and Hosts. The main navigation
+contains Home, Strategies and Settings; the former Services destination is retired.
+New verification and captures for this model are pending until the updated CI run.
 
 [Additional screen captures](docs/screenshots/README.md) and
 [recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the actual tested scope.
 
 ## Features
 
-Choose services while separate models handle Android package routing, domain
-lists and ByeDPI strategy selection. Initial profiles: YouTube, Instagram and
-LinkedIn. Home, Services, Strategies and Settings expose normal controls;
-advanced network controls and the inherited standalone Telegram proxy remain
-available separately. Local user-domain editing, import/export and multi-service
-HTTP/TLS checks are implemented. YouTube is enabled initially to preserve the
-upstream default; Instagram and LinkedIn can be enabled in Services.
+Applications and Telegram are independent mode choices. The common button starts
+or stops the chosen modes: applications only, Telegram only, or both. Home displays
+each engine's runtime state, including a partial start or failure. Turning both
+choices off leaves an explanation to enable a mode before connecting.
+
+Only installed packages explicitly saved in `selected_apps` enter VPN routing.
+Updates preserve that selection. Old service-profile flags neither insert packages
+nor change hosts; Maffinet excludes its own package and rejects an empty installed
+allowlist. DNS is the existing VPN setting and does not configure the standalone
+Telegram proxy.
 
 No accounts, remote VPN servers, backend, telemetry or ML selector are added.
 Connectivity probes establish HTTP/TLS reachability rather than guaranteeing every
-feature of a service application. Auto ranks successful service coverage before
+feature of an application. Auto ranks successful configured target coverage before
 latency using deterministic rules.
 
-1. Enable the required profiles in **Services**. Their installed Android packages
-   combine with manual choices in **Settings → Приложение и подключение**.
-2. Add local domains in **Settings → Domain lists**, validate and save; enable
-   the User list. Import/export uses Android's document picker.
-3. Run **Strategies → Auto** to compare selected services, or choose an existing
-   strategy manually. The matrix records the last check and individual HTTP errors.
-4. Connect from **Home** after granting Android VPN permission. Configuration
-   changes require stopped VPN resources; tests stop and restore an active VPN.
+1. Enable **Applications** and use **Choose applications** on Home to select the
+   installed Android apps to route through VPN/ByeDPI. Enable **Telegram** for
+   its independent MTProto proxy, with direct access to the existing settings.
+2. Open **Hosts** to inspect the built-in General base, edit and save User domains,
+   or merge/import and export them with Android's document picker. User can be
+   enabled or disabled without discarding its saved domains.
+3. Choose the existing **DNS** preset for VPN and a **Strategy**, or run the strategy
+   comparison against separately configured HTTP/TLS checking addresses. Results
+   are invalidated when hosts, checking addresses or relevant filters change.
+4. Use the common button on **Home**, granting VPN consent when Applications is
+   enabled. Settings remain locked while engines are requested/running or testing;
+   strategy tests coordinate stopping and restoring an active VPN.
 
-General is the union of enabled service and User domains. New profiles belong in
-`core/services/ServiceCatalog.kt`; routing, lists, UI and probes consume that data.
+General is a fixed base of eight existing curated domains plus the enabled User
+extension. App selection and legacy service flags never affect that union.
+The base is defined in `core/domains/BuiltInDomainLists.kt`. Legacy named lists
+remain read-only aliases solely for old `{list:youtube/instagram/linkedin}` commands.
 Advanced retains raw commands, desync, host overrides, DNS, IPv6 and strategy
 import/export. `{domains}` and `{list:general}` reference active lists; legacy
-`{sni}` remains compatible with the original fake-SNI value.
+`{sni}` remains compatible with the original fake-SNI value. Raw host filtering
+requires an explicit Advanced override. [Architecture](docs/ARCHITECTURE.md)
+describes the independent modes, hosts and strategy snapshots.
 
 ## Networking
 
@@ -107,7 +117,7 @@ reproduces that binding from recognized originals and refuses unknown binaries.
 CI builds/tests with stable NDK29.0.14206865 and the runner's existing standard
 SDK agreement; -Pmaffinet.ndkVersion supplies that compiler override. Debug APKs appear in app/build/outputs/apk/debug.
 Release signing is unconfigured; use a private maintainer key outside source
-control. Unit tests cover parsing/merging, profiles, arguments, scoring and
+control. Unit tests cover parsing/merging, explicit routing, mode choices, arguments, scoring and
 persistence. `./gradlew -p verification test` runs pure production-source JVM tests
 without Android SDK. Linux CI also compiles unchanged pinned ByeDPI for actual
 host/protocol/retry/UDP contract checks; see [verification](verification/README.md).
@@ -118,7 +128,7 @@ reports and screen captures. A licensed Linux SDK host can run the same checks
 with `bash tools/run-emulator-smoke.sh`; the script requires a provisioned AOSP
 API29 image, emulator, platform tools and KVM. Its simulated VPN consent is
 restricted to an explicitly opted-in qemu test environment. The tests check native
-SOCKS/TUN lifecycle and selected-service probes, while routed helper-app traffic,
+SOCKS/TUN lifecycle and configured-target probes, while routed helper-app traffic,
 provider bypass, media and physical phone/TV acceptance remain separate checks.
 Use [device validation](docs/DEVICE_VALIDATION.md)
 for VPN lifecycle, background, network switching and Android TV checks.

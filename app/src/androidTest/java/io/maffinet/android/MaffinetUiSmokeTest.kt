@@ -101,18 +101,23 @@ class MaffinetUiSmokeTest {
     }
 
     @Test
-    fun fourPrimaryDestinationsOpenAndAboutRespectsAttributionGate() {
+    fun primaryDestinationsAndDirectHostsOpenAndAboutRespectsAttributionGate() {
         launchActivity()
         waitForText("Подключиться")
         assertHomeAttributionVisibility()
         saveScreenshot("03-home")
 
-        navigate("Сервисы", "Выберите сервисы для подключения и автоматической проверки.")
-        compose.onNodeWithText("YouTube").assertIsDisplayed()
-        saveScreenshot("04-services")
+        compose.onAllNodesWithContentDescription("Сервисы").assertCountEquals(0)
+        compose.onAllNodesWithText("YouTube").assertCountEquals(0)
+        compose.onNodeWithText("Hosts").performScrollTo().performClick()
+        waitForText("General · встроенный список")
+        saveScreenshot("04-hosts")
+        compose.onNodeWithText("Показать General").performClick()
+        saveScreenshot("17-hosts-general")
+        compose.onNodeWithText("Скрыть General").performScrollTo().performClick()
 
         navigate("Стратегии", "Auto strategy")
-        compose.onNodeWithText("Проверить выбранные сервисы").assertIsDisplayed()
+        compose.onNodeWithText("Проверить стратегии").performScrollTo().assertIsDisplayed()
         saveScreenshot("05-strategies")
 
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
@@ -138,22 +143,49 @@ class MaffinetUiSmokeTest {
     }
 
     @Test
-    fun serviceSelectionSurvivesClosingAndReopeningActivity() {
+    fun modeChoicesAndApplicationsSurviveReopeningWithoutChangingHosts() {
+        check(preferences.edit().putStringSet("selected_apps", setOf("com.android.settings")).commit())
+        val originalHosts = DomainListRepository(context).activeDomains()
         launchActivity()
         waitForText("Подключиться")
-        navigate("Сервисы", "Выберите сервисы для подключения и автоматической проверки.")
-        serviceSwitch("YouTube", "Instagram").assertIsOn()
-        serviceSwitch("Instagram", "YouTube").performScrollTo().assertIsOff().performClick().assertIsOn()
-        serviceSwitch("YouTube", "Instagram").performScrollTo().performClick().assertIsOff()
-        saveScreenshot("08-services-changed")
+        compose.onNodeWithTag("applications-mode").performScrollTo().assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithTag("telegram-mode").performScrollTo().assertIsOff().performClick().assertIsOn()
+        saveScreenshot("08-telegram-mode")
 
         relaunchActivity()
         waitForText("Подключиться")
-        navigate("Сервисы", "Выберите сервисы для подключения и автоматической проверки.")
-        serviceSwitch("Instagram", "YouTube").performScrollTo().assertIsOn()
-        serviceSwitch("YouTube", "Instagram").performScrollTo().assertIsOff()
-        serviceSwitch("LinkedIn", "YouTube").performScrollTo().assertIsOff()
-        saveScreenshot("09-services-restored")
+        compose.onNodeWithTag("applications-mode").performScrollTo().assertIsOff()
+        compose.onNodeWithTag("telegram-mode").performScrollTo().assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithText("Включите «Приложения» или «Telegram», чтобы подключиться.").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Выбрано: 1").performScrollTo().assertIsDisplayed()
+        check(preferences.getStringSet("selected_apps", emptySet()) == setOf("com.android.settings"))
+        check(DomainListRepository(context).activeDomains() == originalHosts)
+        saveScreenshot("09-modes-off")
+    }
+
+    @Test
+    fun homeProvidesDirectAppSelectionAndPersistentVpnDns() {
+        check(preferences.edit().putStringSet("selected_apps", setOf("com.android.settings")).commit())
+        launchActivity()
+        waitForText("Подключиться")
+        compose.onNodeWithText("Выбрать приложения").performScrollTo().performClick()
+        waitForText("Через VPN идут только выбранные приложения. Пустой выбор не запускает VPN.")
+        saveScreenshot("13-app-selection")
+        compose.onNodeWithText("Готово").performClick()
+        compose.onNodeWithText("DNS").performScrollTo().performClick()
+        waitForText("DNS для VPN")
+        saveScreenshot("14-dns-selection")
+        compose.onNodeWithText("Google Public DNS").performScrollTo().performClick()
+        relaunchActivity()
+        waitForText("Подключиться")
+        compose.onNodeWithText("Google Public DNS").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("DNS применяется к VPN для выбранных приложений.").performScrollTo().assertIsDisplayed()
+        check(preferences.getString("custom_dns_preset", "") == "Google Public DNS")
+        check(preferences.getStringSet("selected_apps", emptySet()) == setOf("com.android.settings"))
+        saveScreenshot("15-home-dns")
+        compose.onNodeWithText("Настройки Telegram").performScrollTo().performClick()
+        waitForText("Порт подключения")
+        saveScreenshot("16-telegram-settings")
     }
 
     @Test
@@ -161,7 +193,7 @@ class MaffinetUiSmokeTest {
         launchActivity()
         waitForText("Подключиться")
         openDomainEditor()
-        compose.onNode(isToggleable()).assertIsOn().performClick().assertIsOff()
+        compose.onNode(isToggleable()).performScrollTo().assertIsOn().performClick().assertIsOff()
         replaceDomains("EXAMPLE.COM\nsub.example.org\nexample.com")
         saveDomains()
         waitForText("Сохранено доменов: 2")
@@ -178,7 +210,7 @@ class MaffinetUiSmokeTest {
         relaunchActivity()
         waitForText("Подключиться")
         openDomainEditor()
-        compose.onNode(isToggleable()).assertIsOff()
+        compose.onNode(isToggleable()).performScrollTo().assertIsOff()
         compose.onNode(hasSetTextAction()).performScrollTo().assertTextContains(SAVED_DOMAINS)
         saveScreenshot("12-domains-restored")
     }
@@ -231,8 +263,8 @@ class MaffinetUiSmokeTest {
 
     private fun openDomainEditor() {
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
-        compose.onNodeWithText("Domain lists").performScrollTo().performClick()
-        waitForText("User domains")
+        compose.onNodeWithText("Hosts").performScrollTo().performClick()
+        waitForText("User · ваши домены")
         compose.onNode(hasSetTextAction()).assertExists()
     }
 

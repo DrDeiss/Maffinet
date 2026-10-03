@@ -295,6 +295,7 @@ fun SettingsTab(
     val isTv = remember(sharedPrefs) { sharedPrefs.getBoolean("device_type_tv", false) }
     val scope = rememberCoroutineScope()
     val performFullExit = {
+        io.maffinet.android.core.connection.ConnectionCoordinator.stopAll(context)
         val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
         prefs.edit().putBoolean("service_enabled", false).commit()
         try {
@@ -385,8 +386,8 @@ fun SettingsTab(
         }
     }
     var bypassMode by remember {
-        val wantsYt = sharedPrefs.getBoolean("wants_youtube_bypass", true)
-        val wantsTg = sharedPrefs.getBoolean("telegram_proxy_enabled_by_user", true)
+        val wantsYt = MaffinetSettingsRepository(context).applicationsEnabled()
+        val wantsTg = MaffinetSettingsRepository(context).telegramEnabled()
         val initialValue = when {
             wantsYt && wantsTg -> "both"
             wantsTg -> "telegram"
@@ -403,8 +404,8 @@ fun SettingsTab(
         autoConnect = prefs.getBoolean("auto_connect_on_start", false)
         openTgOnConnect = prefs.getBoolean("open_tg_on_connect", true)
         selectedDnsPreset = prefs.getString("custom_dns_preset", "Стандартный (Отключено)") ?: "Стандартный (Отключено)"
-        val wantsYt = prefs.getBoolean("wants_youtube_bypass", true)
-        val wantsTg = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
+        val wantsYt = MaffinetSettingsRepository(context).applicationsEnabled()
+        val wantsTg = MaffinetSettingsRepository(context).telegramEnabled()
         bypassMode = when {
             wantsYt && wantsTg -> "both"
             wantsTg -> "telegram"
@@ -459,7 +460,7 @@ fun SettingsTab(
                     val isSystem = (flags and ApplicationInfo.FLAG_SYSTEM) != 0
                     val isUpdatedSystem = (flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
                     val hasLaunchIntent = pm.getLaunchIntentForPackage(pkg.packageName) != null
-                    !isSystem || isUpdatedSystem || hasLaunchIntent
+                    pkg.packageName != context.packageName && (!isSystem || isUpdatedSystem || hasLaunchIntent)
                 }
                 .sortedBy { pkg ->
                     pkg.applicationInfo?.let {
@@ -767,7 +768,7 @@ fun SettingsTab(
                 }
 
                 SettingsClickRow(
-                    title = "Дополнительные приложения",
+                    title = "Выбрать приложения",
                     subtitle = if (actualSelectedCount > 0)
                         "Выбрано: $actualSelectedCount прил. (только они пойдут через VPN)"
                     else
@@ -879,7 +880,7 @@ fun SettingsTab(
                     )
                 }
                 Text(
-                    text = "Позволяет обходить блокировки сайтов (ChatGPT) и мобильных игр (Brawl Stars, Null's). Рекомендуется использовать Xbox DNS.",
+                    text = "DNS-пресет применяется к VPN для выбранных приложений. Отдельный Telegram-прокси использует собственное подключение.",
                     color = Color(0xFFA1A1AA),
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -1167,15 +1168,17 @@ fun SettingsTab(
         visible = showExcludedAppsDialog,
         onDismissRequest = { showExcludedAppsDialog = false },
         icon = R.drawable.ic_settings,
-        title = "Дополнительные приложения",
-        subtitle = "Дополнительный ручной маршрут. Приложения включённых сервисов добавляются автоматически. Остальные идут напрямую.",
+        title = "Выбрать приложения",
+        subtitle = "Через VPN идут только выбранные приложения. Пустой выбор не запускает VPN.",
         installedApps = installedApps,
         selectedApps = selectedApps,
         onAppToggled = { pkg ->
+            if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context) && pkg != context.packageName) {
             val newSet = selectedApps.toMutableSet()
             if (newSet.contains(pkg)) newSet.remove(pkg) else newSet.add(pkg)
             selectedApps = newSet
             settingsRepository.setManualApplications(newSet)
+            }
         }
     )
 
@@ -1204,125 +1207,47 @@ fun SettingsTab(
         }
     )
 
-    val dnsList = listOf(
-        "Стандартный (Отключено)",
-        "Cloudflare Secure DNS",
-        "Google Public DNS",
-        "AdGuard DNS (Блокировка рекламы)",
-        "Xbox DNS (xbox-dns.ru / ChatGPT / Brawl)",
-        "Supercell Xbox DNS (supercell.xbox-dns.ru)",
-        "NullsProxy DNS (dns.nullsproxy.com)",
-        "Comss.one DNS (dns.comss.one)",
-        "Geohide DNS (dns.geohide.ru)"
-    )
-
     MaffinetDnsSheet(
-        visible = showDnsDialog,
-        onDismissRequest = { showDnsDialog = false },
-        icon = R.drawable.ic_settings,
-        title = "Маршрутизация DNS",
-        subtitle = "Выберите пресет DNS для обхода ограничений",
-        dnsList = dnsList,
+        visible = showDnsDialog, onDismissRequest = { showDnsDialog = false },
+        icon = R.drawable.ic_settings, title = "DNS для VPN",
+        subtitle = "Пресет для выбранных Android-приложений",
+        dnsList = io.maffinet.android.ui.components.DnsPresets.values,
         selectedDnsPreset = selectedDnsPreset,
         onPresetSelected = { preset ->
-            selectedDnsPreset = preset
-            context.getSharedPreferences(
-                context.packageName + "_preferences",
-                android.content.Context.MODE_PRIVATE
-            ).edit().putString("custom_dns_preset", preset).apply()
+            if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+                selectedDnsPreset = preset
+                settingsRepository.setString("custom_dns_preset", preset)
+            }
             showDnsDialog = false
-
-            val hostname = when (preset) {
-                "Cloudflare Secure DNS" -> "one.one.one.one"
-                "Google Public DNS" -> "dns.google"
-                "AdGuard DNS (Блокировка рекламы)" -> "dns.adguard-dns.com"
-                "Xbox DNS (xbox-dns.ru / ChatGPT / Brawl)" -> "dot.xbox-dns.ru"
-                "Supercell Xbox DNS (supercell.xbox-dns.ru)" -> "dot.xbox-dns.ru"
-                "NullsProxy DNS (dns.nullsproxy.com)" -> "dns.nullsproxy.com"
-                "Comss.one DNS (dns.comss.one)" -> "dns.comss.one"
-                "Geohide DNS (dns.geohide.ru)" -> "dns.geohide.ru"
-                else -> null
-            }
-
-            if (hostname != null) {
-                try {
-                    val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("Private DNS", hostname)
-                    clipboard.setPrimaryClip(clip)
-                    android.widget.Toast.makeText(context, "Адрес скопирован: $hostname", android.widget.Toast.LENGTH_LONG).show()
-                } catch (_: Exception) {}
-            }
-
-            try {
-                val intent = android.content.Intent("android.settings.PRIVATE_DNS_SETTINGS")
-                context.startActivity(intent)
-            } catch (_: Exception) {
-                try {
-                    val intent = android.content.Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
-                    context.startActivity(intent)
-                } catch (_: Exception) {}
-            }
         }
     )
 
-        MaffinetActionSheet(
-        visible = showBypassModeDialog,
-        onDismissRequest = { showBypassModeDialog = false },
-        icon = R.drawable.ic_bolt,
-        title = "Режим работы",
-        subtitle = "Выберите режим VPN для выбранных сервисов и отдельного Telegram-прокси.",
+    MaffinetActionSheet(
+        visible = showBypassModeDialog, onDismissRequest = { showBypassModeDialog = false },
+        icon = R.drawable.ic_bolt, title = "Режим работы",
+        subtitle = "Режимы также доступны на главной. Изменения применяются при подключении.",
         options = listOf(
-            MaffinetSheetOption(
-                label = "VPN и Telegram",
-                selected = bypassMode == "both",
-                onClick = {
+            MaffinetSheetOption("Приложения и Telegram", selected = bypassMode == "both", onClick = {
+                if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+                    settingsRepository.setApplicationsEnabled(true); settingsRepository.setTelegramEnabled(true)
                     bypassMode = "both"
-                    val edit = sharedPrefs.edit()
-                    edit.putBoolean("wants_youtube_bypass", true)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", true)
-                    edit.putBoolean("service_enabled", false).apply()
-                    ServiceManager.stop(context)
-                    val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                        action = io.maffinet.android.data.STOP_ACTION
-                    }
-                    context.startService(stopIntent)
-                    TgProxyController.stop()
                 }
-            ),
-            MaffinetSheetOption(
-                label = "Только Telegram",
-                selected = bypassMode == "telegram",
-                onClick = {
+                showBypassModeDialog = false
+            }),
+            MaffinetSheetOption("Только Telegram", selected = bypassMode == "telegram", onClick = {
+                if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+                    settingsRepository.setApplicationsEnabled(false); settingsRepository.setTelegramEnabled(true)
                     bypassMode = "telegram"
-                    val edit = sharedPrefs.edit()
-                    edit.putBoolean("wants_youtube_bypass", false)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", true)
-                    edit.putBoolean("service_enabled", false).apply()
-                    ServiceManager.stop(context)
-                    val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                        action = io.maffinet.android.data.STOP_ACTION
-                    }
-                    context.startService(stopIntent)
-                    TgProxyController.stop()
                 }
-            ),
-            MaffinetSheetOption(
-                label = "Только VPN",
-                selected = bypassMode == "youtube",
-                onClick = {
+                showBypassModeDialog = false
+            }),
+            MaffinetSheetOption("Только приложения", selected = bypassMode == "youtube", onClick = {
+                if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+                    settingsRepository.setApplicationsEnabled(true); settingsRepository.setTelegramEnabled(false)
                     bypassMode = "youtube"
-                    val edit = sharedPrefs.edit()
-                    edit.putBoolean("wants_youtube_bypass", true)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", false)
-                    edit.putBoolean("service_enabled", false).apply()
-                    ServiceManager.stop(context)
-                    val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                        action = io.maffinet.android.data.STOP_ACTION
-                    }
-                    context.startService(stopIntent)
-                    TgProxyController.stop()
                 }
-            )
+                showBypassModeDialog = false
+            })
         )
     )
 
@@ -1334,7 +1259,7 @@ fun SettingsTab(
                 label = "Сбросить всё",
                 subtitle = "Полный сброс настроек с перезапуском"
             ) {
-                io.maffinet.android.core.dpibypass.ServiceManager.stop(context)
+                io.maffinet.android.core.connection.ConnectionCoordinator.stopAll(context)
                 val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
                     action = io.maffinet.android.data.STOP_ACTION
                     io.maffinet.android.core.debug.AppDebugManager.log("Выполнен полный сброс настроек приложения (Сбросить всё) с перезапуском")
@@ -1356,7 +1281,7 @@ fun SettingsTab(
                 label = "Сбросить всё, кроме результатов тестов",
                 subtitle = "Настройки удаляются, результаты тестов сохраняются"
             ) {
-                io.maffinet.android.core.dpibypass.ServiceManager.stop(context)
+                io.maffinet.android.core.connection.ConnectionCoordinator.stopAll(context)
                 val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
                     action = io.maffinet.android.data.STOP_ACTION
                     io.maffinet.android.core.debug.AppDebugManager.log("Выполнен частичный сброс настроек (сохранены результаты тестов) с перезапуском")
@@ -1391,102 +1316,14 @@ fun SettingsTab(
         )
     )
 
-    val unloadWantsYt = sharedPrefs.getBoolean("wants_youtube_bypass", true)
-    val unloadWantsTg = sharedPrefs.getBoolean("telegram_proxy_enabled_by_user", true)
-    val unloadCurrentMode = when {
-        unloadWantsYt && unloadWantsTg -> "both"
-        unloadWantsTg -> "telegram"
-        unloadWantsYt -> "youtube"
-        else -> "both"
-    }
-
     MaffinetUnloadSheet(
-        visible = showUnloadDialog,
-        onDismissRequest = { showUnloadDialog = false },
-        selectedKey = unloadCurrentMode,
-        options = listOf(
-            UnloadOption(key = "both", label = "VPN и Telegram", subtitle = "Выбранные сервисы и MTProto-прокси"),
-            UnloadOption(key = "telegram", label = "Только Telegram", subtitle = "Только MTProto-прокси, без VPN"),
-            UnloadOption(key = "youtube", label = "Только VPN", subtitle = "Только VPN-тоннель, без прокси")
-        ),
-        onOptionSelected = { key ->
+        visible = showUnloadDialog, onDismissRequest = { showUnloadDialog = false }, selectedKey = "selected",
+        options = listOf(UnloadOption("selected", "Выбранные режимы", "Продолжить работу в фоне с текущими настройками")),
+        onOptionSelected = {
             showUnloadDialog = false
-            val edit = sharedPrefs.edit()
-            when (key) {
-                "both" -> {
-                    edit.putBoolean("wants_youtube_bypass", true)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", true)
-                }
-                "telegram" -> {
-                    edit.putBoolean("wants_youtube_bypass", false)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", true)
-                }
-                "youtube" -> {
-                    edit.putBoolean("wants_youtube_bypass", true)
-                    edit.putBoolean("telegram_proxy_enabled_by_user", false)
-                }
-            }
-            edit.putBoolean("service_enabled", true)
-            edit.putBoolean("econom_mode", true)
-            edit.apply()
-
-            ServiceManager.stop(context)
-            val stopIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                action = io.maffinet.android.data.STOP_ACTION
-            }
-            context.startService(stopIntent)
-            TgProxyController.stop()
-
-            io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(context)
-            io.maffinet.android.service.WatchdogReceiver.cancelWatchdogAlarm(context)
-
-            scope.launch {
-                kotlinx.coroutines.delay(800)
-                val wantsYoutube = sharedPrefs.getBoolean("wants_youtube_bypass", true)
-                val wantsTelegram = sharedPrefs.getBoolean("telegram_proxy_enabled_by_user", true)
-
-                if (wantsYoutube) {
-                    ServiceManager.start(context, Mode.VPN)
-                }
-
-                if (wantsTelegram) {
-                    val openTg = sharedPrefs.getBoolean("open_tg_on_connect", true)
-                    if (wantsYoutube) {
-                        TgProxyController.startAsync(
-                            context = context,
-                            onSuccess = {
-                                val port = TgProxyController.getPort(context)
-                                val secret = TgProxyController.getOrGenerateSecret(context)
-                                val url = TgProxyController.getTgProxyUrl(
-                                    TgProxyController.DEFAULT_BIND_IP,
-                                    port,
-                                    secret
-                                )
-                                val alreadyConfigured = sharedPrefs.getBoolean("tg_proxy_configured", false)
-                                if (openTg && !alreadyConfigured) {
-                                    val tgIntent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)).apply {
-                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    try {
-                                        context.startActivity(tgIntent)
-                                        sharedPrefs.edit().putBoolean("tg_proxy_configured", true).apply()
-                                    } catch (_: Exception) {}
-                                }
-                            },
-                            onError = {}
-                        )
-                    } else {
-                        val startIntent = android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                            action = io.maffinet.android.data.START_ACTION
-                            putExtra("open_tg", openTg)
-                        }
-                        androidx.core.content.ContextCompat.startForegroundService(context, startIntent)
-                    }
-                }
-
-                val activity = context as? android.app.Activity
-                activity?.finishAndRemoveTask()
-            }
+            val result = io.maffinet.android.core.connection.ConnectionCoordinator.startSelected(context)
+            if (result.errors.isEmpty()) (context as? android.app.Activity)?.finishAndRemoveTask()
+            else android.widget.Toast.makeText(context, result.errors.joinToString("\n"), android.widget.Toast.LENGTH_LONG).show()
         }
     )
 }

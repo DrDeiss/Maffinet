@@ -1,5 +1,45 @@
 # Maffinet — audit and implementation plan
 
+## Current goal — independent Applications, Telegram and Hosts
+
+The user's clarification on 2026-10-03 supersedes the service-catalog product
+requirements below. Continue the existing Android engines and Maffinet design;
+the product now exposes Applications, explicit installed-app selection, an
+independent Telegram proxy, VPN DNS, strategies and hosts. Services is removed
+from primary navigation; YouTube/Instagram/LinkedIn switches no longer control
+routing, domains or strategy checking addresses.
+
+- One common button starts/stops selected Applications and/or Telegram modes.
+  Selection, persisted desired state and actual engine state are separate. STOP,
+  recovery, background, boot and watchdog must treat each mode independently.
+  Configuration changes are locked while engines/resources or checking are active.
+- `selected_apps` is the sole VPN package source. Preserve it through migration;
+  check installation, exclude Maffinet, and reject an empty installed allowlist.
+- Hosts use the existing parser, store and ByeDPI compiler. General has a fixed
+  eight-domain base; enabled User domains extend it. Editing/removal/save/toggle,
+  merge import and export remain available. App/service choices never alter hosts.
+  Preserve `{domains}`, `{list:…}`, legacy fake SNI and explicit Advanced override.
+- Strategy checks use an independent editable HTTP/TLS address list and a fixed
+  snapshot of hosts/filters/targets. A changed fingerprint invalidates measured
+  history and prevents applying a result from a different configuration.
+- Preserve VpnService → TUN → HEV → local SOCKS → ByeDPI, all four ABIs and
+  `io.maffinet.android.core.dpibypass.TProxyService`. Preserve DNS, Telegram,
+  imports/exports, background features, TV navigation, LICENSE/NOTICE and deferred
+  development attribution.
+
+Implementation of this clarification is in progress. The previous passing
+baseline remains historical evidence (32 standalone JVM, 31 Android JVM, nine
+instrumentation tests, debug/release assembly and Lint). Updated checks,
+emulator screenshots and physical-device results must be recorded separately;
+new-model integrated validation is pending until the updated CI completes.
+
+## Historical audit and superseded implementation plan
+
+The audit, phases and progress below describe the earlier implementation. Their
+service-profile routing/domain/testing requirements are retained as history and
+must not be used as current product requirements. Native architecture, licensing,
+provenance and applicable verification constraints remain in force.
+
 Audit date: 2026-10-03. Upstream: `rupleide/NetFixMobile`, commit `19cb13c19f87a1fe6339acb65e35da2ab4d14a43` (v1.0.3 codebase). Independent fork: https://github.com/DrDeiss/Maffinet. The complete upstream Git history is retained.
 
 ## Phase 0: audited architecture

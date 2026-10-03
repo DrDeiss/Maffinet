@@ -657,7 +657,7 @@ private fun YoutubeBypassStep(
                                 .putString("youtube_mode", "smarttube")
                                 .putString("byedpi_proxy_port", "1080")
                                 .putBoolean("is_smart_tv", true)
-                                .putBoolean("wants_youtube_bypass", true)
+                                .putBoolean(io.maffinet.android.data.settings.MaffinetSettingsRepository.APPLICATIONS_ENABLED, true)
                                 .apply()
                             onSetYoutubeBypass(true)
                             scope.launch {
@@ -689,7 +689,7 @@ private fun YoutubeBypassStep(
                                 .putString("work_mode", "VPN")
                                 .putString("youtube_mode", "official")
                                 .putBoolean("is_smart_tv", true)
-                                .putBoolean("wants_youtube_bypass", true)
+                                .putBoolean(io.maffinet.android.data.settings.MaffinetSettingsRepository.APPLICATIONS_ENABLED, true)
                                 .apply()
                             onSetYoutubeBypass(true)
                             val hasResults = StrategyTestManager.testResults.isNotEmpty()
@@ -712,7 +712,7 @@ private fun YoutubeBypassStep(
                         onClick = {
                             context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                                 .edit()
-                                .putBoolean("wants_youtube_bypass", false)
+                                .putBoolean(io.maffinet.android.data.settings.MaffinetSettingsRepository.APPLICATIONS_ENABLED, false)
                                 .apply()
                             onSetYoutubeBypass(false)
                             onNavigate(OnboardingStep.AboutAndSupport)
@@ -724,7 +724,7 @@ private fun YoutubeBypassStep(
                         onClick = {
                             context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                                 .edit()
-                                .putBoolean("wants_youtube_bypass", true)
+                                .putBoolean(io.maffinet.android.data.settings.MaffinetSettingsRepository.APPLICATIONS_ENABLED, true)
                                 .apply()
                             onSetYoutubeBypass(true)
                             val hasResults = StrategyTestManager.testResults.isNotEmpty()
@@ -1396,7 +1396,7 @@ private fun SummaryStep(
                 modifier = Modifier.focusRequester(focusRequester),
                 onClick = {
                     val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
-                    prefs.edit().putBoolean("telegram_proxy_enabled_by_user", wantsTelegramProxy ?: true).apply()
+                    io.maffinet.android.data.settings.MaffinetSettingsRepository(context).setTelegramEnabled(wantsTelegramProxy ?: true)
                     onNavigate(OnboardingStep.FinalGreeting)
                 }
             )
