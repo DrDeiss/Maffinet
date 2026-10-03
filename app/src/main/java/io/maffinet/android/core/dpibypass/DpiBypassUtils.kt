@@ -102,22 +102,19 @@ fun createConnectionNotification(
     @StringRes title: Int,
     @StringRes content: Int,
     service: Class<*>,
+    allowPause: Boolean = true,
+    statusText: CharSequence? = null,
 ): Notification {
-    val pauseIntent = Intent(context, service).apply { action = PAUSE_ACTION }
-    val pausePendingIntent = PendingIntent.getService(
-        context, 1, pauseIntent,
-        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-    )
     val stopIntent = Intent(context, service).apply { action = STOP_ACTION }
     val stopPendingIntent = PendingIntent.getService(
         context, 3, stopIntent,
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
     )
-    return NotificationCompat.Builder(context, channelId)
+    val builder = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(R.drawable.ic_notification)
         .setSilent(true)
         .setContentTitle("Maffinet")
-        .setContentText("Подключение защищено")
+        .setContentText(statusText ?: "Подключение защищено")
         .setContentIntent(
             PendingIntent.getActivity(
                 context,
@@ -126,9 +123,15 @@ fun createConnectionNotification(
                 PendingIntent.FLAG_IMMUTABLE,
             )
         )
-        .addAction(R.drawable.ic_pause, "Приостановить", pausePendingIntent)
-        .addAction(R.drawable.ic_power, "Выключить", stopPendingIntent)
-        .build()
+    if (allowPause) {
+        val pauseIntent = Intent(context, service).apply { action = PAUSE_ACTION }
+        val pausePendingIntent = PendingIntent.getService(
+            context, 1, pauseIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+        builder.addAction(R.drawable.ic_pause, "Приостановить", pausePendingIntent)
+    }
+    return builder.addAction(R.drawable.ic_power, "Выключить", stopPendingIntent).build()
 }
 
 fun createPauseNotification(

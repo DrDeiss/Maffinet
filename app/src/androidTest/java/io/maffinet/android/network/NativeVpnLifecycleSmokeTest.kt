@@ -1,6 +1,8 @@
 package io.maffinet.android.network
 
 import android.content.BroadcastReceiver
+import android.app.Notification
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -228,6 +230,14 @@ class NativeVpnLifecycleSmokeTest {
             assertFalse(result.startedApplications)
             assertTrue(result.startedTelegram)
             awaitTelegramRunning()
+            val notifications = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            eventually("Telegram notification must describe the running proxy") {
+                notifications.activeNotifications.firstOrNull { it.id == 100 }?.notification
+                    ?.extras?.getCharSequence(Notification.EXTRA_TEXT)?.contains("Telegram-прокси работает") == true
+            }
+            val notification = notifications.activeNotifications.first { it.id == 100 }.notification
+            assertEquals("Telegram exposes only its supported STOP action", listOf("Выключить"), notification.actions.map { it.title.toString() })
+            assertFalse(notification.actions.any { it.title.toString().contains("Приостановить") })
             assertFalse(ByeDpiVpnService.isVpnActive)
             assertFalse(ByeDpiVpnService.hasProxyResources)
             assertFalse(settings.applicationsRequested())
@@ -237,7 +247,14 @@ class NativeVpnLifecycleSmokeTest {
             WatchdogReceiver().onReceive(context, Intent("io.maffinet.android.action.WATCHDOG_PING"))
             assertTrue(settings.telegramRequested())
             assertEquals(ModeConnectionState.Running, TgProxyController.status.value)
-            stopTelegramAndAwaitCleanup()
+            if (it == 0) {
+                // Exercise the actual notification's direct STOP, including desired-state clearing.
+                notification.actions.single().actionIntent.send()
+                eventually("Telegram notification STOP must close the listener and persist") {
+                    !settings.telegramRequested() && !TgProxyController.hasResources &&
+                        TgProxyController.status.value == ModeConnectionState.Stopped
+                }
+            } else stopTelegramAndAwaitCleanup()
             ConnectionCoordinator.recover(context)
             assertFalse(settings.anyModeRequested())
             assertFalse(TgProxyController.hasResources)

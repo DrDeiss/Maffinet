@@ -1,6 +1,7 @@
 package io.maffinet.android.core.tgproxy
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -152,6 +153,8 @@ class TgProxyService : LifecycleService() {
 
     private fun publish(action: String, status: AppStatus) {
         isTgProxyRunningGlobal = status == AppStatus.Running
+        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
+            .notify(FOREGROUND_SERVICE_ID, createNotification())
         // Legacy appStatus is used by the VPN strategy wizard. Telegram has its own
         // StateFlow and sender broadcasts and must not overwrite the VPN status.
         sendBroadcast(Intent(action).putExtra(SENDER, Sender.Proxy.ordinal))
@@ -181,10 +184,20 @@ class TgProxyService : LifecycleService() {
     }
 
     private fun startForeground() {
-        val notification: Notification = createConnectionNotification(this, CHANNEL,
-            R.string.notification_title, R.string.vpn_notification_content, TgProxyService::class.java)
+        val notification = createNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(FOREGROUND_SERVICE_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else startForeground(FOREGROUND_SERVICE_ID, notification)
     }
+
+    private fun createNotification(): Notification = createConnectionNotification(this, CHANNEL,
+        R.string.notification_title, R.string.vpn_notification_content, TgProxyService::class.java,
+        allowPause = false,
+        statusText = when (TgProxyController.status.value) {
+            ModeConnectionState.Stopped -> "Telegram-прокси остановлен"
+            ModeConnectionState.Starting -> "Telegram-прокси запускается"
+            ModeConnectionState.Running -> "Telegram-прокси работает • ${TgProxyController.DEFAULT_BIND_IP}:${TgProxyController.getPort(this)}"
+            ModeConnectionState.Stopping -> "Telegram-прокси останавливается"
+            ModeConnectionState.Failed -> "Ошибка Telegram-прокси"
+        })
 }

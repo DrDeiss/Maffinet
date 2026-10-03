@@ -539,9 +539,11 @@ private fun DnsCustomScrollbar(
             .width(4.dp)
     ) {
         val viewHeight = size.height
-        if (totalEstimatedHeight <= viewHeight) return@Canvas
+        if (viewHeight <= 0f || totalEstimatedHeight <= viewHeight) return@Canvas
 
-        val thumbHeight = (viewHeight * viewHeight / totalEstimatedHeight).coerceIn(with(density) { 40.dp.toPx() }, viewHeight / 3)
+        val maxThumbHeight = viewHeight / 3
+        val minThumbHeight = minOf(with(density) { 40.dp.toPx() }, maxThumbHeight)
+        val thumbHeight = (viewHeight * viewHeight / totalEstimatedHeight).coerceIn(minThumbHeight, maxThumbHeight)
         val maxScroll = totalEstimatedHeight - viewHeight
         val firstItemOffset = state.firstVisibleItemScrollOffset
         val currentScrolled = (state.firstVisibleItemIndex.toFloat() * (itemHeight + spacing)) + firstItemOffset
