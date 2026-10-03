@@ -23,8 +23,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify inherited native ABI contracts
         run: python3 tools/verify-native-binaries.py
+      - name: Prepare production native parser fixture
+        run: |
+          git submodule update --init app/src/main/cpp/byedpi
+          python3 tools/build-native-contract.py
       - name: Run pure model tests without Android SDK
-        run: bash ./gradlew -p verification test --no-daemon --console=plain
+        run: bash ./gradlew -p verification test -Pmaffinet.nativeFixture="$PWD/verification/build/native/native-contract" --no-daemon --console=plain
       - name: Upload JVM validation reports
         if: always()
         uses: actions/upload-artifact@v4

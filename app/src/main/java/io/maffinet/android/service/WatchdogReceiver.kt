@@ -8,8 +8,9 @@ import android.content.Intent
 import android.net.VpnService
 import android.os.Build
 import io.maffinet.android.core.dpibypass.ServiceManager
+import io.maffinet.android.core.dpibypass.ByeDpiVpnService
+import io.maffinet.android.core.debug.AppDebugManager as Log
 import io.maffinet.android.core.tgproxy.TgProxyController
-import io.maffinet.android.data.Mode
 import io.maffinet.android.MainActivity
 
 class WatchdogReceiver : BroadcastReceiver() {
@@ -34,20 +35,25 @@ class WatchdogReceiver : BroadcastReceiver() {
                 intent.action == "android.intent.action.QUICKBOOT_POWERON"
 
         if (serviceEnabled || (isBoot && autostart)) {
-            val wantsYoutube = prefs.getBoolean("wants_youtube_bypass", true)
+            if (isBoot && autostart && !serviceEnabled) {
+                prefs.edit().putBoolean("service_enabled", true).apply()
+            }
+            val wantsVpn = prefs.getBoolean("wants_youtube_bypass", true)
             val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
-            if (wantsYoutube && VpnService.prepare(appCtx) == null) {
-                ServiceManager.start(appCtx, Mode.VPN)
+            if (wantsVpn && ServiceManager.canStartVpn() && !ByeDpiVpnService.isVpnActive &&
+                !ByeDpiVpnService.hasProxyResources && VpnService.prepare(appCtx) == null) {
+                try { ServiceManager.ensureStarted(appCtx) }
+                catch (error: Exception) { Log.e("WatchdogReceiver", "VPN recovery could not start", error) }
             }
             if (wantsTelegram) {
                 val port = TgProxyController.getPort(appCtx)
-                val isTgProxyRunning = io.maffinet.android.data.isTgProxyRunningGlobal || TgProxyController.isPortOpen(
+                val isTgProxyRunning = TgProxyController.isPortOpen(
                     TgProxyController.DEFAULT_BIND_IP,
                     port,
                     500
                 )
                 if (!isTgProxyRunning) {
-                    if (wantsYoutube) {
+                    if (wantsVpn) {
                         TgProxyController.startAsync(appCtx, {}, {})
                     } else {
                         val intent = Intent(appCtx, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {

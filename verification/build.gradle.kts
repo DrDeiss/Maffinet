@@ -29,6 +29,7 @@ kotlin {
                 "io/maffinet/android/data/domains/UserDomainStoreTest.kt",
                 "io/maffinet/android/core/services/**",
                 "io/maffinet/android/core/strategy/StrategyScorerTest.kt",
+                "io/maffinet/verification/**",
             )
         }
     }
@@ -41,5 +42,6 @@ java {
 dependencies { testImplementation("junit:junit:4.13.2") }
 tasks.test {
     useJUnit()
+    systemProperty("maffinet.nativeFixture", providers.gradleProperty("maffinet.nativeFixture").getOrElse(""))
     testLogging { events("passed", "skipped", "failed") }
 }

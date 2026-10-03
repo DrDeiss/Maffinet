@@ -8,11 +8,9 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.maffinet.android.core.dpibypass.ServiceManager
+import io.maffinet.android.core.dpibypass.ByeDpiVpnService
+import io.maffinet.android.core.debug.AppDebugManager as Log
 import io.maffinet.android.core.tgproxy.TgProxyController
-import io.maffinet.android.data.AppStatus
-import io.maffinet.android.data.Mode
-import io.maffinet.android.data.appStatus
-import io.maffinet.android.data.isTgProxyRunningGlobal
 import java.util.concurrent.TimeUnit
 
 class WatchdogWorker(
@@ -27,24 +25,28 @@ class WatchdogWorker(
 
         if (!serviceEnabled) return Result.success()
 
-        val wantsYoutube = prefs.getBoolean("wants_youtube_bypass", true)
+        val wantsVpn = prefs.getBoolean("wants_youtube_bypass", true)
         val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
 
-        val serviceDead = appStatus.first != AppStatus.Running
-        val tgDead = !isTgProxyRunningGlobal && !TgProxyController.isPortOpen(
+        val serviceDead = !ByeDpiVpnService.isVpnActive && !ByeDpiVpnService.hasProxyResources
+        val tgDead = !TgProxyController.isPortOpen(
             TgProxyController.DEFAULT_BIND_IP,
             TgProxyController.getPort(appCtx),
             500
         )
 
-        if (wantsYoutube && serviceDead) {
+        if (wantsVpn && serviceDead && ServiceManager.canStartVpn()) {
             if (VpnService.prepare(appCtx) == null) {
-                ServiceManager.start(appCtx, Mode.VPN)
+                try { ServiceManager.ensureStarted(appCtx) }
+                catch (error: Exception) {
+                    Log.e("WatchdogWorker", "VPN recovery could not start", error)
+                    return Result.retry()
+                }
             }
         }
 
         if (wantsTelegram && tgDead) {
-            if (wantsYoutube) {
+            if (wantsVpn) {
                 TgProxyController.startAsync(appCtx, {}, {})
             } else {
                 val intent = android.content.Intent(appCtx, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
