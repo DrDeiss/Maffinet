@@ -2,7 +2,7 @@ package io.maffinet.android.data.settings
 
 import android.content.Context
 import android.content.SharedPreferences
-import io.maffinet.android.core.domains.BuiltInDomainLists
+import io.maffinet.android.core.services.ServiceCatalog
 
 /** New settings keys and future migrations belong here, not in UI composables. */
 class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
@@ -20,7 +20,7 @@ class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
     val schemaVersion: Int get() = preferences.getInt(SCHEMA_VERSION, CURRENT_SCHEMA_VERSION)
 
     fun enabledServiceIds(): Set<String> = preferences.getStringSet(ENABLED_SERVICES, null)?.toSet()
-        ?: BuiltInDomainLists.enabledByDefault
+        ?: ServiceCatalog.enabledByDefault
 
     fun setServiceEnabled(id: String, enabled: Boolean) {
         require(id.matches(Regex("[a-z][a-z0-9_-]*"))) { "Invalid service ID" }

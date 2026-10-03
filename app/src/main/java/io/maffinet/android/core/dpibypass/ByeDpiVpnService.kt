@@ -37,6 +37,9 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
+import io.maffinet.android.core.services.ApplicationRouting
+import io.maffinet.android.core.services.ServiceCatalog
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 class ByeDpiVpnService : LifecycleVpnService() {
     private val byeDpiProxy = ByeDpiProxy()
@@ -534,46 +537,30 @@ class ByeDpiVpnService : LifecycleVpnService() {
             builder.setMetered(false)
         }
 
-        val defaultPkgs = setOf(
-            "org.smarttube.stable",
-            "org.smarttube.beta",
-            "com.google.android.youtube",
-            "com.google.android.youtube.tv",
-            "com.liskovsoft.videomanager.v2",
-            "com.liskovsoft.smarttubetv.beta",
-            "com.teamsmart.videomanager.tv",
-            "app.revanced.android.youtube",
-            "com.google.android.apps.youtube.music",
-            "com.google.android.apps.youtube.kids",
-            "org.schabi.newpipe",
-            "org.schabi.newpipe.legacy",
-            "com.kapp.youtube",
-            "com.bg.vanced",
-            "com.libretube",
-            "com.liskovsoft.smarttubetv"
+        val settings = MaffinetSettingsRepository(this)
+        val listedApps = ApplicationRouting.selectedPackages(
+            ServiceCatalog.profiles, settings.enabledServiceIds(), settings.manualApplications(), packageName
         )
-        val selectedApps = preferences.getStringSet("selected_apps", null)
-        val listedApps = if (selectedApps == null) {
-            preferences.edit().putStringSet("selected_apps", defaultPkgs).apply()
-            defaultPkgs
-        } else {
-            val missing = defaultPkgs.filter { it !in selectedApps }
-            if (missing.isNotEmpty()) {
-                val updated = selectedApps + defaultPkgs
-                preferences.edit().putStringSet("selected_apps", updated).apply()
-                updated
-            } else {
-                selectedApps
+        val installed = listedApps.filterTo(linkedSetOf()) { candidate ->
+            try {
+                @Suppress("DEPRECATION")
+                packageManager.getApplicationInfo(candidate, 0)
+                true
+            } catch (_: PackageManager.NameNotFoundException) {
+                false
             }
         }
-
-        for (packageName in listedApps) {
+        val routed = ApplicationRouting.installedPackages(listedApps, installed, packageName)
+        var allowedCount = 0
+        for (packageName in routed) {
             try {
                 builder.addAllowedApplication(packageName)
+                allowedCount++
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to whitelist app $packageName", e)
             }
         }
+        check(allowedCount > 0) { "No selected application could be routed through Maffinet" }
 
         return builder
     }

@@ -1,16 +1,15 @@
 package io.maffinet.android.data.domains
 
 import android.content.Context
-import io.maffinet.android.core.domains.BuiltInDomainLists
 import io.maffinet.android.core.domains.DomainList
 import io.maffinet.android.core.domains.DomainParseResult
-import io.maffinet.android.core.domains.DomainParser
+import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import java.io.File
 
 class DomainListRepository(
     private val userStore: UserDomainStore,
-    private val enabledServiceIds: () -> Set<String> = { BuiltInDomainLists.enabledByDefault },
+    private val enabledServiceIds: () -> Set<String> = { ServiceCatalog.enabledByDefault },
     private val userEnabled: () -> Boolean = { true },
     private val changeUserEnabled: (Boolean) -> Unit = {},
 ) {
@@ -23,11 +22,7 @@ class DomainListRepository(
     )
 
     fun getLists(): List<DomainList> {
-        val selection = enabledServiceIds()
-        val services = BuiltInDomainLists.services.map { it.copy(isActive = it.id in selection) }
-        val user = DomainList("user", "User", userDomains(), isActive = userEnabled())
-        val general = DomainList("general", "General", DomainParser.merge(services + user), isBuiltIn = true)
-        return listOf(general, user) + services
+        return ServiceCatalog.domainLists(enabledServiceIds(), userDomains(), userEnabled())
     }
 
     fun activeDomains(): List<String> = getLists().first { it.id == "general" }.domains

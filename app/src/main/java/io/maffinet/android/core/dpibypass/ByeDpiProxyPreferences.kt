@@ -24,8 +24,7 @@ class ByeDpiProxyCmdPreferences(val args: Array<String>) : ByeDpiProxyPreference
     companion object {
         private fun parseCmdToArguments(preferences: SharedPreferences, context: Context): Array<String> {
             val cmd = preferences.getStringNotNull("byedpi_cmd_args", "-o1 -a1 -r-5+se")
-            val ip = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
-            val port = preferences.getStringNotNull("byedpi_proxy_port", "1080")
+            val (ip, port) = preferences.getProxyIpAndPort()
             return ByeDpiArgumentCompiler.compile(cmd, filterConfiguration(context), ip, port)
         }
 
