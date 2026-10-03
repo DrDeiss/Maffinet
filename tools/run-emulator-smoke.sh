@@ -43,6 +43,18 @@ cleanup() {
     timeout 15s "$ADB" -s "$ANDROID_SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
     timeout 10s "$ADB" -s "$ANDROID_SERIAL" exec-out screencap -p > "$REPORT_DIR/screenshots/final-screen.png" 2> "$REPORT_DIR/screencap.log"
     timeout 20s "$ADB" -s "$ANDROID_SERIAL" pull /sdcard/Android/data/io.maffinet.android/files/ui-smoke "$REPORT_DIR/screenshots/" > "$REPORT_DIR/screenshot-pull.log" 2>&1
+    local screenshot_count=0
+    if [[ -d "$REPORT_DIR/screenshots/ui-smoke" ]]; then
+      screenshot_count=$(find "$REPORT_DIR/screenshots/ui-smoke" -type f -name '*.png' -size +0c | wc -l)
+    fi
+    printf 'Captured UI screenshots: %s\n' "$screenshot_count" | tee "$REPORT_DIR/screenshot-summary.txt"
+    if (( screenshot_count == 0 )); then
+      echo 'No UI test screenshots were collected; the final emulator screen alone is insufficient.' >&2
+      cat "$REPORT_DIR/screenshot-pull.log" >&2
+      # Preserve an earlier test/boot failure, and fail otherwise successful
+      # tests whose required visual evidence could not be exported.
+      (( status != 0 )) || status=1
+    fi
     timeout 10s "$ADB" -s "$ANDROID_SERIAL" emu kill >> "$REPORT_DIR/emulator-stop.log" 2>&1
     kill -TERM "$EMULATOR_PID" 2>/dev/null
     for ((attempt=0; attempt<10; attempt++)); do
@@ -111,4 +123,8 @@ for setting in window_animation_scale transition_animation_scale animator_durati
 done
 timeout 10s "$ADB" -s "$ANDROID_SERIAL" logcat -c
 cd "$ROOT_DIR"
-timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+# AGP 9.0.1 marks this retention option stable and wires it to keepInstalledApks.
+# Retain APKs only on this isolated test emulator until screenshots are pulled.
+# AndroidX uses the same option for screenshot outputs:
+# https://android.googlesource.com/platform/frameworks/support/+/eb74b1a4b3527414639994574a201f125aff90f5
+timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"

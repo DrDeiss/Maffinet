@@ -79,12 +79,14 @@ class MaffinetUiSmokeTest {
         compose.onNodeWithText("Продолжить").performClick()
         waitForText("Добро пожаловать в Maffinet")
         compose.onNodeWithText(UNOFFICIAL_NOTICE).assertDoesNotExist()
+        waitForDisplayedText("Начать")
         compose.onNodeWithText("Начать").assertIsDisplayed()
         saveScreenshot("02-onboarding-welcome")
 
         relaunchActivity()
         waitForText("Добро пожаловать в Maffinet")
         compose.onNodeWithText(UNOFFICIAL_NOTICE).assertDoesNotExist()
+        waitForDisplayedText("Начать")
         compose.onNodeWithText("Начать").assertIsDisplayed()
     }
 
@@ -166,12 +168,14 @@ class MaffinetUiSmokeTest {
             .putBoolean("maffinet_fork_notice_seen", noticeSeen)
             .commit())
         scenario = ActivityScenario.launch(MainActivity::class.java)
+        waitForSplashDismissal()
     }
 
     /** A new Activity reads persisted preferences/files; it cannot reuse rememberSaveable state. */
     private fun relaunchActivity() {
         closeActivity()
         scenario = ActivityScenario.launch(MainActivity::class.java)
+        waitForSplashDismissal()
     }
 
     private fun closeActivity() {
@@ -210,6 +214,22 @@ class MaffinetUiSmokeTest {
     private fun waitForText(text: String, substring: Boolean = false) {
         compose.waitUntil(timeoutMillis = 20_000) {
             compose.onAllNodesWithText(text, substring = substring).fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun waitForDisplayedText(text: String) {
+        compose.waitUntil(timeoutMillis = 20_000) {
+            // Welcome uses a delayed AnimatedVisibility; presence alone is insufficient.
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithText(text).isDisplayed()
+        }
+    }
+
+    private fun waitForSplashDismissal() {
+        compose.waitUntil(timeoutMillis = 20_000) {
+            compose.mainClock.advanceTimeByFrame()
+            // Home semantics already exist underneath the splash, so wait for its actual dismissal.
+            compose.runOnIdle { !MainActivity.splashNotShownYet }
         }
     }
 

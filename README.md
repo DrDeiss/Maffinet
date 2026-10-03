@@ -94,6 +94,14 @@ control. Unit tests cover parsing/merging, profiles, arguments, scoring and
 persistence. `./gradlew -p verification test` runs pure production-source JVM tests
 without Android SDK. Linux CI also compiles unchanged pinned ByeDPI for actual
 host/protocol/retry/UDP contract checks; see [verification](verification/README.md).
+CI also assembles instrumentation tests, runs Android Lint with errors fatal and
+executes UI/native VPN smoke tests on an AOSP API29 x86_64 emulator. It collects
+reports and screen captures. A licensed Linux SDK host can run the same checks
+with `bash tools/run-emulator-smoke.sh`; the script requires a provisioned AOSP
+API29 image, emulator, platform tools and KVM. Its simulated VPN consent is
+restricted to an explicitly opted-in qemu test environment. The tests check native
+SOCKS/TUN lifecycle and selected-service probes, while routed helper-app traffic,
+provider bypass, media and physical phone/TV acceptance remain separate checks.
 Use [device validation](docs/DEVICE_VALIDATION.md)
 for VPN lifecycle, background, network switching and Android TV checks.
 

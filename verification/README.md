@@ -15,8 +15,10 @@ APK build, instrumented tests, native ABI loading, or physical-device checks.
 On Linux, fetch the pinned ByeDPI submodule and run
 `python3 tools/build-native-contract.py`, then pass
 `-Pmaffinet.nativeFixture="$PWD/verification/build/native/native-contract"` to the
-verification command. Five additional contract tests feed the production argument
+verification command. Six additional contract tests feed the production argument
 compiler into the real pinned native parser/group selector. They exercise HTTP/TLS
 hostname boundaries, retry groups, protocol narrowing, and UDP unchanged forwarding
 through a local socketpair. No external connections or Android SDK are involved.
+The sixth case compiles all 73 unchanged inherited presets with the production
+selective argument compiler and requires the real native parser to accept each.
 Without that fixture these tests explicitly skip; ordinary JVM tests still run.

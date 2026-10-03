@@ -11,6 +11,14 @@ actual validation. Product intent does not imply successful device tests.
   Resolve that and transitive native dependency notices before distribution.
 - **Device verification:** builds/JVM tests do not prove VPN lifecycle, reconnect,
   Wi-Fi/mobile transitions, OEM background behavior, or Android TV navigation.
+  AOSP API29 x86_64 instrumentation covers native SOCKS/TUN start/stop/retry and
+  restoration after testing; it does not certify routed helper-app traffic or
+  equivalent behavior on physical devices and other Android versions.
+- **Native page alignment:** Android Lint reports that the inherited JNA5.14.0
+  x86_64 `libjnidispatch.so` is not 16KB aligned. This AOSP API29 test does not
+  validate 16KB-page compatibility; audit every packaged native dependency before
+  claiming support for that environment. The retained HEV binaries themselves
+  have 16KB-aligned ELF load segments on all four ABIs.
 - **Connectivity checks:** HTTP/TLS reachability does not prove authentication,
   media delivery or every feature of a service application. Service domains are
   initial values and require maintenance.
