@@ -9,6 +9,29 @@ permissions:
   contents: read
 
 jobs:
+  jvm-models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify inherited native ABI contracts
+        run: python3 tools/verify-native-binaries.py
+      - name: Run pure model tests without Android SDK
+        run: bash ./gradlew -p verification test --no-daemon --console=plain
+      - name: Upload JVM validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jvm-validation
+          path: verification/build/reports/tests/
+          if-no-files-found: ignore
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -27,15 +50,12 @@ jobs:
         shell: bash
         run: |
           test -s "$ANDROID_HOME/licenses/android-sdk-license"
-          test -s "$ANDROID_HOME/licenses/android-sdk-preview-license" || {
-            echo 'The runner must provision an accepted Android SDK Preview License for NDK r30 beta1.'
-            echo 'This workflow never accepts license agreements automatically.'
-            exit 1
-          }
       - name: Install pinned tools using runner agreements
-        run: sdkmanager --channel=3 "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198" "cmake;3.22.1" </dev/null
+        # Stable r29 uses the runner's existing Android SDK agreement. No preview
+        # agreement is accepted, and the app's inherited r30 beta default stays.
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" </dev/null
       - name: Build APK and run JVM tests
-        run: bash ./gradlew :app:assembleDebug :app:testDebugUnitTest --no-daemon --console=plain
+        run: bash ./gradlew :app:assembleDebug :app:testDebugUnitTest -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -43,5 +63,4 @@ jobs:
           name: android-validation
           path: |
             app/build/reports/tests/
-            app/build/outputs/apk/debug/*.apk
           if-no-files-found: ignore

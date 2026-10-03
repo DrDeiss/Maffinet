@@ -21,6 +21,7 @@ actual validation. Product intent does not imply successful device tests.
   separate target SDK migration and permission/foreground-service validation.
   Release signing is unconfigured; use a private maintainer key outside Git.
 - **SDK agreements:** portable setup stages Android SDK and Preview agreements
-  without accepting them. CI requires a runner that provisioned them already.
+  without accepting them. CI uses stable NDK r29 with the runner's existing standard
+  agreement; that validates a compiler override, not the default r30 beta toolchain.
 
 Use [the device checklist](DEVICE_VALIDATION.md) before calling a build ready.

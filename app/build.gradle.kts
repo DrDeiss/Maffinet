@@ -8,7 +8,7 @@ plugins {
 
 android {
     namespace = "io.maffinet.android"
-    ndkVersion = "30.0.14904198"
+    ndkVersion = providers.gradleProperty("maffinet.ndkVersion").getOrElse("30.0.14904198")
     compileSdk {
         version = release(36)
     }

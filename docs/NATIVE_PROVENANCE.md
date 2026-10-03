@@ -21,6 +21,11 @@ and configured NDK. Normal builds never invoke it or overwrite shipped HEV files
 Rust uses JNA C exports and is independent of the Kotlin package. ByeDPI JNI
 symbols are rebuilt to match the new package.
 
+The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
+published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.
+This override changes the compiler toolchain only; it never rebuilds the retained
+HEV/Rust binaries. CI success does not validate the default beta toolchain.
+
 The unavailable HEV source and unverified Rust binary/source correspondence are
 release gates. A working APK using the binaries is not a reproducible source build.
 Restore matching sources and third-party notices before public binary distribution.

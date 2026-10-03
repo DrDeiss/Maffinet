@@ -18,6 +18,9 @@ TELEGRAM_POST_*.md
 /.toolchain/
 /.gradle-user/
 /app/build/
+/verification/build/
 *.jks
 *.keystore
 keystore.properties
+__pycache__/
+*.py[cod]
