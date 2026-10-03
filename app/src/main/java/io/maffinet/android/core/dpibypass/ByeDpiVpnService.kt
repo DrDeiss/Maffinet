@@ -96,14 +96,21 @@ class ByeDpiVpnService : LifecycleVpnService() {
                 availableNetworks.add(network)
                 if (networkLost || (lastNetwork != null && lastNetwork != network)) {
                     if (isRunning) {
+                        val recoveryRequest = ServiceManager.currentStartRequest()
                         lifecycleScope.launch {
                             mutex.withLock {
-                                if (!isRunning || !ServiceManager.canStartVpn()) return@withLock
+                                if (!isRunning || !recoveryIsCurrent(recoveryRequest)) return@withLock
+                                starting = true
                                 try {
                                     updateStatus(ServiceStatus.Disconnected)
                                     stopTun2Socks()
                                     stopProxy()
+                                    if (!recoveryIsCurrent(recoveryRequest)) return@withLock
                                     startProxy()
+                                    if (!recoveryIsCurrent(recoveryRequest)) {
+                                        cleanupPipeline()
+                                        return@withLock
+                                    }
                                     startTun2Socks()
                                     updateStatus(ServiceStatus.Connected)
                                 } catch (e: Exception) {
@@ -111,6 +118,8 @@ class ByeDpiVpnService : LifecycleVpnService() {
                                     cleanupPipeline()
                                     updateStatus(ServiceStatus.Failed)
                                     stopSelf()
+                                } finally {
+                                    starting = false
                                 }
                             }
                         }
@@ -180,7 +189,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
                     return START_NOT_STICKY
                 }
                 lifecycleScope.launch {
-                    stop()
+                    stop(intent, startId)
                 }
                 START_NOT_STICKY
             }
@@ -188,9 +197,10 @@ class ByeDpiVpnService : LifecycleVpnService() {
             RESUME_ACTION -> {
                 getPreferences().edit().putBoolean("service_enabled", true).apply()
                 ServiceManager.onVpnResumed()
+                val resumeRequest = ServiceManager.currentStartRequest()
                 lifecycleScope.launch {
                     if (ServiceManager.canStartVpn() && prepare(this@ByeDpiVpnService) == null) {
-                        start()
+                        start(resumeRequest)
                     }
                 }
                 START_STICKY
@@ -214,7 +224,8 @@ class ByeDpiVpnService : LifecycleVpnService() {
             null -> {
                 val desired = getPreferences().getBoolean("service_enabled", false)
                 if (desired && ServiceManager.canStartVpn() && prepare(this) == null) {
-                    lifecycleScope.launch { start() }
+                    val recoveryRequest = ServiceManager.currentStartRequest()
+                    lifecycleScope.launch { start(recoveryRequest) }
                     START_STICKY
                 } else {
                     stopSelf()
@@ -234,7 +245,11 @@ class ByeDpiVpnService : LifecycleVpnService() {
         lifecycleScope.launch { stop() }
     }
 
-    private suspend fun start(request: Intent? = null) {
+    private fun recoveryIsCurrent(request: Intent): Boolean =
+        ServiceManager.canStartVpn() && ServiceManager.isStartRequestCurrent(request) &&
+            getPreferences().getBoolean("service_enabled", false)
+
+    private suspend fun start(request: Intent?) {
         Log.i(TAG, "Starting")
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
@@ -307,7 +322,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         notificationManager.notify(FOREGROUND_SERVICE_ID, pausedNotification)
     }
 
-    private suspend fun stop() {
+    private suspend fun stop(request: Intent? = null, commandStartId: Int? = null) {
         Log.i(TAG, "Stopping")
 
         releaseWakeLock()
@@ -316,12 +331,16 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
 
         mutex.withLock {
+            // A newer START can arrive while an earlier STOP waits for startup.
+            if (!ServiceManager.isStopRequestCurrent(request)) return
             cleanupPipeline()
             updateStatus(ServiceStatus.Disconnected)
         }
+        if (!ServiceManager.isStopRequestCurrent(request)) return
+        if (commandStartId != null && !stopSelfResult(commandStartId)) return
         @Suppress("DEPRECATION")
         stopForeground(true)
-        stopSelf()
+        if (commandStartId == null) stopSelf()
     }
 
     private suspend fun cleanupPipeline() = withContext(NonCancellable + Dispatchers.IO) {

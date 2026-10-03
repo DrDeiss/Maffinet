@@ -15,19 +15,35 @@ release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
 installation alongside NetFix Mobile.
 
-## Product direction
+## Features
 
 Choose services while separate models handle Android package routing, domain
 lists and ByeDPI strategy selection. Initial profiles: YouTube, Instagram and
 LinkedIn. Home, Services, Strategies and Settings expose normal controls;
 advanced network controls and the inherited standalone Telegram proxy remain
-available separately. Local user-domain editing and multi-service connectivity
-checks are implemented in the later phases described in PLAN.md.
+available separately. Local user-domain editing, import/export and multi-service
+HTTP/TLS checks are implemented. YouTube is enabled initially to preserve the
+upstream default; Instagram and LinkedIn can be enabled in Services.
 
 No accounts, remote VPN servers, backend, telemetry or ML selector are added.
 Connectivity probes establish HTTP/TLS reachability rather than guaranteeing every
 feature of a service application. Auto ranks successful service coverage before
 latency using deterministic rules.
+
+1. Enable the required profiles in **Services**. Their installed Android packages
+   combine with manual choices in **Settings → Приложение и подключение**.
+2. Add local domains in **Settings → Domain lists**, validate and save; enable
+   the User list. Import/export uses Android's document picker.
+3. Run **Strategies → Auto** to compare selected services, or choose an existing
+   strategy manually. The matrix records the last check and individual HTTP errors.
+4. Connect from **Home** after granting Android VPN permission. Configuration
+   changes require stopped VPN resources; tests stop and restore an active VPN.
+
+General is the union of enabled service and User domains. New profiles belong in
+`core/services/ServiceCatalog.kt`; routing, lists, UI and probes consume that data.
+Advanced retains raw commands, desync, host overrides, DNS, IPv6 and strategy
+import/export. `{domains}` and `{list:general}` reference active lists; legacy
+`{sni}` remains compatible with the original fake-SNI value.
 
 ## Networking
 
@@ -39,8 +55,11 @@ Android VpnService → TUN → HEV tun2socks → local SOCKS → ByeDPI → Inte
 
 Traffic is processed locally. Android VPN consent creates the local tunnel; this
 does not hide the public IP address. Routing packages through that tunnel and
-matching hostnames in ByeDPI are separate responsibilities. Domain filtering
-requires observable supported hostnames and has protocol limits.
+matching hostnames in ByeDPI are separate responsibilities. Default selective
+mode filters every TCP desync group by observable HTTP/TLS hostnames and forwards
+unselected traffic without desync. This native revision ignores host filters for
+UDP, so selective mode forwards UDP unchanged. Advanced host override retains
+unrestricted legacy behavior. IP-only and encrypted-hostname traffic may not match.
 
 ## Build and tests
 
@@ -68,11 +87,14 @@ and original JNI compatibility bridge. [Native provenance](docs/NATIVE_PROVENANC
 records exact source pins and binary hashes. The optional `:app:rebuildHevTunnel`
 requires the recovered matching customized source; stock HEV has a different ABI.
 
-CI builds/tests on runners with previously provisioned SDK agreements and fails
-if preview acceptance is missing. Debug APKs appear in app/build/outputs/apk/debug.
+CI builds/tests with stable NDK29.0.14206865 and the runner's existing standard
+SDK agreement; -Pmaffinet.ndkVersion supplies that compiler override. Debug APKs appear in app/build/outputs/apk/debug.
 Release signing is unconfigured; use a private maintainer key outside source
-control. Unit tests are added for parsing/merging, profiles, arguments, scoring
-and persistence as those phases are implemented. Use [device validation](docs/DEVICE_VALIDATION.md)
+control. Unit tests cover parsing/merging, profiles, arguments, scoring and
+persistence. `./gradlew -p verification test` runs pure production-source JVM tests
+without Android SDK. Linux CI also compiles unchanged pinned ByeDPI for actual
+host/protocol/retry/UDP contract checks; see [verification](verification/README.md).
+Use [device validation](docs/DEVICE_VALIDATION.md)
 for VPN lifecycle, background, network switching and Android TV checks.
 
 ## License and attribution

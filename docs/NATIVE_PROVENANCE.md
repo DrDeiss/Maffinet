@@ -29,3 +29,12 @@ HEV/Rust binaries. CI success does not validate the default beta toolchain.
 The unavailable HEV source and unverified Rust binary/source correspondence are
 release gates. A working APK using the binaries is not a reproducible source build.
 Restore matching sources and third-party notices before public binary distribution.
+
+Focused recovery check on 2026-10-03 found no exact HEV commit in the canonical
+heiher repository or the closest dovecoteescapee, wiktorbgu and romanvht forks.
+Global GitHub commit/code searches also found no exact SHA. NetFix's initial public
+commit [0a246dbb](https://github.com/rupleide/NetFixMobile/commit/0a246dbb70b054667a1293f6220e04a5d5b60e72)
+already contains this pin and canonical URL; there is no earlier public submodule
+history in that repository. This is a bounded search result, not proof that the
+source exists nowhere. Request the exact customized source archive/repository,
+recursive submodules and build procedure from the upstream author.

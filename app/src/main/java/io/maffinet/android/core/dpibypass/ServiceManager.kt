@@ -35,6 +35,10 @@ object ServiceManager {
         intent?.hasExtra(EXTRA_START_GENERATION) != true ||
             intent?.getLongExtra(EXTRA_START_GENERATION, -1L) == desiredGeneration
 
+    /** Capture before dispatch/suspension so a later STOP invalidates recovery too. */
+    @Synchronized fun currentStartRequest(): Intent =
+        Intent().putExtra(EXTRA_START_GENERATION, desiredGeneration)
+
     /** Explicit connection request; during a scan it is deferred until native cleanup. */
     @Synchronized fun start(context: Context, mode: Mode) {
         val applicationContext = context.applicationContext

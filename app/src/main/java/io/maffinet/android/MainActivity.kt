@@ -177,8 +177,8 @@ class MainActivity : ComponentActivity() {
             val primaryTab = if (selectedTab in listOf(0, 5, 2, 3)) selectedTab else 3
             val navigate: (Int) -> Unit = { index ->
                 val testing = io.maffinet.android.core.dpibypass.StrategyTestManager.isTesting
-                val connected = io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running
-                if ((testing && index in listOf(1, 6, 7)) || (connected && index in listOf(1, 7))) {
+                val configurationLocked = io.maffinet.android.ui.components.configurationIsLocked()
+                if ((testing && index in listOf(1, 6, 7)) || (configurationLocked && index in listOf(1, 7))) {
                     android.widget.Toast.makeText(context, "Остановите подключение или проверку, чтобы изменять эти настройки", android.widget.Toast.LENGTH_SHORT).show()
                 } else selectedTab = index.coerceIn(0, 9)
             }

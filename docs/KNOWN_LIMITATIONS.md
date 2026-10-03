@@ -17,6 +17,17 @@ actual validation. Product intent does not imply successful device tests.
 - **Filtering:** observable supported hostnames can match ByeDPI domain lists;
   IP-only, encrypted-hostname and some UDP traffic may not. Package routing and
   domain filtering have different scopes.
+- **UDP:** this pinned native revision does not apply host filters to UDP desync.
+  Selective mode therefore forwards UDP unchanged and confines desync to TCP.
+  Advanced host override preserves unrestricted legacy settings explicitly.
+- **Empty routing:** Maffinet refuses a tunnel with no installed selected packages
+  rather than capturing the entire device. Install an enabled profile application
+  or choose an installed application manually for custom domains.
+- **Probe history:** matrices show saved HTTP/TLS results for the tested selection,
+  not continuous availability. HTTP protection/rate limits can cause false failures.
+- **Native termination:** a worker that still runs after bounded stop/force-close
+  blocks another singleton start. Restart the application process before retrying;
+  activity recreation alone cannot reset a native worker.
 - **Publication:** targetSdk remains the inherited 26. Store publication needs a
   separate target SDK migration and permission/foreground-service validation.
   Release signing is unconfigured; use a private maintainer key outside Git.
