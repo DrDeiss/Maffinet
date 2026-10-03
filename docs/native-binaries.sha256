@@ -1,7 +1,7 @@
-208c425922eccd95fe3d779cc699939571347d4d234dbe3bda3ab3d8f30a1bee  app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so
-24d4f421572382262167db89d9028d6e97ade91d7887a292afb990aa47ef4d56  app/src/main/jniLibs/armeabi-v7a/libhev-socks5-tunnel.so
-65f5b1480aa43000988304d457207ea97465d98986acecd825184339a4b9fe82  app/src/main/jniLibs/x86_64/libhev-socks5-tunnel.so
-4d4babb577c7d5a9a083ad9fb3a2843b281984e7795b445a0c8ff2e82083cef3  app/src/main/jniLibs/x86/libhev-socks5-tunnel.so
+8a494af65c1c8c30452b8d76bc1518dc0b2c7e3a13adf454e5b35c3de1e6389a  app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so
+f3ed4b6345736a6dedd61477cb8be9ed2bd6b41e531f87268fd9ebd551f91bb4  app/src/main/jniLibs/armeabi-v7a/libhev-socks5-tunnel.so
+2e3d9ea76040ea6afdbae21307ea5064db0267a0eea35a3f090a6ae360dac5ed  app/src/main/jniLibs/x86_64/libhev-socks5-tunnel.so
+60dd2e63977e0ff352b30846c93922ca06b17d53262815b291cd52ff6da2184e  app/src/main/jniLibs/x86/libhev-socks5-tunnel.so
 6a6c2220871723cef82c2cb7bc7786858b620b0ef3a6c0a40787dad873fc98e8  app/src/main/jniLibsRust/arm64-v8a/libtgwsproxy.so
 2adb886bafab1249c704851a43223086bd1b8bfa836be98ffb44a5171934eec5  app/src/main/jniLibsRust/armeabi-v7a/libtgwsproxy.so
 0240f45b8fac0b975c0d918d7b351b2c9c17047994f83faa66089b87ad2c5dac  app/src/main/jniLibsRust/x86_64/libtgwsproxy.so

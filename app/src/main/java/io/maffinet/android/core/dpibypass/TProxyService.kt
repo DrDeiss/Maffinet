@@ -1,8 +1,7 @@
-package com.rupleide.netfix.core.dpibypass
+package io.maffinet.android.core.dpibypass
 
-// Binary compatibility only: upstream's bundled HEV libraries RegisterNatives
-// against this exact class name and the custom (String, Int, Boolean) ABI.
-// The applicationId, manifest components and remaining code belong to Maffinet.
+// HEV registers this Maffinet class through JNI_OnLoad. The audited fixed-width
+// namespace rebind preserves its custom (String, Int, Boolean) tunnel ABI.
 
 object TProxyService {
     init {

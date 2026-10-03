@@ -1,6 +1,5 @@
 package io.maffinet.android.core.dpibypass
 
-import com.rupleide.netfix.core.dpibypass.TProxyService
 
 import android.app.Notification
 import android.app.NotificationManager

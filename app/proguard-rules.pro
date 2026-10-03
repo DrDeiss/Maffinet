@@ -19,3 +19,6 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# HEV resolves this class and its methods by name from JNI_OnLoad.
+-keep class io.maffinet.android.core.dpibypass.TProxyService { *; }

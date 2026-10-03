@@ -4,7 +4,8 @@ This is an alpha development checkout. PLAN.md records completed phases and
 actual validation. Product intent does not imply successful device tests.
 
 - **Missing custom HEV source:** gitlink `c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1`
-  cannot be fetched from its declared origin. Builds retain the original binaries.
+  cannot be fetched from its declared origin. Builds retain the engine bytes with
+  a verified 48-byte JNI class-name rebind to Maffinet; this is not a source rebuild.
   Recover the matching customized source before publishing a complete source release.
 - **Rust provenance:** source, Cargo.lock and binaries were imported together, but
   no inherited build script or attestation proves binary/source correspondence.

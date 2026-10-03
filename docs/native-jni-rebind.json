@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "originalJniClass": "com/rupleide/netfix/core/dpibypass/TProxyService",
+  "maffinetJniClass": "io/maffinet/android/core/dpibypass/TProxyService",
+  "classNameBytes": 48,
+  "libraries": [
+    {
+      "abi": "arm64-v8a",
+      "path": "app/src/main/jniLibs/arm64-v8a/libhev-socks5-tunnel.so",
+      "offset": 60371,
+      "originalSha256": "208c425922eccd95fe3d779cc699939571347d4d234dbe3bda3ab3d8f30a1bee",
+      "maffinetSha256": "8a494af65c1c8c30452b8d76bc1518dc0b2c7e3a13adf454e5b35c3de1e6389a"
+    },
+    {
+      "abi": "armeabi-v7a",
+      "path": "app/src/main/jniLibs/armeabi-v7a/libhev-socks5-tunnel.so",
+      "offset": 55956,
+      "originalSha256": "24d4f421572382262167db89d9028d6e97ade91d7887a292afb990aa47ef4d56",
+      "maffinetSha256": "f3ed4b6345736a6dedd61477cb8be9ed2bd6b41e531f87268fd9ebd551f91bb4"
+    },
+    {
+      "abi": "x86",
+      "path": "app/src/main/jniLibs/x86/libhev-socks5-tunnel.so",
+      "offset": 45824,
+      "originalSha256": "4d4babb577c7d5a9a083ad9fb3a2843b281984e7795b445a0c8ff2e82083cef3",
+      "maffinetSha256": "60dd2e63977e0ff352b30846c93922ca06b17d53262815b291cd52ff6da2184e"
+    },
+    {
+      "abi": "x86_64",
+      "path": "app/src/main/jniLibs/x86_64/libhev-socks5-tunnel.so",
+      "offset": 60128,
+      "originalSha256": "65f5b1480aa43000988304d457207ea97465d98986acecd825184339a4b9fe82",
+      "maffinetSha256": "2e3d9ea76040ea6afdbae21307ea5064db0267a0eea35a3f090a6ae360dac5ed"
+    }
+  ]
+}

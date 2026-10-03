@@ -1,9 +1,12 @@
-"""Check inherited native files against their immutable SHA256 and JNI contract."""
+"""Check shipped hashes, Maffinet JNI bindings and the exact inherited byte delta."""
 from hashlib import sha256
 from pathlib import Path
+from rebind_hev_jni import load_contract, audit_library
 
 root = Path(__file__).resolve().parents[1]
 manifest = root / "docs/native-binaries.sha256"
+old_jni, new_jni, bindings = load_contract(root)
+bindings = {entry["path"]: entry for entry in bindings}
 entries = []
 for line in manifest.read_text(encoding="utf-8-sig").splitlines():
     if not line.strip():
@@ -15,14 +18,9 @@ for line in manifest.read_text(encoding="utf-8-sig").splitlines():
     contents = file.read_bytes()
     actual = sha256(contents).hexdigest()
     if actual != expected:
-        raise RuntimeError(f"Inherited native binary changed: {name}")
+        raise RuntimeError(f"Shipped native binary differs from its manifest: {name}")
     if file.name == "libhev-socks5-tunnel.so":
-        for required in (
-            b"com/rupleide/netfix/core/dpibypass/TProxyService",
-            b"(Ljava/lang/String;IZ)V",
-        ):
-            if required not in contents:
-                raise RuntimeError(f"Inherited HEV JNI contract is missing: {name}")
+        audit_library(contents, bindings[name], old_jni, new_jni)
     entries.append(name)
 
 expected_files = {
@@ -33,4 +31,10 @@ expected_files = {
 }
 if set(entries) != expected_files or len(entries) != len(expected_files):
     raise RuntimeError("Native manifest must contain exactly the eight inherited ABI libraries")
-print("Verified all eight inherited native hashes and four HEV JNI contracts.")
+bridge = root / "app/src/main/java/io/maffinet/android/core/dpibypass/TProxyService.kt"
+if not bridge.is_file() or "package io.maffinet.android.core.dpibypass" not in bridge.read_text(encoding="utf-8"):
+    raise RuntimeError("Maffinet HEV Kotlin bridge is missing")
+old_bridge = root / "app/src/main/java" / (old_jni.decode("ascii") + ".kt")
+if old_bridge.exists():
+    raise RuntimeError("The legacy HEV Kotlin namespace must not be shipped")
+print("Verified eight shipped native hashes and four Maffinet HEV JNI bindings with exact inverse provenance.")
