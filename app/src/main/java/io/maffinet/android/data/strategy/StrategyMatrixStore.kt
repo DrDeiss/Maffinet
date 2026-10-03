@@ -10,16 +10,21 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 
-/** Versioned local probe history; independent from legacy strategy import/export. */
+data class StrategyMatrixHistory(val fingerprint: String, val evaluations: List<StrategyEvaluation>)
+
+/** Versioned local probe history; only matching compiler/target snapshots are current evidence. */
 class StrategyMatrixStore(context: Context) {
     private val file = File(context.filesDir, "strategy_matrix_v1.json")
 
-    fun load(): List<StrategyEvaluation> = try {
-        if (!file.isFile) emptyList() else {
+    fun hasSavedHistory(): Boolean = file.isFile
+
+    fun load(): StrategyMatrixHistory? = try {
+        if (!file.isFile) null else {
             val root = JSONObject(file.readText())
-            if (root.optInt("version") != 1) emptyList() else {
+            // Version 1 did not record hosts/targets and cannot be presented as a current check.
+            if (root.optInt("version") != 2) null else {
                 val entries = root.getJSONArray("evaluations")
-                (0 until entries.length()).map { index ->
+                val evaluations = (0 until entries.length()).map { index ->
                     val entry = entries.getJSONObject(index)
                     val services = entry.getJSONArray("services")
                     StrategyEvaluation(entry.getInt("candidateIndex"), entry.getString("command"),
@@ -36,11 +41,12 @@ class StrategyMatrixStore(context: Context) {
                                 })
                         })
                 }
+                StrategyMatrixHistory(root.getString("fingerprint"), evaluations)
             }
         }
-    } catch (_: Exception) { emptyList() }
+    } catch (_: Exception) { null }
 
-    fun save(evaluations: Collection<StrategyEvaluation>) {
+    fun save(fingerprint: String, evaluations: Collection<StrategyEvaluation>) {
         val entries = JSONArray()
         for (evaluation in evaluations) {
             val services = JSONArray()
@@ -61,7 +67,8 @@ class StrategyMatrixStore(context: Context) {
         }
         val temporary = File(file.parentFile, file.name + ".tmp")
         FileOutputStream(temporary).use { stream ->
-            stream.write(JSONObject().put("version", 1).put("evaluations", entries).toString().toByteArray(Charsets.UTF_8))
+            stream.write(JSONObject().put("version", 2).put("fingerprint", fingerprint)
+                .put("evaluations", entries).toString().toByteArray(Charsets.UTF_8))
             stream.fd.sync()
         }
         try {

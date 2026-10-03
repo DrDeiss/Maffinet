@@ -5,6 +5,11 @@ import io.maffinet.android.core.debug.AppDebugManager as Log
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.SecureRandom
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Mutex
+import io.maffinet.android.core.connection.ModeConnectionState
+import kotlinx.coroutines.sync.withLock
 
 object TgProxyController {
     const val DEFAULT_PORT = 1443
@@ -110,63 +115,101 @@ object TgProxyController {
         }
     }
 
-    fun startAsync(
-        context: Context,
-        onSuccess: () -> Unit,
-        onError: () -> Unit
-    ) {
-        val secretKey = getOrGenerateSecret(context)
-        val cacheDir = context.cacheDir.absolutePath
-        val dcIps = getDcIps(context)
-        val port = getPort(context)
-        val poolSize = getPoolSize(context)
-        val cfEnabled = isCfEnabled(context)
-        val cfPriority = isCfPriority(context)
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val operations = Mutex()
+    private val generation = java.util.concurrent.atomic.AtomicLong()
+    private val state = MutableStateFlow(ModeConnectionState.Stopped)
+    val status: StateFlow<ModeConnectionState> = state.asStateFlow()
+    @Volatile private var nativeStarted = false
+    @Volatile private var boundPort = DEFAULT_PORT
+    val hasResources: Boolean get() = nativeStarted
 
-        Log.i("TgProxyController", "Запуск TG-прокси на порту $port (pool: $poolSize, cf: $cfEnabled, priority: $cfPriority, dc: \"$dcIps\")")
+    internal fun markStartRequested() { state.value = ModeConnectionState.Starting }
 
-        Thread {
-            try {
-                NativeProxy.setPoolSize(poolSize)
-                NativeProxy.setCfProxyCacheDir(cacheDir)
-                NativeProxy.setCfProxyConfig(cfEnabled, cfPriority, "")
-                NativeProxy.startProxy(DEFAULT_BIND_IP, port, dcIps, secretKey, 1)
-            } catch (e: Throwable) {
-                Log.e("TgProxyController", "Error in startProxy thread", e)
-            }
-        }.start()
-
-        Thread {
-            var success = false
-            for (i in 1..6) {
+    fun startAsync(context: Context, onSuccess: () -> Unit, onError: () -> Unit) {
+        val token = generation.incrementAndGet()
+        state.value = ModeConnectionState.Starting
+        val app = context.applicationContext
+        scope.launch {
+            operations.withLock {
+                if (token != generation.get()) return@withLock
                 try {
-                    Thread.sleep(500)
-                } catch (e: InterruptedException) {
-                    break
-                }
-                if (isPortOpen(DEFAULT_BIND_IP, port, 1000)) {
-                    success = true
-                    break
+                    check(stopNative()) { "Previous Telegram proxy did not stop" }
+                    boundPort = getPort(app)
+                    check(!isPortOpen(DEFAULT_BIND_IP, boundPort, 100)) { "Telegram proxy port is already occupied" }
+                    NativeProxy.setPoolSize(getPoolSize(app))
+                    NativeProxy.setCfProxyCacheDir(app.cacheDir.absolutePath)
+                    NativeProxy.setCfProxyConfig(isCfEnabled(app), isCfPriority(app), "")
+                    // Rust StartProxy returns after binding, then owns asynchronous Tokio
+                    // tasks. A Java worker exiting is therefore not a proxy failure.
+                    nativeStarted = true
+                    val code = NativeProxy.startProxy(DEFAULT_BIND_IP, boundPort, getDcIps(app), getOrGenerateSecret(app), 1)
+                    check(code == 0) { "Telegram proxy failed to bind (code $code)" }
+                    if (token != generation.get()) {
+                        stopNative()
+                        return@withLock
+                    }
+                    check(isPortOpen(DEFAULT_BIND_IP, boundPort, 500)) { "Telegram proxy listener did not become ready" }
+                    state.value = ModeConnectionState.Running
+                    onSuccess()
+                    monitorListener(token, onError)
+                } catch (error: Throwable) {
+                    Log.e("TgProxyController", "Telegram proxy startup failed", error)
+                    stopNative()
+                    if (token == generation.get()) {
+                        state.value = ModeConnectionState.Failed
+                        onError()
+                    }
                 }
             }
-            if (success) {
-                Log.i("TgProxyController", "Порт TG-прокси $port успешно открыт")
-                onSuccess()
-            } else {
-                Log.e("TgProxyController", "Не удалось открыть порт TG-прокси $port за отведенное время")
-                onError()
-            }
-        }.start()
+        }
     }
 
-    fun stop() {
-        Log.i("TgProxyController", "Остановка TG-прокси")
-        Thread {
-            try {
-                NativeProxy.stopProxy()
-            } catch (e: Exception) {
-                Log.w("TgProxyController", "StopProxy failed", e)
+    private fun monitorListener(token: Long, onError: () -> Unit) {
+        scope.launch {
+            while (token == generation.get() && nativeStarted) {
+                delay(1_000)
+                if (token != generation.get()) return@launch
+                if (!isPortOpen(DEFAULT_BIND_IP, boundPort, 500)) {
+                    operations.withLock {
+                        if (token != generation.get()) return@withLock
+                        stopNative()
+                        state.value = ModeConnectionState.Failed
+                        onError()
+                    }
+                    return@launch
+                }
             }
-        }.start()
+        }
+    }
+
+    fun stop(preserveFailure: Boolean = false, onStopped: () -> Unit = {}) {
+        val token = generation.incrementAndGet() // Invalidates readiness before dispatching STOP.
+        val keepFailed = preserveFailure && state.value == ModeConnectionState.Failed
+        if (!keepFailed) state.value = ModeConnectionState.Stopping
+        scope.launch {
+            operations.withLock {
+                if (token != generation.get()) return@withLock
+                val clean = stopNative()
+                if (token == generation.get()) {
+                    state.value = if (clean && !keepFailed) ModeConnectionState.Stopped else ModeConnectionState.Failed
+                    onStopped()
+                }
+            }
+        }
+    }
+
+    private fun stopNative(): Boolean {
+        if (!nativeStarted) return true
+        try { NativeProxy.stopProxy() }
+        catch (error: Throwable) { Log.w("TgProxyController", "Telegram StopProxy failed", error) }
+        repeat(30) {
+            if (!isPortOpen(DEFAULT_BIND_IP, boundPort, 100)) {
+                nativeStarted = false
+                return true
+            }
+            Thread.sleep(50)
+        }
+        return false // Keep ownership and the settings lock if native cleanup failed.
     }
 }

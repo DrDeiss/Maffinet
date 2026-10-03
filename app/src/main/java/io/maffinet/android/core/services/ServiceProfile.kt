@@ -3,7 +3,7 @@ package io.maffinet.android.core.services
 import io.maffinet.android.core.domains.DomainParser
 import java.net.URI
 
-/** A catalog record links routing, domain selection and probes without conflating them. */
+/** Legacy named lists retained for strategy aliases; they never select Android apps. */
 data class ServiceProfile(
     val id: String,
     val name: String,
@@ -27,22 +27,14 @@ data class ServiceProfile(
 
 object ApplicationRouting {
     fun selectedPackages(
-        profiles: List<ServiceProfile>,
-        enabledServiceIds: Set<String>,
         manualApplications: Set<String>,
         ownPackage: String,
-    ): Set<String> {
-        val packages = linkedSetOf<String>()
-        profiles.filter { it.id in enabledServiceIds }.forEach { packages += it.packages }
-        packages += manualApplications.sorted()
-        packages.remove(ownPackage)
-        return packages
-    }
+    ): Set<String> = manualApplications.sorted().filterTo(linkedSetOf()) { it != ownPackage }
 
     /** Never let an empty allowlist turn into Android's full-device routing mode. */
     fun installedPackages(selected: Set<String>, installed: Set<String>, ownPackage: String): Set<String> {
         val routed = selected.intersect(installed) - ownPackage
-        require(routed.isNotEmpty()) { "Install an enabled service app or select an installed application in Advanced settings" }
+        require(routed.isNotEmpty()) { "Выберите хотя бы одно установленное приложение" }
         return routed
     }
 }

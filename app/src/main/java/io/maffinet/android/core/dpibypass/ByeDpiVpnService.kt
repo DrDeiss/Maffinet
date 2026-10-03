@@ -39,8 +39,12 @@ import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import io.maffinet.android.core.services.ApplicationRouting
-import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.connection.ModeConnectionState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class ByeDpiVpnService : LifecycleVpnService() {
     private val byeDpiProxy = ByeDpiProxy()
@@ -63,6 +67,9 @@ class ByeDpiVpnService : LifecycleVpnService() {
         @Volatile private var nativeProxyActive = false
         @Volatile private var tunnelActive = false
         @Volatile private var starting = false
+        private val connectionState = MutableStateFlow(ModeConnectionState.Stopped)
+        val currentStatus: StateFlow<ModeConnectionState> = connectionState.asStateFlow()
+        internal fun setConnectionState(state: ModeConnectionState) { connectionState.value = state }
         val isVpnActive: Boolean get() = status == ServiceStatus.Connected
         /** Remains true until the native worker actually exits and the TUN closes. */
         val hasProxyResources: Boolean get() = starting || nativeProxyActive || tunnelActive
@@ -158,8 +165,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         stopProxyBlocking()
         updateStatus(if (failed) ServiceStatus.Failed else ServiceStatus.Disconnected)
         releaseWakeLock()
-        val prefs = getSharedPreferences(packageName + "_preferences", android.content.Context.MODE_PRIVATE)
-        if (!failed && !hasProxyResources && ServiceManager.canStartVpn() && prefs.getBoolean("service_enabled", false)) {
+        if (!failed && !hasProxyResources && ServiceManager.canStartVpn() && MaffinetSettingsRepository(this).applicationsRequested()) {
             val intent = Intent(this, io.maffinet.android.service.WatchdogReceiver::class.java).apply {
                 action = "io.maffinet.android.action.RESTART_SERVICE"
             }
@@ -194,8 +200,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             }
 
             RESUME_ACTION -> {
-                getPreferences().edit().putBoolean("service_enabled", true).apply()
-                ServiceManager.onVpnResumed()
+                ServiceManager.onVpnResumed(this)
                 val resumeRequest = ServiceManager.currentStartRequest()
                 lifecycleScope.launch {
                     if (ServiceManager.canStartVpn() && prepare(this@ByeDpiVpnService) == null) {
@@ -215,13 +220,18 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
             SERVICE_INTERFACE -> {
                 Log.i(TAG, "Started by Android")
+                if (!MaffinetSettingsRepository(this).applicationsEnabled()) {
+                    stopSelfResult(startId)
+                    return START_NOT_STICKY
+                }
                 ServiceManager.start(this, Mode.VPN)
 
                 START_STICKY
             }
 
             null -> {
-                val desired = getPreferences().getBoolean("service_enabled", false)
+                val settings = MaffinetSettingsRepository(this)
+                val desired = settings.applicationsRequested() && settings.applicationsEnabled()
                 if (desired && ServiceManager.canStartVpn() && prepare(this) == null) {
                     val recoveryRequest = ServiceManager.currentStartRequest()
                     lifecycleScope.launch { start(recoveryRequest) }
@@ -246,7 +256,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
     private fun recoveryIsCurrent(request: Intent): Boolean =
         ServiceManager.canStartVpn() && ServiceManager.isStartRequestCurrent(request) &&
-            getPreferences().getBoolean("service_enabled", false)
+            MaffinetSettingsRepository(this).let { it.applicationsRequested() && it.applicationsEnabled() }
 
     private suspend fun start(request: Intent?) {
         Log.i(TAG, "Starting")
@@ -255,8 +265,10 @@ class ByeDpiVpnService : LifecycleVpnService() {
         notificationManager.cancel(PAUSE_NOTIFICATION_ID)
 
         mutex.withLock {
-          if (!ServiceManager.canStartVpn() || !ServiceManager.isStartRequestCurrent(request) || status == ServiceStatus.Connected) return@withLock
+          if (!ServiceManager.canStartVpn() || !ServiceManager.isStartRequestCurrent(request) ||
+              !MaffinetSettingsRepository(this).let { it.applicationsRequested() && it.applicationsEnabled() } || status == ServiceStatus.Connected) return@withLock
           starting = true
+          setConnectionState(ModeConnectionState.Starting)
           try {
             val prefs = getSharedPreferences(packageName + "_preferences", android.content.Context.MODE_PRIVATE)
             val economMode = prefs.getBoolean("econom_mode", false)
@@ -275,7 +287,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             Log.e(TAG, "Failed to start VPN", e)
             cleanupPipeline()
             releaseWakeLock()
-            io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
+            ConnectionCoordinator.refreshWatchdog(this)
             updateStatus(ServiceStatus.Failed)
             @Suppress("DEPRECATION")
             stopForeground(true)
@@ -325,13 +337,12 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.i(TAG, "Stopping")
 
         releaseWakeLock()
-        if (!getPreferences().getBoolean("service_enabled", false)) {
-            io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
-        }
+        ConnectionCoordinator.refreshWatchdog(this)
 
         mutex.withLock {
             // A newer START can arrive while an earlier STOP waits for startup.
             if (!ServiceManager.isStopRequestCurrent(request)) return
+            setConnectionState(ModeConnectionState.Stopping)
             cleanupPipeline()
             updateStatus(ServiceStatus.Disconnected)
         }
@@ -532,6 +543,11 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.d(TAG, "VPN status changed from $status to $newStatus")
 
         status = newStatus
+        setConnectionState(when (newStatus) {
+            ServiceStatus.Connected -> ModeConnectionState.Running
+            ServiceStatus.Disconnected -> ModeConnectionState.Stopped
+            ServiceStatus.Failed -> ModeConnectionState.Failed
+        })
 
         setStatus(
             when (newStatus) {
@@ -616,9 +632,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
 
         val settings = MaffinetSettingsRepository(this)
-        val listedApps = ApplicationRouting.selectedPackages(
-            ServiceCatalog.profiles, settings.enabledServiceIds(), settings.manualApplications(), packageName
-        )
+        val listedApps = ApplicationRouting.selectedPackages(settings.manualApplications(), packageName)
         val installed = listedApps.filterTo(linkedSetOf()) { candidate ->
             try {
                 @Suppress("DEPRECATION")

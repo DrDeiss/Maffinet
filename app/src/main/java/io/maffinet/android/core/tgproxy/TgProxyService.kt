@@ -1,158 +1,190 @@
 package io.maffinet.android.core.tgproxy
 
 import android.app.Notification
-import android.app.NotificationManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.Uri
 import android.os.Build
-import io.maffinet.android.core.debug.AppDebugManager as Log
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import io.maffinet.android.R
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.connection.ModeConnectionState
 import io.maffinet.android.core.dpibypass.createConnectionNotification
 import io.maffinet.android.core.dpibypass.registerNotificationChannel
-import io.maffinet.android.data.AppStatus
-import io.maffinet.android.data.Mode
-import io.maffinet.android.data.START_ACTION
-import io.maffinet.android.data.STOP_ACTION
-import io.maffinet.android.data.STARTED_BROADCAST
-import io.maffinet.android.data.STOPPED_BROADCAST
-import io.maffinet.android.data.FAILED_BROADCAST
-import io.maffinet.android.data.SENDER
-import io.maffinet.android.data.Sender
-import io.maffinet.android.data.setStatus
+import io.maffinet.android.core.debug.AppDebugManager as Log
+import io.maffinet.android.data.*
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+/** Telegram always owns its foreground service, including while VPN is also connected. */
 class TgProxyService : LifecycleService() {
-
     companion object {
-        private val TAG = TgProxyService::class.java.simpleName
         private const val FOREGROUND_SERVICE_ID = 100
-        private const val NOTIFICATION_CHANNEL_ID = "TgProxyServiceChannel"
+        private const val CHANNEL = "TgProxyServiceChannel"
+        private const val GENERATION = "io.maffinet.android.telegram_generation"
+        private var generation = 0L
+
+        @Synchronized private fun isCurrent(intent: Intent?): Boolean =
+            intent?.hasExtra(GENERATION) != true || intent.getLongExtra(GENERATION, -1L) == generation
+
+        @Synchronized fun requestStart(context: Context, openTelegram: Boolean = false) {
+            val app = context.applicationContext
+            val settings = MaffinetSettingsRepository(app)
+            if (!settings.telegramEnabled()) return
+            settings.setTelegramRequested(true)
+            if (TgProxyController.status.value in setOf(ModeConnectionState.Starting, ModeConnectionState.Running)) return
+            val token = ++generation
+            try {
+                TgProxyController.markStartRequested()
+                ContextCompat.startForegroundService(app, Intent(app, TgProxyService::class.java).apply {
+                    action = START_ACTION
+                    putExtra(GENERATION, token)
+                    putExtra("open_tg", openTelegram)
+                })
+            } catch (error: Exception) {
+                settings.setTelegramRequested(false)
+                TgProxyController.stop()
+                throw error
+            }
+            ConnectionCoordinator.refreshWatchdog(app)
+        }
+
+        @Synchronized fun ensureStarted(context: Context) {
+            val settings = MaffinetSettingsRepository(context)
+            if (settings.telegramRequested() && settings.telegramEnabled() &&
+                TgProxyController.status.value !in ConnectionCoordinator.activeStates) requestStart(context)
+        }
+
+        @Synchronized fun requestStop(context: Context) {
+            val app = context.applicationContext
+            MaffinetSettingsRepository(app).setTelegramRequested(false)
+            val token = ++generation
+            // Cancel readiness even if a queued START has not reached the service yet.
+            TgProxyController.stop()
+            try {
+                ContextCompat.startForegroundService(app, Intent(app, TgProxyService::class.java).apply {
+                    action = STOP_ACTION
+                    putExtra(GENERATION, token)
+                })
+            } catch (error: Exception) {
+                Log.e("TgProxyService", "Telegram STOP dispatch failed; stopping service directly", error)
+                app.stopService(Intent(app, TgProxyService::class.java))
+            }
+            ConnectionCoordinator.refreshWatchdog(app)
+        }
+
+        @Synchronized private fun onDirectStop(context: Context) {
+            generation++
+            MaffinetSettingsRepository(context).setTelegramRequested(false)
+            ConnectionCoordinator.refreshWatchdog(context)
+        }
     }
 
     private var wakeLock: android.os.PowerManager.WakeLock? = null
-
-    private fun acquireWakeLock() {
-        val prefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
-        if (!prefs.getBoolean("tg_proxy_wakelock_enabled", false)) return
-        if (wakeLock == null) {
-            val powerManager = getSystemService(android.content.Context.POWER_SERVICE) as android.os.PowerManager
-            wakeLock = powerManager.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Maffinet::TgProxyWakeLock").apply {
-                acquire()
-            }
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try {
-            if (wakeLock?.isHeld == true) {
-                wakeLock?.release()
-            }
-        } catch (_: Exception) {
-        } finally {
-            wakeLock = null
-        }
-    }
+    private var lastRequest: Intent? = null
 
     override fun onCreate() {
         super.onCreate()
-        registerNotificationChannel(
-            this,
-            NOTIFICATION_CHANNEL_ID,
-            R.string.proxy_channel_name
-        )
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        releaseWakeLock()
+        registerNotificationChannel(this, CHANNEL, R.string.proxy_channel_name)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-
-        val action = intent?.action
-        if (action == START_ACTION) {
-            Log.i(TAG, "Служба TgProxyService: получен запрос на запуск")
-            acquireWakeLock()
-            startForeground()
-            val openTg = intent.getBooleanExtra("open_tg", false)
-            lifecycleScope.launch {
-                TgProxyController.startAsync(
-                    context = this@TgProxyService,
-                    onSuccess = {
-                        Log.i(TAG, "Служба TgProxyService успешно запущена")
-                        setStatus(AppStatus.Running, Mode.Proxy)
-                        val broadcastIntent = Intent(STARTED_BROADCAST).apply {
-                            putExtra(SENDER, Sender.Proxy.ordinal)
-                        }
-                        sendBroadcast(broadcastIntent)
-                        
-                        val prefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
-                        val alreadyConfigured = prefs.getBoolean("tg_proxy_configured", false)
-                        if (openTg && !alreadyConfigured) {
-                            val port = TgProxyController.getPort(this@TgProxyService)
-                            val secret = TgProxyController.getOrGenerateSecret(this@TgProxyService)
-                            val url = TgProxyController.getTgProxyUrl(
-                                TgProxyController.DEFAULT_BIND_IP,
-                                port,
-                                secret
-                            )
-                            val tgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            }
-                            try {
-                                startActivity(tgIntent)
-                                prefs.edit().putBoolean("tg_proxy_configured", true).apply()
-                            } catch (_: Exception) {}
-                        }
-                    },
-                    onError = {
-                        Log.e(TAG, "Служба TgProxyService завершилась с ошибкой запуска")
-                        setStatus(AppStatus.Halted, Mode.Proxy)
-                        val broadcastIntent = Intent(FAILED_BROADCAST).apply {
-                            putExtra(SENDER, Sender.Proxy.ordinal)
-                        }
-                        sendBroadcast(broadcastIntent)
-                        stopSelf()
-                    }
-                )
-            }
-            return START_STICKY
-        } else if (action == STOP_ACTION) {
-            Log.i(TAG, "Служба TgProxyService: получен запрос на остановку")
-            releaseWakeLock()
-            TgProxyController.stop()
-            setStatus(AppStatus.Halted, Mode.Proxy)
-            val broadcastIntent = Intent(STOPPED_BROADCAST).apply {
-                putExtra(SENDER, Sender.Proxy.ordinal)
-            }
-            sendBroadcast(broadcastIntent)
-            stopSelf()
+        startForeground()
+        if (!isCurrent(intent)) {
+            if (!MaffinetSettingsRepository(this).telegramRequested()) stopSelfResult(startId)
             return START_NOT_STICKY
         }
+        if (intent?.action == STOP_ACTION && !intent.hasExtra(GENERATION)) onDirectStop(this)
+        // Sticky recovery and notification actions also need an immutable token so
+        // a later STOP/START can invalidate callbacks queued by this command.
+        val request = intent?.takeIf { it.hasExtra(GENERATION) }
+            ?: synchronized(Companion) { Intent(intent ?: Intent()).putExtra(GENERATION, generation) }
+        lastRequest = request
+        return when (intent?.action) {
+            STOP_ACTION -> {
+                releaseWakeLock()
+                TgProxyController.stop {
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        if (!isCurrent(request)) return@launch
+                        publish(STOPPED_BROADCAST, AppStatus.Halted)
+                        stopSelfResult(startId)
+                    }
+                }
+                START_NOT_STICKY
+            }
+            START_ACTION, null -> {
+                val settings = MaffinetSettingsRepository(this)
+                if (!settings.telegramRequested() || !settings.telegramEnabled()) {
+                    stopSelfResult(startId)
+                    return START_NOT_STICKY
+                }
+                acquireWakeLock()
+                TgProxyController.startAsync(this, onSuccess = {
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        if (!isCurrent(request) || !MaffinetSettingsRepository(this@TgProxyService).telegramRequested()) return@launch
+                        publish(STARTED_BROADCAST, AppStatus.Running)
+                        if (intent?.getBooleanExtra("open_tg", false) == true) openTelegram()
+                    }
+                }, onError = {
+                    lifecycleScope.launch(Dispatchers.Main) {
+                        if (!isCurrent(request)) return@launch
+                        publish(FAILED_BROADCAST, AppStatus.Halted)
+                        releaseWakeLock()
+                        stopSelfResult(startId)
+                    }
+                })
+                START_STICKY
+            }
+            else -> { stopSelfResult(startId); START_NOT_STICKY }
+        }
+    }
 
-        return START_NOT_STICKY
+    override fun onDestroy() {
+        releaseWakeLock()
+        if (isCurrent(lastRequest)) TgProxyController.stop(preserveFailure = true)
+        super.onDestroy()
+    }
+
+    private fun publish(action: String, status: AppStatus) {
+        isTgProxyRunningGlobal = status == AppStatus.Running
+        // Legacy appStatus is used by the VPN strategy wizard. Telegram has its own
+        // StateFlow and sender broadcasts and must not overwrite the VPN status.
+        sendBroadcast(Intent(action).putExtra(SENDER, Sender.Proxy.ordinal))
+    }
+
+    private fun acquireWakeLock() {
+        val prefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
+        if (prefs.getBoolean("tg_proxy_wakelock_enabled", false) && wakeLock == null) {
+            val power = getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            wakeLock = power.newWakeLock(android.os.PowerManager.PARTIAL_WAKE_LOCK, "Maffinet::TgProxyWakeLock").apply { acquire() }
+        }
+    }
+    private fun releaseWakeLock() {
+        try { if (wakeLock?.isHeld == true) wakeLock?.release() }
+        finally { wakeLock = null }
+    }
+
+    private fun openTelegram() {
+        val prefs = getSharedPreferences(packageName + "_preferences", MODE_PRIVATE)
+        if (prefs.getBoolean("tg_proxy_configured", false)) return
+        val url = TgProxyController.getTgProxyUrl(TgProxyController.DEFAULT_BIND_IP,
+            TgProxyController.getPort(this), TgProxyController.getOrGenerateSecret(this))
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            prefs.edit().putBoolean("tg_proxy_configured", true).apply()
+        } catch (error: Exception) { Log.w("TgProxyService", "Telegram link could not open", error) }
     }
 
     private fun startForeground() {
-        val notification: Notification = createConnectionNotification(
-            this,
-            NOTIFICATION_CHANNEL_ID,
-            R.string.notification_title,
-            R.string.vpn_notification_content,
-            TgProxyService::class.java
-        )
+        val notification: Notification = createConnectionNotification(this, CHANNEL,
+            R.string.notification_title, R.string.vpn_notification_content, TgProxyService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                FOREGROUND_SERVICE_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
-            )
-        } else {
-            startForeground(FOREGROUND_SERVICE_ID, notification)
-        }
+            startForeground(FOREGROUND_SERVICE_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        } else startForeground(FOREGROUND_SERVICE_ID, notification)
     }
 }

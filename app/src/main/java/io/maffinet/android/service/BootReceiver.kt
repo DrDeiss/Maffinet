@@ -3,11 +3,9 @@ package io.maffinet.android.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.VpnService
 import io.maffinet.android.MainActivity
-import io.maffinet.android.core.dpibypass.ServiceManager
-import io.maffinet.android.core.tgproxy.TgProxyController
-import io.maffinet.android.data.Mode
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.debug.AppDebugManager as Log
 
 class BootReceiver : BroadcastReceiver() {
 
@@ -23,32 +21,11 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        val prefs = appCtx.getSharedPreferences(appCtx.packageName + "_preferences", Context.MODE_PRIVATE)
-        val serviceEnabled = prefs.getBoolean("service_enabled", false)
-        val autostart = prefs.getBoolean("autostart", false)
-
         val isBoot = intent.action == Intent.ACTION_BOOT_COMPLETED ||
                 intent.action == Intent.ACTION_REBOOT ||
                 intent.action == "android.intent.action.QUICKBOOT_POWERON"
 
-        if (serviceEnabled || (isBoot && autostart)) {
-            val wantsYoutube = prefs.getBoolean("wants_youtube_bypass", true)
-            val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
-            if (wantsYoutube && VpnService.prepare(appCtx) == null) {
-                ServiceManager.start(appCtx, Mode.VPN)
-            }
-            if (wantsTelegram) {
-                if (wantsYoutube) {
-                    TgProxyController.startAsync(appCtx, {}, {})
-                } else {
-                    val intent = Intent(appCtx, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                        action = io.maffinet.android.data.START_ACTION
-                        putExtra("open_tg", false)
-                    }
-                    androidx.core.content.ContextCompat.startForegroundService(appCtx, intent)
-                }
-            }
-            WatchdogWorker.schedulePeriodicWork(appCtx)
-        }
+        try { ConnectionCoordinator.recover(appCtx, boot = isBoot) }
+        catch (error: Exception) { Log.e("BootReceiver", "Mode recovery failed", error) }
     }
 }

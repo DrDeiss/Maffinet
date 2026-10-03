@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.ContextCompat
 import io.maffinet.android.core.debug.AppDebugManager as Log
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.connection.ModeConnectionState
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.data.Mode
 import io.maffinet.android.data.START_ACTION
 import io.maffinet.android.data.STOP_ACTION
@@ -42,23 +45,26 @@ object ServiceManager {
     /** Explicit connection request; during a scan it is deferred until native cleanup. */
     @Synchronized fun start(context: Context, mode: Mode) {
         val applicationContext = context.applicationContext
-        applicationContext.getPreferences().edit().putBoolean("service_enabled", true).apply()
+        if (!MaffinetSettingsRepository(applicationContext).applicationsEnabled()) return
+        check(!nativeQuarantined) { "Native proxy did not stop; reopen Maffinet before reconnecting" }
+        MaffinetSettingsRepository(applicationContext).setApplicationsRequested(true)
         desiredGeneration++
         paused = false
         if (testing) {
             resumeAfterTesting = true
             return
         }
-        if (nativeQuarantined) {
-            Log.e("ServiceManager", "Native proxy did not stop; reopen Maffinet before reconnecting")
-            return
+        try { dispatchStart(applicationContext, desiredGeneration) }
+        catch (error: Exception) {
+            MaffinetSettingsRepository(applicationContext).setApplicationsRequested(false)
+            throw error
         }
-        dispatchStart(applicationContext, desiredGeneration)
     }
 
     /** Recovery is conditional and never reverses a newer user STOP. */
     @Synchronized fun ensureStarted(context: Context) {
-        if (!context.getPreferences().getBoolean("service_enabled", false) || !canStartVpn() ||
+        val settings = MaffinetSettingsRepository(context)
+        if (!settings.applicationsRequested() || !settings.applicationsEnabled() || !canStartVpn() ||
             ByeDpiVpnService.isVpnActive || ByeDpiVpnService.hasProxyResources) return
         dispatchStart(context.applicationContext, desiredGeneration)
     }
@@ -85,7 +91,8 @@ object ServiceManager {
         resumeAfterTesting = false
         startRequested = false
         paused = false
-        context.getPreferences().edit().putBoolean("service_enabled", false).apply()
+        MaffinetSettingsRepository(context).setApplicationsRequested(false)
+        ConnectionCoordinator.refreshWatchdog(context)
         StrategyTestManager.cancelTesting()
     }
 
@@ -97,7 +104,8 @@ object ServiceManager {
         StrategyTestManager.cancelTesting()
     }
 
-    @Synchronized fun onVpnResumed() {
+    @Synchronized fun onVpnResumed(context: Context) {
+        MaffinetSettingsRepository(context).setApplicationsRequested(true)
         desiredGeneration++
         paused = false
         startRequested = true
@@ -106,7 +114,7 @@ object ServiceManager {
 
     /** Restart stops resources while preserving the requested connection state. */
     @Synchronized fun restart(context: Context, mode: Mode) {
-        if (!context.getPreferences().getBoolean("service_enabled", false) || paused || nativeQuarantined) return
+        if (!MaffinetSettingsRepository(context).applicationsRequested() || paused || nativeQuarantined) return
         if (testing) {
             resumeAfterTesting = true
             return
@@ -119,7 +127,7 @@ object ServiceManager {
             val stopped = awaitVpnStopped()
             synchronized(this@ServiceManager) {
                 if (stopped && generation == desiredGeneration && canStartVpn() &&
-                    applicationContext.getPreferences().getBoolean("service_enabled", false)) {
+                    MaffinetSettingsRepository(applicationContext).applicationsRequested()) {
                     dispatchStart(applicationContext, generation)
                 }
             }
@@ -133,7 +141,7 @@ object ServiceManager {
         check(!testing && !nativeQuarantined) { "Another native proxy operation is still running" }
         val session = StrategyTestSession()
         activeSession = session
-        resumeAfterTesting = !paused && context.getPreferences().getBoolean("service_enabled", false) &&
+        resumeAfterTesting = !paused && MaffinetSettingsRepository(context).applicationsRequested() &&
             (startRequested || ByeDpiVpnService.isVpnActive || ByeDpiVpnService.hasProxyResources)
         testing = true // Start/reconnect/watchdog gates close before temporary STOP.
         return session
@@ -152,25 +160,28 @@ object ServiceManager {
         if (activeSession !== session) return
         if (!nativeClean) nativeQuarantined = true
         val resume = resumeAfterTesting && nativeClean && !paused && !ByeDpiVpnService.hasProxyResources &&
-            context.getPreferences().getBoolean("service_enabled", false)
+            MaffinetSettingsRepository(context).applicationsRequested()
         activeSession = null
         resumeAfterTesting = false
         testing = false
         // The desired preference was never overwritten by scan STOP. A user STOP wins.
         if (resume) dispatchStart(context.applicationContext, desiredGeneration)
-        if (context.getPreferences().getBoolean("service_enabled", false) &&
-            !context.getPreferences().getBoolean("econom_mode", false)) {
-            io.maffinet.android.service.WatchdogWorker.schedulePeriodicWork(context.applicationContext)
-        }
+        ConnectionCoordinator.refreshWatchdog(context)
     }
 
     private fun dispatchStart(context: Context, generation: Long) {
         startRequested = true
+        ByeDpiVpnService.setConnectionState(ModeConnectionState.Starting)
         val intent = Intent(context, ByeDpiVpnService::class.java).apply {
             action = START_ACTION
             putExtra(EXTRA_START_GENERATION, generation)
         }
-        ContextCompat.startForegroundService(context, intent)
+        try { ContextCompat.startForegroundService(context, intent) }
+        catch (error: Exception) {
+            startRequested = false
+            ByeDpiVpnService.setConnectionState(ModeConnectionState.Failed)
+            throw error
+        }
     }
 
     private fun dispatchStop(context: Context, preserveDesiredState: Boolean) {
@@ -179,6 +190,10 @@ object ServiceManager {
             putExtra(EXTRA_KEEP_DESIRED_STATE, preserveDesiredState)
             putExtra(EXTRA_STOP_GENERATION, desiredGeneration)
         }
-        ContextCompat.startForegroundService(context, intent)
+        try { ContextCompat.startForegroundService(context, intent) }
+        catch (error: Exception) {
+            Log.e("ServiceManager", "VPN STOP dispatch failed; stopping the service directly", error)
+            context.stopService(Intent(context, ByeDpiVpnService::class.java))
+        }
     }
 }

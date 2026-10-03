@@ -21,6 +21,7 @@ import io.maffinet.android.core.domains.LegacyStrategyAliases
 import io.maffinet.android.core.strategy.StrategyEvaluation
 import io.maffinet.android.core.strategy.StrategyScorer
 import io.maffinet.android.data.strategy.StrategyMatrixStore
+import io.maffinet.android.data.strategy.ProbeTargetRepository
 
 object StrategyTestManager {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -38,6 +39,9 @@ object StrategyTestManager {
 
     val testResults = mutableStateListOf<Triple<Int, String, String>>()
     val matrixResults = mutableStateMapOf<String, StrategyEvaluation>()
+    var hasStaleResults by mutableStateOf(false)
+        private set
+    private var historyFingerprint: String? = null
     @Volatile private var testingJob: Job? = null
 
     @Synchronized fun cancelTesting() { testingJob?.cancel() }
@@ -132,11 +136,18 @@ object StrategyTestManager {
         if (isTesting) return
         loadCustomizations(context)
         matrixResults.clear()
-        StrategyMatrixStore(context).load().forEach { matrixResults[it.command] = it }
+        testResults.clear()
+        val store = StrategyMatrixStore(context)
+        val saved = store.load()
+        val fingerprint = ProbeTargetRepository(context).snapshot().fingerprint
+        historyFingerprint = fingerprint
+        val currentHistory = saved?.takeIf { it.fingerprint == fingerprint }
+        hasStaleResults = store.hasSavedHistory() && currentHistory == null
+        currentHistory?.evaluations?.forEach { matrixResults[it.command] = it }
         val settings = context.getPreferences()
         val activeCommand = settings.getString("byedpi_cmd_args", null)
             .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
-        bestStrategyResult = activeCommand
+        bestStrategyResult = StrategyScorer.best(matrixResults.values)?.command
         appliedStrategy = activeCommand
         val file = File(context.filesDir, "proxy_test_results.txt")
         if (file.exists()) {
@@ -155,7 +166,9 @@ object StrategyTestManager {
                 if (loaded.isNotEmpty()) {
                     testResults.clear()
                     val activeApplied = appliedStrategy
-                    val filtered = loaded.filter { !deletedStrategies.containsKey(it.second) && !it.third.contains("тайм-аут") }
+                    val filtered = loaded.filter { !deletedStrategies.containsKey(it.second) }.mapNotNull {
+                        if (matrixResults.containsKey(it.second)) it else savedEntry(it)
+                    }
                     val sortedLoaded = filtered.sortedWith(compareBy<Triple<Int, String, String>> {
                         if (pinnedStrategies.containsKey(it.second)) 0 else 1
                     }.thenBy {
@@ -168,15 +181,47 @@ object StrategyTestManager {
         }
     }
 
+    /** Hosts/editor navigation calls this before displaying any last-run evidence. */
+    @Synchronized fun refreshConfiguration(context: Context) {
+        val fingerprint = ProbeTargetRepository(context).snapshot().fingerprint
+        if (historyFingerprint == fingerprint) return
+        if (matrixResults.isNotEmpty()) hasStaleResults = true
+        matrixResults.clear()
+        val retained = testResults.mapNotNull(::savedEntry)
+        testResults.clear()
+        testResults.addAll(retained)
+        bestStrategyResult = null
+        historyFingerprint = fingerprint
+        if (isTesting) {
+            currentProgress = "Настройки проверки изменились; повторите проверку"
+            testingJob?.cancel()
+        }
+    }
+
+    fun historyMatchesCurrentConfiguration(context: Context): Boolean =
+        historyFingerprint == ProbeTargetRepository(context).snapshot().fingerprint
+
+    private fun savedEntry(item: Triple<Int, String, String>): Triple<Int, String, String>? = when {
+        item.third.startsWith("Импортировано") -> item
+        pinnedStrategies[item.second] == true || customNames.containsKey(item.second) ||
+            strategyNotes.containsKey(item.second) || item.second == appliedStrategy ->
+                Triple(item.first, item.second, "Сохранена · проверка устарела")
+        else -> null
+    }
+
     @Synchronized
     fun startTesting(context: Context): Job? {
         if (isTesting) return null
+        val snapshot = ProbeTargetRepository(context).snapshot()
+        val retained = testResults.mapNotNull(::savedEntry)
+        historyFingerprint = snapshot.fingerprint
         isTesting = true
         val applicationContext = context.applicationContext
         val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 Log.i("StrategyTestManager", "Запуск автоподбора стратегий")
                 hasConnectionError = false
+                hasStaleResults = false
                 bestStrategyResult = null
                 testResults.clear()
                 matrixResults.clear()
@@ -189,8 +234,12 @@ object StrategyTestManager {
                     if (!deletedStrategies.containsKey(strategy)) {
                         testResults.add(0, Triple(index + 1, strategy, status))
                     }
-                }, onEvaluation = { evaluation -> matrixResults[evaluation.command] = evaluation },
-                    excludedCommands = deletedStrategies.keys.toSet(), onBestReady = { best ->
+                }, onEvaluation = { evaluation ->
+                    check(snapshot.fingerprint == ProbeTargetRepository(applicationContext).snapshot().fingerprint) {
+                        "Hosts или проверочные адреса изменились; повторите проверку"
+                    }
+                    matrixResults[evaluation.command] = evaluation
+                }, excludedCommands = deletedStrategies.keys.toSet(), snapshot = snapshot, onBestReady = { best ->
                         currentCoroutineContext().ensureActive()
                         if (best != null) {
                             bestStrategyResult = best
@@ -216,7 +265,14 @@ object StrategyTestManager {
                 Log.e("StrategyTestManager", "Strategy testing failed", error)
             } finally {
                 try {
-                    StrategyMatrixStore(applicationContext).save(matrixResults.toMap().values)
+                    if (snapshot.fingerprint != ProbeTargetRepository(applicationContext).snapshot().fingerprint) {
+                        matrixResults.clear()
+                        testResults.clear()
+                        bestStrategyResult = null
+                        hasStaleResults = true
+                    }
+                    retained.filter { saved -> testResults.none { it.second == saved.second } }.forEach { testResults.add(it) }
+                    StrategyMatrixStore(applicationContext).save(snapshot.fingerprint, matrixResults.toMap().values)
                     saveResults(applicationContext)
                 } catch (error: Exception) { Log.e("StrategyTestManager", "Failed to save probe history", error) }
                 synchronized(this@StrategyTestManager) {

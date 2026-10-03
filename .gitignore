@@ -19,6 +19,8 @@ TELEGRAM_POST_*.md
 /.gradle-user/
 /app/build/
 /verification/build/
+/.kotlin/
+/verification/.kotlin/
 *.jks
 *.keystore
 keystore.properties

@@ -20,6 +20,8 @@ kotlin {
                 "io/maffinet/android/core/services/ServiceCatalog.kt",
                 "io/maffinet/android/core/strategy/StrategyEvaluation.kt",
                 "io/maffinet/android/core/strategy/DefaultStrategyCatalog.kt",
+                "io/maffinet/android/core/strategy/ProbeTargets.kt",
+                "io/maffinet/android/core/connection/ConnectionModes.kt",
             )
         }
         test {
@@ -30,6 +32,8 @@ kotlin {
                 "io/maffinet/android/data/domains/UserDomainStoreTest.kt",
                 "io/maffinet/android/core/services/**",
                 "io/maffinet/android/core/strategy/StrategyScorerTest.kt",
+                "io/maffinet/android/core/strategy/ProbeTargetsTest.kt",
+                "io/maffinet/android/core/connection/ConnectionModesTest.kt",
                 "io/maffinet/verification/**",
             )
         }

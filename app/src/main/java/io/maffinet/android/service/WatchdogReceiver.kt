@@ -5,21 +5,17 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.net.VpnService
 import android.os.Build
-import io.maffinet.android.core.dpibypass.ServiceManager
-import io.maffinet.android.core.dpibypass.ByeDpiVpnService
 import io.maffinet.android.core.debug.AppDebugManager as Log
-import io.maffinet.android.core.tgproxy.TgProxyController
 import io.maffinet.android.MainActivity
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 class WatchdogReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         val appCtx = context.applicationContext
         val prefs = appCtx.getSharedPreferences(appCtx.packageName + "_preferences", Context.MODE_PRIVATE)
-        val serviceEnabled = prefs.getBoolean("service_enabled", false)
-        val autostart = prefs.getBoolean("autostart", false)
 
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
             val mainIntent = Intent(context, MainActivity::class.java).apply {
@@ -34,39 +30,11 @@ class WatchdogReceiver : BroadcastReceiver() {
                 intent.action == Intent.ACTION_REBOOT ||
                 intent.action == "android.intent.action.QUICKBOOT_POWERON"
 
-        if (serviceEnabled || (isBoot && autostart)) {
-            if (isBoot && autostart && !serviceEnabled) {
-                prefs.edit().putBoolean("service_enabled", true).apply()
-            }
-            val wantsVpn = prefs.getBoolean("wants_youtube_bypass", true)
-            val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
-            if (wantsVpn && ServiceManager.canStartVpn() && !ByeDpiVpnService.isVpnActive &&
-                !ByeDpiVpnService.hasProxyResources && VpnService.prepare(appCtx) == null) {
-                try { ServiceManager.ensureStarted(appCtx) }
-                catch (error: Exception) { Log.e("WatchdogReceiver", "VPN recovery could not start", error) }
-            }
-            if (wantsTelegram) {
-                val port = TgProxyController.getPort(appCtx)
-                val isTgProxyRunning = TgProxyController.isPortOpen(
-                    TgProxyController.DEFAULT_BIND_IP,
-                    port,
-                    500
-                )
-                if (!isTgProxyRunning) {
-                    if (wantsVpn) {
-                        TgProxyController.startAsync(appCtx, {}, {})
-                    } else {
-                        val intent = Intent(appCtx, io.maffinet.android.core.tgproxy.TgProxyService::class.java).apply {
-                            action = io.maffinet.android.data.START_ACTION
-                            putExtra("open_tg", false)
-                        }
-                        androidx.core.content.ContextCompat.startForegroundService(appCtx, intent)
-                    }
-                }
-            }
-        }
+        try { ConnectionCoordinator.recover(appCtx, boot = isBoot) }
+        catch (error: Exception) { Log.e("WatchdogReceiver", "Mode recovery could not start", error) }
 
-        if (intent.action == "io.maffinet.android.action.WATCHDOG_PING" && serviceEnabled) {
+        if (intent.action == "io.maffinet.android.action.WATCHDOG_PING" &&
+            MaffinetSettingsRepository(appCtx).anyModeRequested() && !prefs.getBoolean("econom_mode", false)) {
             scheduleWatchdogAlarm(appCtx)
         }
     }

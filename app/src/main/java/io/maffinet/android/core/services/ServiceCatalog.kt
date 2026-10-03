@@ -1,9 +1,6 @@
 package io.maffinet.android.core.services
 
-import io.maffinet.android.core.domains.DomainList
-import io.maffinet.android.core.domains.DomainParser
-
-/** Add a service here; routing, lists, UI and strategy targets consume the same records. */
+/** Legacy catalog retained for import/strategy compatibility, independent of app routing and hosts. */
 object ServiceCatalog {
     val profiles = listOf(
         ServiceProfile(
@@ -39,17 +36,4 @@ object ServiceCatalog {
     fun get(id: String): ServiceProfile? = profiles.firstOrNull { it.id == id }
     fun enabledProfiles(ids: Set<String>): List<ServiceProfile> = profiles.filter { it.id in ids }
 
-    fun domainLists(enabledIds: Set<String>, userDomains: List<String>, userEnabled: Boolean): List<DomainList> =
-        domainLists(profiles, enabledIds, userDomains, userEnabled)
-
-    fun domainLists(
-        profiles: List<ServiceProfile>, enabledIds: Set<String>, userDomains: List<String>, userEnabled: Boolean,
-    ): List<DomainList> {
-        val services = profiles.map {
-            DomainList(it.id, it.name, it.domains.toList(), isActive = it.id in enabledIds, isBuiltIn = true)
-        }
-        val user = DomainList("user", "User", userDomains, isActive = userEnabled)
-        val general = DomainList("general", "General", DomainParser.merge(services + user), isBuiltIn = true)
-        return listOf(general, user) + services
-    }
 }

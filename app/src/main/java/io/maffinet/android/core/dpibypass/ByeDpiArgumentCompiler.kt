@@ -64,9 +64,9 @@ object ByeDpiArgumentCompiler {
             prefix + options
         } else {
             val domains = configuration.activeDomains.map(DomainParser::normalize).distinct()
-            require(domains.isNotEmpty()) { "Enable a service or add user domains before connecting" }
+            require(domains.isNotEmpty()) { "Add hosts before connecting" }
             require(options.none { it.code == 'H' }) {
-                "Custom hosts commands require Advanced → Override service domain filtering"
+                "Custom hosts commands require Advanced → Override hosts filtering"
             }
             require(options.none { it.code == 'B' }) {
                 "Native group copying requires the advanced host filtering override"

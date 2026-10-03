@@ -1,11 +1,23 @@
 package io.maffinet.android.core.domains
 
-import io.maffinet.android.core.services.ServiceCatalog
-
-/** Compatibility adapter; ServiceCatalog is the only source of service definitions. */
+/** Hosts are a fixed base plus a user extension, independent of Android app routing. */
 object BuiltInDomainLists {
-    val services: List<DomainList> get() = ServiceCatalog.profiles.map {
-        DomainList(it.id, it.name, it.domains.toList(), isBuiltIn = true)
+    // Preserve names used by old {list:youtube/instagram/linkedin} strategies. These
+    // aliases are never switches and never choose the active hosts configuration.
+    val legacyAliases = listOf(
+        DomainList("youtube", "YouTube", listOf("youtube.com", "googlevideo.com", "ytimg.com", "ggpht.com"),
+            isActive = false, isBuiltIn = true),
+        DomainList("instagram", "Instagram", listOf("instagram.com", "cdninstagram.com"),
+            isActive = false, isBuiltIn = true),
+        DomainList("linkedin", "LinkedIn", listOf("linkedin.com", "licdn.com"),
+            isActive = false, isBuiltIn = true),
+    )
+
+    val general = DomainList("general", "General", legacyAliases.flatMap { it.domains }.distinct(), isBuiltIn = true)
+
+    /** General remains the active aggregate for existing {domains}/{list:general} callers. */
+    fun configuration(userDomains: List<String>, userEnabled: Boolean): List<DomainList> {
+        val user = DomainList("user", "User", userDomains, isActive = userEnabled)
+        return listOf(general.copy(domains = DomainParser.merge(listOf(general, user))), user) + legacyAliases
     }
-    val enabledByDefault: Set<String> get() = ServiceCatalog.enabledByDefault
 }

@@ -167,26 +167,25 @@ object AppDebugManager {
         }
         try {
             val prefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-            val serviceEnabled = prefs.getBoolean("service_enabled", false)
-            val wantsYoutube = prefs.getBoolean("wants_youtube_bypass", true)
-            val wantsTelegram = prefs.getBoolean("telegram_proxy_enabled_by_user", true)
-            sb.append("Служба Maffinet включена: ${if (serviceEnabled) "Да" else "Нет"}\n")
-            sb.append("Обход YouTube включен: ${if (wantsYoutube) "Да" else "Нет"}\n")
-            sb.append("Фикс Telegram включен: ${if (wantsTelegram) "Да" else "Нет"}\n")
-            if (wantsYoutube) {
+            val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
+            sb.append("Запрошен VPN: ${settings.applicationsRequested()}, Telegram: ${settings.telegramRequested()}\n")
+            sb.append("Режим Приложения: ${settings.applicationsEnabled()}, состояние: ${io.maffinet.android.core.dpibypass.ByeDpiVpnService.currentStatus.value}\n")
+            sb.append("Режим Telegram: ${settings.telegramEnabled()}, состояние: ${io.maffinet.android.core.tgproxy.TgProxyController.status.value}\n")
+            if (settings.applicationsEnabled()) {
                 val manualMode = prefs.getBoolean("strategy_manual_mode", false)
                 val byedpiArgs = prefs.getString("byedpi_cmd_args", "")
-                sb.append("Режим YouTube: ${if (manualMode) "Вручную" else "Авто"}\n")
+                sb.append("Стратегия: ${if (manualMode) "Вручную" else "Авто"}\n")
+                sb.append("DNS для VPN: ${prefs.getString("custom_dns_preset", "Стандартный (Отключено)")}\n")
                 sb.append("Аргументы ByeDpi: \"$byedpiArgs\"\n")
                 val allowedApps = prefs.getStringSet("selected_apps", null)
                 if (allowedApps != null) {
                     sb.append("Выбранные приложения для VPN (${allowedApps.size}): ${allowedApps.joinToString(", ")}\n")
                 }
             }
-            if (wantsTelegram) {
-                val port = prefs.getInt("tg_proxy_port", 0)
-                val cfEnabled = prefs.getBoolean("tg_cf_enabled", false)
-                val cfPriority = prefs.getBoolean("tg_cf_priority", false)
+            if (settings.telegramEnabled()) {
+                val port = io.maffinet.android.core.tgproxy.TgProxyController.getPort(context)
+                val cfEnabled = io.maffinet.android.core.tgproxy.TgProxyController.isCfEnabled(context)
+                val cfPriority = io.maffinet.android.core.tgproxy.TgProxyController.isCfPriority(context)
                 val isPortOpen = io.maffinet.android.core.tgproxy.TgProxyController.isPortOpen(
                     io.maffinet.android.core.tgproxy.TgProxyController.DEFAULT_BIND_IP,
                     port,

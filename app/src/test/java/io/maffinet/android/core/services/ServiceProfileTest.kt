@@ -12,29 +12,27 @@ class ServiceProfileTest {
         assertEquals(ServiceCatalog.profiles.size, ServiceCatalog.profiles.map { it.id }.toSet().size)
     }
 
-    @Test fun addingProfileFeedsDomainsAndRoutingWithoutSpecialCases() {
-        val custom = ServiceProfile("example", "Example", setOf("org.example.app"), setOf("example.org"), listOf("https://example.org"))
-        val profiles = ServiceCatalog.profiles + custom
-        val domains = ServiceCatalog.domainLists(profiles, setOf("example"), emptyList(), true)
-        assertEquals(listOf("example.org"), domains.first { it.id == "general" }.domains)
-        assertEquals(setOf("org.example.app"), ApplicationRouting.selectedPackages(profiles, setOf("example"), emptySet(), "io.maffinet.android"))
-    }
-
-    @Test fun serviceAndUserSelectionChangesGeneralWithoutChangingCatalog() {
-        val lists = ServiceCatalog.domainLists(setOf("linkedin"), listOf("custom.org", "linkedin.com"), true)
-        assertEquals(listOf("linkedin.com", "licdn.com", "custom.org"), lists.first { it.id == "general" }.domains)
-        assertFalse(lists.first { it.id == "youtube" }.isActive)
-        val disabled = ServiceCatalog.domainLists(emptySet(), listOf("custom.org"), false)
-        assertTrue(disabled.first { it.id == "general" }.domains.isEmpty())
-        assertEquals(4, ServiceCatalog.get("youtube")!!.domains.size)
-    }
-
-    @Test fun manualAndProfilePackagesUnionAndExcludeProxyUid() {
+    @Test fun routingUsesOnlyManualApplicationsAndExcludesProxyUid() {
         val selected = ApplicationRouting.selectedPackages(
-            ServiceCatalog.profiles, setOf("linkedin"), setOf("org.browser.app", "com.linkedin.android", "io.maffinet.android"), "io.maffinet.android"
+            setOf("org.browser.app", "com.linkedin.android", "io.maffinet.android"), "io.maffinet.android"
         )
         assertEquals(setOf("com.linkedin.android", "org.browser.app"), selected)
         assertEquals(setOf("com.linkedin.android"), ApplicationRouting.installedPackages(selected, setOf("com.linkedin.android"), "io.maffinet.android"))
+    }
+
+    @Test fun emptyManualSelectionDoesNotInheritDefaultServicePackages() {
+        assertTrue(ServiceCatalog.enabledByDefault.isNotEmpty())
+        assertTrue(ApplicationRouting.selectedPackages(emptySet(), "io.maffinet.android").isEmpty())
+        val selected = ApplicationRouting.selectedPackages(setOf("org.browser.app"), "io.maffinet.android")
+        assertEquals(setOf("org.browser.app"), selected)
+        assertTrue(ServiceCatalog.profiles.flatMap { it.packages }.none { it in selected })
+    }
+
+    @Test fun deselectionDoesNotReinsertKnownApplications() {
+        val selection = linkedSetOf("org.browser.app", "com.google.android.youtube")
+        selection.remove("com.google.android.youtube")
+        assertEquals(setOf("org.browser.app"), ApplicationRouting.selectedPackages(selection, "io.maffinet.android"))
+        assertEquals(setOf("org.browser.app"), selection)
     }
 
     @Test fun emptyOrUninstalledApplicationSelectionCannotBecomeFullDeviceVpn() {

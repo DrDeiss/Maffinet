@@ -14,14 +14,13 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
-import io.maffinet.android.core.services.ServiceCatalog
-import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.core.strategy.TargetConnectivityResult
 import io.maffinet.android.core.strategy.ServiceConnectivityResult
 import io.maffinet.android.core.strategy.StrategyEvaluation
 import io.maffinet.android.core.strategy.StrategyScorer
 import io.maffinet.android.core.domains.LegacyStrategyAliases
-import io.maffinet.android.data.domains.DomainListRepository
+import io.maffinet.android.data.strategy.ProbeTargetRepository
+import io.maffinet.android.data.strategy.StrategyProbeSnapshot
 
 class StrategyTester(private val context: Context) {
     companion object {
@@ -36,14 +35,11 @@ class StrategyTester(private val context: Context) {
         onEvaluation: (StrategyEvaluation) -> Unit = {},
         excludedCommands: Set<String> = emptySet(),
         onBestReady: suspend (String?) -> Unit = {},
+        snapshot: StrategyProbeSnapshot = ProbeTargetRepository(context).snapshot(),
     ): String? = withContext(Dispatchers.IO) {
-        val selected = MaffinetSettingsRepository(context).enabledServiceIds()
-        val profiles = ServiceCatalog.enabledProfiles(selected)
-        require(profiles.isNotEmpty()) { "Выберите хотя бы один сервис для проверки" }
-        val lists = DomainListRepository(context).getLists()
-        val filters = ByeDpiFilterConfiguration(lists, lists.first { it.id == "general" }.domains,
-            MaffinetSettingsRepository(context).hostFilterOverride())
-        // A run uses one selection snapshot even if Services is edited while it runs.
+        require(snapshot.urls.isNotEmpty()) { "Добавьте хотя бы один проверочный адрес" }
+        // Every candidate uses the same host/target snapshot, independently of application routing.
+        val filters = snapshot.filters
         val session = ServiceManager.beginStrategyTest(context)
         val testPort = 1082
         val evaluations = mutableListOf<StrategyEvaluation>()
@@ -77,14 +73,13 @@ class StrategyTester(private val context: Context) {
                         if (ready) break
                         delay(50)
                     }
-                    profiles.map { profile ->
+                    snapshot.urls.mapIndexed { targetIndex, url ->
                         currentCoroutineContext().ensureActive()
-                        ServiceConnectivityResult(profile.id, profile.name, profile.testUrls.map { url ->
-                            currentCoroutineContext().ensureActive()
+                        ServiceConnectivityResult("probe_$targetIndex", URL(url).host, listOf(
                             if (ready) probe(url, testPort) else TargetConnectivityResult(
                                 url, false, 0, error = "Локальный proxy не запустился (код ${exitCode.get()})"
                             )
-                        })
+                        ))
                     }
                 } finally {
                     withContext(NonCancellable + Dispatchers.IO) {
@@ -104,10 +99,13 @@ class StrategyTester(private val context: Context) {
                 evaluations.add(evaluation)
                 onEvaluation(evaluation)
                 val latency = evaluation.averageLatencyMs?.let { "$it мс" } ?: "нет соединения"
-                onProgress(index, strategy, "${evaluation.passedServices}/${evaluation.totalServices} сервисов · $latency")
+                onProgress(index, strategy, "${evaluation.passedServices}/${evaluation.totalServices} адресов · $latency")
             }
             val best = StrategyScorer.best(evaluations)?.command
             currentCoroutineContext().ensureActive()
+            check(snapshot.fingerprint == ProbeTargetRepository(context).snapshot().fingerprint) {
+                "Hosts или проверочные адреса изменились. Повторите проверку для текущих настроек."
+            }
             onBestReady(best) // Apply the chosen command before restoring the VPN.
             best
         } finally {

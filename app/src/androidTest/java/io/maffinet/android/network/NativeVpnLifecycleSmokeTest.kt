@@ -6,6 +6,8 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.net.VpnService
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.system.Os
@@ -16,6 +18,11 @@ import io.maffinet.android.core.dpibypass.ByeDpiVpnService
 import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTester
 import io.maffinet.android.core.dpibypass.getPreferences
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.connection.ModeConnectionState
+import io.maffinet.android.core.tgproxy.TgProxyController
+import io.maffinet.android.core.tgproxy.TgProxyService
+import io.maffinet.android.service.WatchdogReceiver
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.strategy.StrategyEvaluation
 import io.maffinet.android.data.FAILED_BROADCAST
@@ -82,6 +89,7 @@ class NativeVpnLifecycleSmokeTest {
             shell("getprop ro.kernel.qemu").trim() == "1" || shell("getprop ro.boot.qemu").trim() == "1")
         assertFalse("A VPN was already running before this isolated smoke test", ByeDpiVpnService.isVpnActive)
         assertFalse("Native resources were already present", ByeDpiVpnService.hasProxyResources)
+        assertFalse("Telegram resources were already present", TgProxyController.hasResources)
         assertFalse("A strategy scan was already running", ServiceManager.isStrategyTestInProgress)
         assertFalse("A previous native cleanup failed", ServiceManager.isNativeProxyQuarantined)
 
@@ -117,7 +125,14 @@ class NativeVpnLifecycleSmokeTest {
         settings.setHostFilterOverride(false)
         settings.setUserDomainsEnabled(true)
         assertTrue(DomainListRepository(context).saveUserDomains("example.com").isValid)
-        assertEquals(listOf("example.com"), DomainListRepository(context).activeDomains())
+        assertTrue(DomainListRepository(context).activeDomains().contains("example.com"))
+        assertTrue("The built-in hosts remain active independently of legacy services", DomainListRepository(context).activeDomains().size > 1)
+        settings.setApplicationsEnabled(true)
+        settings.setTelegramEnabled(false)
+        settings.setRequested(false, false)
+        val tgPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
+        TgProxyController.setPort(context, tgPort)
+        TgProxyController.setCfEnabled(context, false)
 
         // The test APK is installed with its own UID. The instrumented process uses the
         // target UID, so these checks exercise establishment/cleanup, not routed traffic.
@@ -142,7 +157,10 @@ class NativeVpnLifecycleSmokeTest {
     fun stopAndRestoreIsolatedState() {
         if (savedPreferences == null) return // Assumption skipped before any mutation.
         try {
-            if (receiverRegistered) stopAndAwaitCleanup() else ServiceManager.stop(context)
+            if (receiverRegistered) {
+                stopAndAwaitCleanup()
+                stopTelegramAndAwaitCleanup()
+            } else ConnectionCoordinator.stopAll(context)
         } finally {
             try {
                 originalConsentMode?.let { shell("appops set ${context.packageName} ACTIVATE_VPN $it") }
@@ -200,9 +218,200 @@ class NativeVpnLifecycleSmokeTest {
         assertFalse(ServiceManager.isStrategyTestInProgress)
     }
 
+    @Test(timeout = 30_000)
+    fun telegramOnlyStartsStopsRestartsAndNeverCreatesVpn() {
+        settings.setApplicationsEnabled(false)
+        settings.setTelegramEnabled(true)
+        repeat(2) {
+            val result = ConnectionCoordinator.startSelected(context)
+            assertTrue(result.errors.toString(), result.errors.isEmpty())
+            assertFalse(result.startedApplications)
+            assertTrue(result.startedTelegram)
+            awaitTelegramRunning()
+            assertFalse(ByeDpiVpnService.isVpnActive)
+            assertFalse(ByeDpiVpnService.hasProxyResources)
+            assertFalse(settings.applicationsRequested())
+            assertTrue(settings.telegramRequested())
+            // A VPN-only STOP must not clear Telegram's recovery intent or resources.
+            stopAndAwaitCleanup()
+            WatchdogReceiver().onReceive(context, Intent("io.maffinet.android.action.WATCHDOG_PING"))
+            assertTrue(settings.telegramRequested())
+            assertEquals(ModeConnectionState.Running, TgProxyController.status.value)
+            stopTelegramAndAwaitCleanup()
+            ConnectionCoordinator.recover(context)
+            assertFalse(settings.anyModeRequested())
+            assertFalse(TgProxyController.hasResources)
+        }
+    }
+
+    @Test(timeout = 40_000)
+    fun bothModesAndEachIndependentStopKeepTheOtherRunning() {
+        settings.setApplicationsEnabled(true)
+        settings.setTelegramEnabled(true)
+        val beforeHosts = DomainListRepository(context).activeDomains()
+        val result = ConnectionCoordinator.startSelected(context)
+        assertTrue(result.errors.toString(), result.errors.isEmpty())
+        eventually("Both modes should start") { ByeDpiVpnService.isVpnActive && TgProxyController.status.value == ModeConnectionState.Running }
+        stopTelegramAndAwaitCleanup()
+        assertTrue("Telegram STOP must preserve VPN", ByeDpiVpnService.isVpnActive)
+        assertTrue(settings.applicationsRequested())
+        assertFalse(settings.telegramRequested())
+        // A stale legacy global flag must never disable the remaining VPN.
+        preferences.edit().putBoolean("service_enabled", false).putBoolean("wants_youtube_bypass", false).commit()
+        ConnectionCoordinator.recover(context)
+        assertTrue(ByeDpiVpnService.isVpnActive)
+        TgProxyService.requestStart(context)
+        awaitTelegramRunning()
+        stopAndAwaitCleanup()
+        assertTrue("VPN STOP must preserve Telegram", TgProxyController.hasResources)
+        assertTrue(settings.telegramRequested())
+        assertEquals(beforeHosts, DomainListRepository(context).activeDomains())
+        assertEquals(setOf(helperPackage), settings.manualApplications())
+        ConnectionCoordinator.stopAll(context)
+        eventually("Common STOP must close Telegram too") { !TgProxyController.hasResources && TgProxyController.status.value == ModeConnectionState.Stopped }
+        assertFalse(settings.anyModeRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+    }
+
+    @Test(timeout = 20_000)
+    fun noModesAndEmptyAppsDoNotStartDeviceWideVpn() {
+        settings.setApplicationsEnabled(false)
+        settings.setTelegramEnabled(false)
+        val none = ConnectionCoordinator.startSelected(context)
+        assertFalse(none.hasSelectedModes)
+        assertTrue(none.errors.single().contains("Включите"))
+        settings.setApplicationsEnabled(true)
+        settings.setManualApplications(emptySet())
+        val empty = ConnectionCoordinator.startSelected(context)
+        assertFalse(empty.startedApplications)
+        assertTrue(empty.errors.single().contains("приложение"))
+        assertFalse(settings.anyModeRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+    }
+
+    @Test(timeout = 30_000)
+    fun telegramStillStartsWhenApplicationSelectionFails() {
+        settings.setApplicationsEnabled(true)
+        settings.setTelegramEnabled(true)
+        settings.setManualApplications(emptySet())
+        val result = ConnectionCoordinator.startSelected(context)
+        assertFalse(result.startedApplications)
+        assertTrue(result.startedTelegram)
+        assertTrue(result.errors.single().contains("приложение"))
+        awaitTelegramRunning()
+        assertFalse(settings.applicationsRequested())
+        assertTrue(settings.telegramRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+        stopTelegramAndAwaitCleanup()
+    }
+
+    @Test(timeout = 30_000)
+    fun telegramBindFailureDoesNotStopConnectedVpn() {
+        startAndAwaitNativeTunnel()
+        settings.setTelegramEnabled(true)
+        ServerSocket(TgProxyController.getPort(context), 1, InetAddress.getByName("127.0.0.1")).use {
+            TgProxyService.requestStart(context)
+            eventually("Occupied Telegram port must report Failed rather than a foreign listener as Running") {
+                TgProxyController.status.value == ModeConnectionState.Failed
+            }
+            assertFalse(TgProxyController.hasResources)
+            assertTrue(ByeDpiVpnService.isVpnActive)
+            assertTrue(settings.applicationsRequested())
+            stopTelegramAndAwaitCleanupWhilePortOccupied()
+        }
+        TgProxyService.requestStart(context)
+        awaitTelegramRunning()
+        assertTrue("Telegram retry should preserve VPN", ByeDpiVpnService.isVpnActive)
+        stopTelegramAndAwaitCleanup()
+    }
+
+    @Test(timeout = 30_000)
+    fun bootHonorsAutostartAndWatchdogRecoversOnlyTheRequestedMode() {
+        settings.setApplicationsEnabled(true)
+        settings.setTelegramEnabled(true)
+        settings.setRequested(true, true)
+        preferences.edit().putBoolean("autostart", false).commit()
+        ConnectionCoordinator.recover(context, boot = true)
+        assertFalse("Disabled boot autostart must not establish saved VPN requests", ByeDpiVpnService.hasProxyResources)
+        assertFalse("Disabled boot autostart must not establish saved Telegram requests", TgProxyController.hasResources)
+        settings.setRequested(false, false)
+        settings.setApplicationsEnabled(false)
+        preferences.edit().putBoolean("autostart", true).commit()
+        ConnectionCoordinator.recover(context, boot = true)
+        awaitTelegramRunning()
+        assertFalse(settings.applicationsRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+        stopTelegramAndAwaitCleanup()
+        settings.setApplicationsEnabled(true)
+        settings.setRequested(false, true)
+        preferences.edit().putBoolean("service_enabled", false).putBoolean("wants_youtube_bypass", true).commit()
+        WatchdogReceiver().onReceive(context, Intent("io.maffinet.android.action.WATCHDOG_PING"))
+        awaitTelegramRunning()
+        assertFalse("VPN selection alone must not create a watchdog VPN request", settings.applicationsRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+        stopTelegramAndAwaitCleanup()
+    }
+
+    private fun stopTelegramAndAwaitCleanupWhilePortOccupied() {
+        TgProxyService.requestStop(context)
+        eventually("No owned Telegram resources should remain") {
+            TgProxyController.status.value == ModeConnectionState.Stopped && !TgProxyController.hasResources
+        }
+    }
+
+    @Test(timeout = 30_000)
+    fun dnsAndHostsPersistAcrossVpnRestartWithoutChangingTelegramSettings() {
+        settings.setString("custom_dns_preset", "Cloudflare Secure DNS")
+        val secret = TgProxyController.getOrGenerateSecret(context)
+        val port = TgProxyController.getPort(context)
+        val domains = DomainListRepository(context).activeDomains()
+        startAndAwaitNativeTunnel()
+        assertVpnDns(setOf("1.1.1.1", "1.0.0.1"))
+        val before = stopped.get()
+        ServiceManager.restart(context, Mode.VPN)
+        eventually("Restart should close the old VPN") { stopped.get() > before }
+        eventually("Restart should establish VPN again") { ByeDpiVpnService.isVpnActive }
+        assertSocks5Ready(proxyPort)
+        assertVpnDns(setOf("1.1.1.1", "1.0.0.1"))
+        assertEquals("Cloudflare Secure DNS", settings.getString("custom_dns_preset", ""))
+        assertEquals(domains, DomainListRepository(context).activeDomains())
+        assertEquals(setOf(helperPackage), settings.manualApplications())
+        assertEquals(secret, TgProxyController.getOrGenerateSecret(context))
+        assertEquals(port, TgProxyController.getPort(context))
+        assertFalse(settings.telegramRequested())
+        assertFalse(TgProxyController.hasResources)
+    }
+
+    private fun awaitTelegramRunning() {
+        eventually("Telegram's real native listener must start") {
+            TgProxyController.status.value == ModeConnectionState.Running && TgProxyController.hasResources &&
+                isListening(TgProxyController.getPort(context))
+        }
+    }
+
+    private fun assertVpnDns(expected: Set<String>) {
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        eventually("VPN builder DNS must reach the Android VPN link properties") {
+            connectivity.allNetworks.any { network ->
+                connectivity.getNetworkCapabilities(network)?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true &&
+                    connectivity.getLinkProperties(network)?.dnsServers?.map { it.hostAddress }?.toSet() == expected
+            }
+        }
+    }
+
+    private fun stopTelegramAndAwaitCleanup() {
+        TgProxyService.requestStop(context)
+        eventually("Telegram STOP must close the native listener") {
+            TgProxyController.status.value == ModeConnectionState.Stopped && !TgProxyController.hasResources &&
+                !isListening(TgProxyController.getPort(context))
+        }
+        assertFalse(settings.telegramRequested())
+    }
+
     @Test(timeout = 60_000)
-    fun oneNativeCandidateTestsEverySelectedServiceAndRestoresVpn() {
-        ServiceCatalog.profiles.forEach { settings.setServiceEnabled(it.id, true) }
+    fun oneNativeCandidateTestsIndependentTargetsAndRestoresVpn() {
+        val urls = listOf("https://example.com", "https://www.wikipedia.org")
+        assertTrue(io.maffinet.android.data.strategy.ProbeTargetRepository(context).save(urls.joinToString("\n")).isValid)
         settings.setUserDomainsEnabled(false)
         startAndAwaitNativeTunnel()
         assertFalse("The isolated tester port must be available", isListening(1082))
@@ -225,9 +434,9 @@ class NativeVpnLifecycleSmokeTest {
         }
         assertEquals(1, evaluations.size)
         assertEquals(command, evaluations.single().command)
-        assertEquals(ServiceCatalog.profiles.map { it.id }, evaluations.single().services.map { it.serviceId })
-        evaluations.single().services.forEach { service ->
-            assertEquals(ServiceCatalog.get(service.serviceId)!!.testUrls, service.targets.map { it.url })
+        assertEquals(listOf("probe_0", "probe_1"), evaluations.single().services.map { it.serviceId })
+        evaluations.single().services.forEachIndexed { index, service ->
+            assertEquals(listOf(urls[index]), service.targets.map { it.url })
             assertTrue(service.targets.all { it.latencyMs >= 0 && (it.reachable || it.error != null) })
             assertTrue("The real native candidate must reach its probe path",
                 service.targets.none { it.error?.startsWith("Локальный proxy не запустился") == true })
