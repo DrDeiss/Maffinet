@@ -75,7 +75,7 @@
 
         <receiver
             android:name=".service.UpdateStatusReceiver"
-            android:exported="true">
+            android:exported="false">
             <intent-filter>
                 <action android:name="io.maffinet.android.action.INSTALL_STATUS" />
             </intent-filter>
