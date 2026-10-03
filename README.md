@@ -39,7 +39,7 @@ choices off leaves an explanation to enable a mode before connecting.
 Only installed packages explicitly saved in `selected_apps` enter VPN routing.
 Updates preserve that selection. Old service-profile flags neither insert packages
 nor change hosts; Maffinet excludes its own package and rejects an empty installed
-allowlist. DNS is the existing VPN setting and does not configure the standalone
+allowlist. VPN DNS does not configure the standalone
 Telegram proxy.
 
 No accounts, remote VPN servers, backend, telemetry or ML selector are added.
@@ -53,14 +53,14 @@ latency using deterministic rules.
 2. Open **Hosts** to inspect the built-in General base, edit and save User domains,
    or merge/import and export them with Android's document picker. User can be
    enabled or disabled without discarding its saved domains.
-3. Choose the existing **DNS** preset for VPN and a **Strategy**, or run the strategy
+3. Choose a **DNS** preset or custom IPv4 resolvers for VPN and a **Strategy**, or run the strategy
    comparison against separately configured HTTP/TLS checking addresses. Results
    are invalidated when hosts, checking addresses or relevant filters change.
 4. Use the common button on **Home**, granting VPN consent when Applications is
    enabled. Settings remain locked while engines are requested/running or testing;
    strategy tests coordinate stopping and restoring an active VPN.
 
-General is a fixed base of eight existing curated domains plus the enabled User
+General is a curated base of 130 domains in eight categories plus the enabled User
 extension. App selection and legacy service flags never affect that union.
 The base is defined in `core/domains/BuiltInDomainLists.kt`. Legacy named lists
 remain read-only aliases solely for old `{list:youtube/instagram/linkedin}` commands.
@@ -69,6 +69,19 @@ import/export. `{domains}` and `{list:general}` reference active lists; legacy
 `{sni}` remains compatible with the original fake-SNI value. Raw host filtering
 requires an explicit Advanced override. [Architecture](docs/ARCHITECTURE.md)
 describes the independent modes, hosts and strategy snapshots.
+
+Hosts accepts domain lists and extracts public destination hostnames from standard
+IP/hostname files, excluding blocking/local-address entries. Import from a file or
+an HTTPS URL merges validated domains into User. The source buttons offer the
+dns.malw.link and GeoHide hosts bases used by NetFix Windows; their IP mappings
+are not applied. Sources are refreshed manually. See [Hosts and DNS](docs/HOSTS_AND_DNS.md)
+and the [NetFix Windows comparison](docs/NETFIX_COMPARISON.md).
+The DNS picker defaults to geo-access services: GeoHide RU/EU/US, Xbox/Supercell,
+COMSS, malw and Bezmezhau, with separate Android Private DNS actions for
+Null's Proxy, malw Gateway, DNS-AI and ASTRACAT. General public resolvers have
+their own filter. The catalog includes 27 plain IPv4 profiles, custom resolvers
+and four Private DNS setup actions. Provider instructions and current addresses
+are recorded in the catalog; selecting VPN DNS does not enable DoH/DoT.
 
 ## Networking
 

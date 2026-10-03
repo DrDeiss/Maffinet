@@ -396,14 +396,35 @@ fun SettingsTab(
         }
         mutableStateOf(initialValue)
     }
-    var selectedDnsPreset by remember { mutableStateOf("Стандартный (Отключено)") }
+    var selectedDnsPreset by remember { mutableStateOf(io.maffinet.android.core.dns.DnsCatalog.SYSTEM_ID) }
     var privateDnsMode by remember { mutableStateOf("") }
+    val dnsLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(context, dnsLifecycleOwner) {
+        val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
+        fun refreshDnsSettings() {
+            selectedDnsPreset = prefs.getString("custom_dns_preset", io.maffinet.android.core.dns.DnsCatalog.SYSTEM_ID)
+                ?: io.maffinet.android.core.dns.DnsCatalog.SYSTEM_ID
+            privateDnsMode = android.provider.Settings.Global.getString(context.contentResolver, "private_dns_mode") ?: "off"
+        }
+        refreshDnsSettings()
+        val preferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+            if (key == "custom_dns_preset") refreshDnsSettings()
+        }
+        val lifecycleObserver = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) refreshDnsSettings()
+        }
+        prefs.registerOnSharedPreferenceChangeListener(preferenceListener)
+        dnsLifecycleOwner.lifecycle.addObserver(lifecycleObserver)
+        onDispose {
+            prefs.unregisterOnSharedPreferenceChangeListener(preferenceListener)
+            dnsLifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+        }
+    }
 
     LaunchedEffect(context) {
         val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
         autoConnect = prefs.getBoolean("auto_connect_on_start", false)
         openTgOnConnect = prefs.getBoolean("open_tg_on_connect", true)
-        selectedDnsPreset = prefs.getString("custom_dns_preset", "Стандартный (Отключено)") ?: "Стандартный (Отключено)"
         val wantsYt = MaffinetSettingsRepository(context).applicationsEnabled()
         val wantsTg = MaffinetSettingsRepository(context).telegramEnabled()
         bypassMode = when {
@@ -412,10 +433,6 @@ fun SettingsTab(
             wantsYt -> "youtube"
             else -> "both"
         }
-        privateDnsMode = android.provider.Settings.Global.getString(
-            context.contentResolver,
-            "private_dns_mode"
-        ) ?: "off"
     }
 
     LaunchedEffect(Unit) {
@@ -889,7 +906,7 @@ fun SettingsTab(
 
                 SettingsClickRow(
                     title = "DNS-серверы",
-                    subtitle = "Выбрано: $selectedDnsPreset",
+                    subtitle = "Выбрано: ${io.maffinet.android.core.dns.DnsCatalog.selectionLabel(selectedDnsPreset)}",
                     actionContent = {
                         SettingsActionButton(
                             label = "Настроить",
@@ -905,9 +922,9 @@ fun SettingsTab(
                     }
                 )
 
-                val isPrivateDnsBlocking = privateDnsMode == "opportunistic" || privateDnsMode == "hostname"
-                val isCustomDnsSelected = selectedDnsPreset != "Стандартный (Отключено)"
-                if (isPrivateDnsBlocking && isCustomDnsSelected) {
+                val isPrivateDnsEnabled = privateDnsMode == "opportunistic" || privateDnsMode == "hostname"
+                val isCustomDnsSelected = io.maffinet.android.core.dns.DnsCatalog.vpnAddresses(selectedDnsPreset).isNotEmpty()
+                if (isPrivateDnsEnabled && isCustomDnsSelected) {
                     Spacer(modifier = Modifier.height(8.dp))
                     androidx.compose.foundation.layout.Row(
                         modifier = Modifier
@@ -944,7 +961,7 @@ fun SettingsTab(
                             )
                             Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Он переопределяет DNS VPN. Нажмите чтобы открыть настройки и выбрать «Отключить».",
+                                text = "Он может менять обработку DNS в VPN. Если выбранный профиль не работает, нажмите и проверьте системные настройки DNS.",
                                 color = Color(0xFFA1A1AA),
                                 fontSize = 12.sp,
                                 lineHeight = 16.sp
@@ -1210,7 +1227,7 @@ fun SettingsTab(
     MaffinetDnsSheet(
         visible = showDnsDialog, onDismissRequest = { showDnsDialog = false },
         icon = R.drawable.ic_settings, title = "DNS для VPN",
-        subtitle = "Пресет для выбранных Android-приложений",
+        subtitle = "IPv4 в VPN без шифрования. Private DNS настраивается в Android.",
         dnsList = io.maffinet.android.ui.components.DnsPresets.values,
         selectedDnsPreset = selectedDnsPreset,
         onPresetSelected = { preset ->

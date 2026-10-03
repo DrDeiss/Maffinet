@@ -1,5 +1,28 @@
 # Maffinet — audit and implementation plan
 
+## Current update — Hosts and DNS, 2026-10-04
+
+The user requested comparison with NetFix Windows and broader Hosts/DNS support.
+The follow-up clarifies DNS scope: prioritize Smart DNS for geo-access. The picker
+opens that category, offers real GeoHide RU/EU/US resolver profiles and includes
+Bezmezhau, DNS-AI and ASTRACAT alongside Xbox, COMSS, malw and Null's Proxy. General
+public/family DNS profiles are kept behind their separate category.
+The previous eight-domain base constraint is superseded by a curated 130-domain
+General in eight categories. Explicit Android app selection, independent Telegram,
+User enable state, legacy placeholders and selective TCP semantics remain intact.
+
+Source changes add validated hosts/domain import from documents and HTTPS, manual
+malw/GeoHide source buttons, a centralized provider-verified DNS catalog, compatible
+legacy DNS values, custom IPv4 DNS and explicit system Private DNS actions.
+[Comparison](docs/NETFIX_COMPARISON.md) and [source/usage policy](docs/HOSTS_AND_DNS.md)
+record the implementation and remaining desktop differences. IP hosts mappings,
+built-in DoH and automatic source updates remain outside this implementation.
+
+Local validation: 60 production-model/catalog JVM tests passed; six Linux native-fixture
+tests skipped. The full malw/GeoHide source snapshots parse without errors. Kotlin
+PSI parsed 84 main/instrumentation files without syntax errors. Android assembly
+is blocked by the missing local SDK; this update has no new APK/device evidence.
+
 ## Current goal — independent Applications, Telegram and Hosts
 
 The user's clarification on 2026-10-03 supersedes the service-catalog product

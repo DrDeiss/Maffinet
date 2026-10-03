@@ -17,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import io.maffinet.android.BuildConfig
 import io.maffinet.android.R
 import io.maffinet.android.core.connection.ModeConnectionState
+import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.ui.components.*
@@ -83,7 +84,7 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
             if (locked) Text("Остановите подключение или проверку, чтобы изменить настройки.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        ProductSettingLink("DNS", dns, { showDns = true }, !locked)
+        ProductSettingLink("DNS", DnsCatalog.selectionLabel(dns), { showDns = true }, !locked)
         Text("DNS применяется к VPN для выбранных приложений.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
         ProductSettingLink("Стратегия", StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
@@ -97,7 +98,7 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
                 settings.setManualApplications(if (pkg in selectedApps) selectedApps - pkg else selectedApps + pkg)
         })
     MaffinetDnsSheet(showDns, { showDns = false }, R.drawable.ic_settings, "DNS для VPN",
-        "Пресет для выбранных Android-приложений", DnsPresets.values, dns, onPresetSelected = {
+        "IPv4 в VPN без шифрования. Private DNS настраивается в Android.", DnsPresets.values, dns, onPresetSelected = {
             if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) settings.setString("custom_dns_preset", it)
             showDns = false
         })

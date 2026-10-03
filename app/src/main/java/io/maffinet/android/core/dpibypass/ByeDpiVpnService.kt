@@ -39,6 +39,7 @@ import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import io.maffinet.android.core.services.ApplicationRouting
+import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.core.connection.ConnectionCoordinator
 import io.maffinet.android.core.connection.ModeConnectionState
@@ -458,18 +459,8 @@ class ByeDpiVpnService : LifecycleVpnService() {
         val sharedPreferences = getPreferences()
         val (ip, port) = sharedPreferences.getProxyIpAndPort()
 
-        val customDnsPreset = sharedPreferences.getString("custom_dns_preset", "Стандартный (Отключено)") ?: "Стандартный (Отключено)"
-        val dnsIps: List<String> = when (customDnsPreset) {
-            "Cloudflare Secure DNS" -> listOf("1.1.1.1", "1.0.0.1")
-            "Google Public DNS" -> listOf("8.8.8.8", "8.8.4.4")
-            "AdGuard DNS (Блокировка рекламы)" -> listOf("94.140.14.14", "94.140.15.15")
-            "Xbox DNS (xbox-dns.ru / ChatGPT / Brawl)" -> listOf("176.99.11.11", "176.99.11.22")
-            "Supercell Xbox DNS (supercell.xbox-dns.ru)" -> listOf("176.99.11.11", "176.99.11.22")
-            "NullsProxy DNS (dns.nullsproxy.com)" -> listOf("176.99.11.11", "176.99.11.22")
-            "Comss.one DNS (dns.comss.one)" -> listOf("76.76.2.22", "76.76.10.22")
-            "Geohide DNS (dns.geohide.ru)" -> listOf("176.99.11.11", "176.99.11.22")
-            else -> emptyList()
-        }
+        val customDnsPreset = sharedPreferences.getString("custom_dns_preset", DnsCatalog.SYSTEM_ID)
+        val dnsIps = DnsCatalog.vpnAddresses(customDnsPreset)
         val ipv6 = sharedPreferences.getBoolean("ipv6_enable", false)
 
         val tun2socksConfig = buildString {

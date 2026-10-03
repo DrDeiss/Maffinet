@@ -12,6 +12,7 @@ kotlin {
             kotlin.include(
                 "io/maffinet/android/core/domains/DomainList.kt",
                 "io/maffinet/android/core/domains/DomainParser.kt",
+                "io/maffinet/android/core/domains/DomainSourceDownloader.kt",
                 "io/maffinet/android/core/domains/BuiltInDomainLists.kt",
                 "io/maffinet/android/core/domains/LegacyStrategyAliases.kt",
                 "io/maffinet/android/data/domains/UserDomainStore.kt",
@@ -22,12 +23,16 @@ kotlin {
                 "io/maffinet/android/core/strategy/DefaultStrategyCatalog.kt",
                 "io/maffinet/android/core/strategy/ProbeTargets.kt",
                 "io/maffinet/android/core/connection/ConnectionModes.kt",
+                "io/maffinet/android/core/dns/**",
+                "io/maffinet/android/ui/components/DnsPresets.kt",
             )
         }
         test {
             kotlin.srcDir("../app/src/test/java")
             kotlin.include(
                 "io/maffinet/android/core/domains/**",
+                "io/maffinet/android/core/dns/**",
+                "io/maffinet/android/ui/components/DnsPresetsTest.kt",
                 "io/maffinet/android/core/dpibypass/ByeDpiArgumentCompilerTest.kt",
                 "io/maffinet/android/data/domains/UserDomainStoreTest.kt",
                 "io/maffinet/android/core/services/**",

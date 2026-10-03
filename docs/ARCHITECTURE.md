@@ -48,10 +48,12 @@ Legacy profile flags never add packages during migration, launch or selection.
 
 ## Hosts
 
-`BuiltInDomainLists` defines the fixed General base: `youtube.com`,
-`googlevideo.com`, `ytimg.com`, `ggpht.com`, `instagram.com`, `cdninstagram.com`,
-`linkedin.com` and `licdn.com`. This preserves the existing curated host values
-without depending on service switches. `DomainListRepository` merges that base
+`BuiltInDomainLists` defines General with 130 curated domain filters in eight
+categories: video/music, social networks, Discord, Telegram, AI/translation,
+development/work, Xbox/games and DNS infrastructure. The original eight hostnames
+remain first and the legacy named aliases retain their original values.
+Categories are read-only names for `{list:ID}` expansion, not application/profile
+switches. `DomainListRepository` merges that base
 with enabled User domains in stable deduplicated order; its General entry remains
 the active aggregate for existing callers.
 
@@ -60,7 +62,11 @@ URLs, ports, wildcards, IP literals and command arguments are rejected.
 `UserDomainStore` saves normalized domains atomically in a versioned local file.
 Invalid edits/imports preserve the prior saved list. Editing replaces the User
 list, import merges it, and export writes the saved list. Disabling User preserves
-its content. The Hosts screen exposes the base and these user controls.
+its content. The import parser additionally extracts names from IP/hostname files,
+excluding mappings to blocked or local destinations; it does not apply those IPs.
+The Hosts screen exposes the categories, User editor, document import/export and
+manual HTTPS import. The downloader bounds response size/time and rejects HTML,
+failed responses and redirects away from HTTPS. See [source policy](HOSTS_AND_DNS.md).
 
 `ByeDpiArgumentCompiler` injects a native `-H` whitelist in every selective desync
 group, constrains processing to TCP and adds an unchanged fallback for other

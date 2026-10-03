@@ -31,6 +31,10 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
 - **Filtering:** observable supported hostnames can match ByeDPI domain lists;
   IP-only, encrypted-hostname and some UDP traffic may not. Package routing and
   domain filtering have different scopes.
+- **Hosts sources:** imports extract destination domain names into the DPI filter.
+  Desktop hosts IP mappings are not applied; Smart DNS or a future local DNS
+  handler is needed for that behavior. HTTPS sources are refreshed manually and
+  merged into User; deleted upstream domains are not automatically removed.
 - **UDP:** this pinned native revision does not apply host filters to UDP desync.
   Selective mode therefore forwards UDP unchanged and confines desync to TCP.
   Advanced host override preserves unrestricted legacy settings explicitly.

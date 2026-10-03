@@ -6,6 +6,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BuiltInDomainListsTest {
+    @Test fun expandedBaseCoversContentApisAndCdnWithoutChangingLegacyAliases() {
+        val base = BuiltInDomainLists.general.domains
+        assertEquals(BuiltInDomainLists.legacyAliases.flatMap { it.domains }, base.take(8))
+        assertTrue(base.containsAll(listOf("chatgpt.com", "oaiusercontent.com", "claude.ai",
+            "generativelanguage.googleapis.com", "discordapp.net", "t.me", "githubusercontent.com",
+            "xboxlive.com", "brawlstarsgame.com", "spotify.com")))
+        assertEquals(base.size, base.distinct().size)
+        assertTrue(DomainParser.parse(base.joinToString("\n")).isValid)
+        val configured = BuiltInDomainLists.configuration(emptyList(), false)
+        assertEquals(base, DomainParser.merge(configured))
+        val aiArgs = ByeDpiArgumentCompiler.compile("-n {list:ai} -d1", ByeDpiFilterConfiguration(configured, base))
+        assertTrue(aiArgs.contains("openai.com"))
+        assertTrue(BuiltInDomainLists.categories.all { !it.isActive && it.isBuiltIn })
+    }
+
     @Test fun baseIsValidAndUserExtensionHasStableDeduplicatedOrder() {
         val base = BuiltInDomainLists.general.domains
         assertTrue(base.isNotEmpty())

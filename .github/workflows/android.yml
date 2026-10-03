@@ -80,6 +80,14 @@ jobs:
       - name: Build debug and release APKs, run JVM tests and Android Lint
         timeout-minutes: 12
         run: bash ./gradlew :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
+      - name: Save installable debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maffinet-debug-apk
+          path: app/build/outputs/apk/debug/
+          retention-days: 7
+          if-no-files-found: warn
       - name: Run instrumentation smoke on AOSP API 29
         timeout-minutes: 20
         run: bash tools/run-emulator-smoke.sh
