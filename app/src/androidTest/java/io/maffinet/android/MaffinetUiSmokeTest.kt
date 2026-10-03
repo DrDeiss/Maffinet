@@ -110,6 +110,8 @@ class MaffinetUiSmokeTest {
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
         saveScreenshot("06-settings")
         compose.onNodeWithText("О Maffinet").performScrollTo().performClick()
+        waitForTextToDisappear("Версия, исходники, лицензия и благодарности")
+        compose.onNodeWithText("Версия, исходники, лицензия и благодарности").assertDoesNotExist()
         waitForText(FORK_MARKING, substring = true)
         compose.onNodeWithText(FORK_MARKING, substring = true).performScrollTo().assertIsDisplayed()
         saveScreenshot("07-about-attribution")
@@ -224,6 +226,14 @@ class MaffinetUiSmokeTest {
             // Welcome uses a delayed AnimatedVisibility; presence alone is insufficient.
             compose.mainClock.advanceTimeByFrame()
             compose.onNodeWithText(text).isDisplayed()
+        }
+    }
+
+    private fun waitForTextToDisappear(text: String) {
+        compose.waitUntil(timeoutMillis = 20_000) {
+            // Dispose AnimatedContent's outgoing screen before capturing the incoming one.
+            compose.mainClock.advanceTimeByFrame()
+            compose.onAllNodesWithText(text).fetchSemanticsNodes().isEmpty()
         }
     }
 
