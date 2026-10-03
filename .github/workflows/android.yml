@@ -53,7 +53,20 @@ jobs:
       - name: Install pinned tools using runner agreements
         # Stable r29 uses the runner's existing Android SDK agreement. No preview
         # agreement is accepted, and the app's inherited r30 beta default stays.
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" </dev/null
+        shell: bash
+        run: |
+          SDK_MANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDK_MANAGER" ]]; then
+            mapfile -t SDK_MANAGERS < <(find "$ANDROID_HOME/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager -path '*/bin/sdkmanager' | sort -V)
+            if (( ${#SDK_MANAGERS[@]} == 0 )); then
+              echo 'No installed Android SDK command-line manager was found.'
+              exit 1
+            fi
+            SDK_MANAGER="${SDK_MANAGERS[-1]}"
+          fi
+          echo "Using installed SDK manager: $SDK_MANAGER"
+          "$SDK_MANAGER" --version
+          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" </dev/null
       - name: Build APK and run JVM tests
         run: bash ./gradlew :app:assembleDebug :app:testDebugUnitTest -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
       - name: Upload validation reports
