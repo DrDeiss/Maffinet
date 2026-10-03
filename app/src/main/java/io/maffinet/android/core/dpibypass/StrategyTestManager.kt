@@ -60,6 +60,10 @@ object StrategyTestManager {
     val deletedStrategies = mutableStateMapOf<String, Boolean>()
 
     private fun loadCustomizations(context: Context) {
+        pinnedStrategies.clear()
+        deletedStrategies.clear()
+        customNames.clear()
+        strategyNotes.clear()
         val file = File(context.filesDir, "strategy_customizations.json")
         if (!file.exists()) return
         try {
@@ -143,7 +147,8 @@ object StrategyTestManager {
         historyFingerprint = fingerprint
         val currentHistory = saved?.takeIf { it.fingerprint == fingerprint }
         hasStaleResults = store.hasSavedHistory() && currentHistory == null
-        currentHistory?.evaluations?.forEach { matrixResults[it.command] = it }
+        currentHistory?.evaluations?.filterNot { deletedStrategies[it.command] == true }
+            ?.forEach { matrixResults[it.command] = it }
         val settings = context.getPreferences()
         val activeCommand = settings.getString("byedpi_cmd_args", null)
             .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
@@ -202,11 +207,20 @@ object StrategyTestManager {
         historyFingerprint == ProbeTargetRepository(context).snapshot().fingerprint
 
     private fun savedEntry(item: Triple<Int, String, String>): Triple<Int, String, String>? = when {
+        deletedStrategies[item.second] == true -> null
         item.third.startsWith("Импортировано") -> item
         pinnedStrategies[item.second] == true || customNames.containsKey(item.second) ||
             strategyNotes.containsKey(item.second) || item.second == appliedStrategy ->
                 Triple(item.first, item.second, "Сохранена · проверка устарела")
         else -> null
+    }
+
+    @Synchronized private fun recordEvaluation(evaluation: StrategyEvaluation) {
+        if (deletedStrategies[evaluation.command] != true) matrixResults[evaluation.command] = evaluation
+    }
+
+    @Synchronized private fun recordProgress(index: Int, strategy: String, status: String) {
+        if (deletedStrategies[strategy] != true) testResults.add(0, Triple(index + 1, strategy, status))
     }
 
     @Synchronized
@@ -228,28 +242,34 @@ object StrategyTestManager {
                 currentTestIndex = 0
                 currentProgress = "Готовимся к тестированию..."
                 val tester = StrategyTester(applicationContext)
-                val best = tester.runTests(onProgress = { index, strategy, status ->
+                var selectedBest: String? = null
+                tester.runTests(onProgress = { index, strategy, status ->
                     currentTestIndex = index + 1
                     currentProgress = "Проверяем стратегию ${index + 1} из $totalStrategiesCount"
-                    if (!deletedStrategies.containsKey(strategy)) {
-                        testResults.add(0, Triple(index + 1, strategy, status))
-                    }
+                    recordProgress(index, strategy, status)
                 }, onEvaluation = { evaluation ->
                     check(snapshot.fingerprint == ProbeTargetRepository(applicationContext).snapshot().fingerprint) {
                         "Hosts или проверочные адреса изменились; повторите проверку"
                     }
-                    matrixResults[evaluation.command] = evaluation
-                }, excludedCommands = deletedStrategies.keys.toSet(), snapshot = snapshot, onBestReady = { best ->
+                    recordEvaluation(evaluation)
+                }, excludedCommands = deletedStrategies.keys.toSet(), snapshot = snapshot, onBestReady = {
                         currentCoroutineContext().ensureActive()
-                        if (best != null) {
-                            bestStrategyResult = best
-                            appliedStrategy = best
-                            applicationContext.getPreferences().edit()
-                                .putString("byedpi_cmd_args", best)
-                                .putBoolean("byedpi_enable_cmd_settings", true)
-                                .apply()
+                        synchronized(this@StrategyTestManager) {
+                            val best = StrategyScorer.best(matrixResults.values.filterNot {
+                                deletedStrategies[it.command] == true
+                            })?.command
+                            selectedBest = best
+                            if (best != null) {
+                                bestStrategyResult = best
+                                appliedStrategy = best
+                                applicationContext.getPreferences().edit()
+                                    .putString("byedpi_cmd_args", best)
+                                    .putBoolean("byedpi_enable_cmd_settings", true)
+                                    .apply()
+                            }
                         }
                     })
+                val best = selectedBest
 
                 Log.i("StrategyTestManager", "Автоподбор завершен. Лучшая стратегия: \"$best\"")
 
@@ -264,18 +284,19 @@ object StrategyTestManager {
                 currentProgress = error.message ?: "Ошибка проверки стратегий"
                 Log.e("StrategyTestManager", "Strategy testing failed", error)
             } finally {
-                try {
-                    if (snapshot.fingerprint != ProbeTargetRepository(applicationContext).snapshot().fingerprint) {
-                        matrixResults.clear()
-                        testResults.clear()
-                        bestStrategyResult = null
-                        hasStaleResults = true
-                    }
-                    retained.filter { saved -> testResults.none { it.second == saved.second } }.forEach { testResults.add(it) }
-                    StrategyMatrixStore(applicationContext).save(snapshot.fingerprint, matrixResults.toMap().values)
-                    saveResults(applicationContext)
-                } catch (error: Exception) { Log.e("StrategyTestManager", "Failed to save probe history", error) }
                 synchronized(this@StrategyTestManager) {
+                    try {
+                        if (snapshot.fingerprint != ProbeTargetRepository(applicationContext).snapshot().fingerprint) {
+                            matrixResults.clear()
+                            testResults.clear()
+                            bestStrategyResult = null
+                            hasStaleResults = true
+                        }
+                        retained.filter { saved -> deletedStrategies[saved.second] != true &&
+                            testResults.none { it.second == saved.second } }.forEach { testResults.add(it) }
+                        StrategyMatrixStore(applicationContext).save(snapshot.fingerprint, matrixResults.toMap().values)
+                        saveResults(applicationContext)
+                    } catch (error: Exception) { Log.e("StrategyTestManager", "Failed to save probe history", error) }
                     isTesting = false
                     testingJob = null
                 }
@@ -324,18 +345,22 @@ object StrategyTestManager {
     }
 
     fun applyStrategy(context: Context, originalIndex: Int, strategy: String) {
+        val accepted = synchronized(this) {
+            if (deletedStrategies[strategy] == true) false else {
+                context.getPreferences().edit()
+                    .putString("byedpi_cmd_args", strategy)
+                    .putBoolean("byedpi_enable_cmd_settings", true)
+                    .apply()
+                appliedStrategy = strategy
+                true
+            }
+        }
+        if (!accepted) {
+            Log.w("StrategyTestManager", "Ignoring a deleted strategy")
+            android.widget.Toast.makeText(context, "Стратегия удалена", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         Log.i("StrategyTestManager", "Вручную применена стратегия №$originalIndex: \"$strategy\"")
-        val prefs = context.getSharedPreferences(
-            context.packageName + "_preferences",
-            Context.MODE_PRIVATE
-        )
-        prefs.edit()
-            .putString("byedpi_cmd_args", strategy)
-            .putBoolean("byedpi_enable_cmd_settings", true)
-            .apply()
-
-        appliedStrategy = strategy
-
         resortResults(context)
 
         android.widget.Toast.makeText(
@@ -381,11 +406,15 @@ object StrategyTestManager {
         saveCustomizations(context)
     }
 
-    fun deleteStrategy(context: Context, strategy: String) {
+    @Synchronized fun deleteStrategy(context: Context, strategy: String) {
         deletedStrategies[strategy] = true
         saveCustomizations(context)
         testResults.removeAll { it.second == strategy }
+        matrixResults.remove(strategy)
+        if (bestStrategyResult == strategy) bestStrategyResult = StrategyScorer.best(matrixResults.values)?.command
         saveResults(context)
+        try { StrategyMatrixStore(context).removeCommand(strategy) }
+        catch (error: Exception) { Log.e("StrategyTestManager", "Failed to delete saved matrix candidate", error) }
     }
 
     private fun resortResults(context: Context) {
@@ -486,6 +515,8 @@ object StrategyTestManager {
                 val cleanName = if (rawName.startsWith("EX: ")) rawName else "EX: $rawName"
                 val notes = obj.optString("notes", "")
 
+                // An explicit import can restore a previously deleted saved command.
+                deletedStrategies.remove(strategy)
                 customNames[strategy] = cleanName
                 pinnedStrategies[strategy] = true
                 if (notes.isNotBlank()) {

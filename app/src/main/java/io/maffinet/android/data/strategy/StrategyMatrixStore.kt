@@ -46,6 +46,12 @@ class StrategyMatrixStore(context: Context) {
         }
     } catch (_: Exception) { null }
 
+    /** Removing a candidate does not change the compiler/probe inputs of remaining evidence. */
+    fun removeCommand(command: String) {
+        val history = load() ?: return
+        save(history.fingerprint, history.evaluations.filterNot { it.command == command })
+    }
+
     fun save(fingerprint: String, evaluations: Collection<StrategyEvaluation>) {
         val entries = JSONArray()
         for (evaluation in evaluations) {

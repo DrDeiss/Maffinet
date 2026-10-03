@@ -37,6 +37,7 @@ class MaffinetUiSmokeTest {
 
     @Before
     fun isolateSavedState() {
+        io.maffinet.android.core.connection.ConnectionCoordinator.clearStartErrors()
         originalPreferences = preferences.all.mapValues { (_, value) ->
             if (value is Set<*>) value.toSet() else value
         }
@@ -117,8 +118,11 @@ class MaffinetUiSmokeTest {
         compose.onAllNodesWithText("YouTube").assertCountEquals(0)
         compose.onNodeWithText("Hosts").performScrollTo().performClick()
         waitForText("General · встроенный список")
+        closeSoftKeyboard()
+        compose.onNodeWithText("General · встроенный список").performScrollTo()
         saveScreenshot("04-hosts")
         compose.onNodeWithText("Показать General").performClick()
+        compose.onNodeWithText("General · встроенный список").performScrollTo()
         saveScreenshot("17-hosts-general")
         compose.onNodeWithText("Скрыть General").performScrollTo().performClick()
 
@@ -176,12 +180,18 @@ class MaffinetUiSmokeTest {
         waitForText("Подключиться")
         compose.onNodeWithText("Выбрать приложения").performScrollTo().performClick()
         waitForText("Через VPN идут только выбранные приложения. Пустой выбор не запускает VPN.")
+        waitForDisplayedText("com.android.settings")
+        compose.onNodeWithText("com.android.settings").performClick()
+        check(preferences.getStringSet("selected_apps", emptySet()).isNullOrEmpty())
+        compose.onNodeWithText("com.android.settings").performClick()
+        check(preferences.getStringSet("selected_apps", emptySet()) == setOf("com.android.settings"))
         saveScreenshot("13-app-selection")
         compose.onNodeWithText("Готово").performClick()
         compose.onNodeWithText("DNS").performScrollTo().performClick()
         waitForText("DNS для VPN")
         saveScreenshot("14-dns-selection")
-        compose.onNodeWithText("Google Public DNS").performScrollTo().performClick()
+        compose.onNodeWithTag("dns-preset-list").performScrollToNode(hasText("Google Public DNS"))
+        compose.onNodeWithText("Google Public DNS").performClick()
         relaunchActivity()
         waitForText("Подключиться")
         compose.onNodeWithText("Google Public DNS").performScrollTo().assertIsDisplayed()
@@ -285,12 +295,6 @@ class MaffinetUiSmokeTest {
         compose.onAllNodesWithText("rupleide", substring = true).assertCountEquals(0)
     }
 
-    private fun serviceSwitch(name: String, otherCard: String): SemanticsNodeInteraction {
-        // Restrict the ancestor to the service's card, excluding the whole scrolling screen.
-        val card = hasAnyDescendant(hasText(name)) and !hasAnyDescendant(hasText(otherCard))
-        return compose.onNode(isToggleable() and hasAnyAncestor(card))
-    }
-
     private fun openDomainEditor() {
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
         compose.onNodeWithText("Hosts").performScrollTo().performClick()
@@ -338,6 +342,8 @@ class MaffinetUiSmokeTest {
     }
 
     private fun saveScreenshot(name: String) {
+        // Include delayed entrance animations, which can begin after semantics appear.
+        compose.mainClock.advanceTimeBy(1_000)
         compose.waitForIdle()
         instrumentation.waitForIdleSync()
         val framesRendered = CountDownLatch(1)

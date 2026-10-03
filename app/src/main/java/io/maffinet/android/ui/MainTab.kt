@@ -26,13 +26,12 @@ fun MainTab(focusRequester: FocusRequester, navBarFocusRequester: FocusRequester
     val prefs = remember { context.getSharedPreferences(context.packageName + "_preferences", 0) }
     val vpnState by ByeDpiVpnService.currentStatus.collectAsState()
     val telegramState by TgProxyController.status.collectAsState()
-    var error by remember { mutableStateOf<String?>(null) }
+    val startErrors by ConnectionCoordinator.startErrors.collectAsState()
     var elapsedSeconds by remember { mutableIntStateOf(0) }
     var exitAfterStart by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     fun startSelected() {
         val result = ConnectionCoordinator.startSelected(context, openTelegram = prefs.getBoolean("open_tg_on_connect", true))
-        error = result.errors.takeIf { it.isNotEmpty() }?.joinToString("\n")
         if (exitAfterStart && result.errors.isEmpty() && result.hasSelectedModes) (context as? Activity)?.finishAndRemoveTask()
         exitAfterStart = false
     }
@@ -47,7 +46,6 @@ fun MainTab(focusRequester: FocusRequester, navBarFocusRequester: FocusRequester
     fun connect() {
         if (ConnectionCoordinator.isConfigurationLocked(context) && !StrategyTestManager.isTesting) {
             ConnectionCoordinator.stopAll(context)
-            error = null
         } else {
             val permission = if (settings.applicationsEnabled()) android.net.VpnService.prepare(context) else null
             if (permission != null) vpnLauncher.launch(permission) else startSelected()
@@ -69,7 +67,7 @@ fun MainTab(focusRequester: FocusRequester, navBarFocusRequester: FocusRequester
             }
         } else elapsedSeconds = 0
     }
-    HomeScreen(vpnState, telegramState, elapsedSeconds, error, focusRequester,
+    HomeScreen(vpnState, telegramState, elapsedSeconds, startErrors.takeIf { it.isNotEmpty() }?.joinToString("\n"), focusRequester,
         onConnect = { if (!StrategyTestManager.isTesting) connect() },
         onBackground = {
             if (!StrategyTestManager.isTesting) {

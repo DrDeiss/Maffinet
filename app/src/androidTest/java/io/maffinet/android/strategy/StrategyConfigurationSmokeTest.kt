@@ -83,4 +83,46 @@ class StrategyConfigurationSmokeTest {
         settings.setHostFilterOverride(true)
         assertNotEquals(targetFingerprint, probes.snapshot().fingerprint)
     }
+
+    @Test fun deletedCandidateCannotReappearOrBeAppliedAndPreservesRemainingEvidence() {
+        assertTrue(probes.save("https://example.com").isValid)
+        val fingerprint = probes.snapshot().fingerprint
+        val first = StrategyEvaluation(0, "-s1", listOf(ServiceConnectivityResult("probe_0", "example.com",
+            listOf(TargetConnectivityResult("https://example.com", true, 12, httpStatus = 200)))))
+        val second = first.copy(candidateIndex = 1, command = "-s2")
+        val store = StrategyMatrixStore(context)
+        store.save(fingerprint, listOf(first, second))
+        settings.setString("byedpi_cmd_args", "-o2")
+        settings.setBoolean("byedpi_enable_cmd_settings", true)
+        StrategyTestManager.init(context)
+        StrategyTestManager.testResults.add(Triple(1, first.command, "1/1 адресов · 12 мс"))
+        StrategyTestManager.togglePin(context, first.command)
+
+        StrategyTestManager.deleteStrategy(context, first.command)
+        assertFalse(StrategyTestManager.matrixResults.containsKey(first.command))
+        assertFalse(StrategyTestManager.testResults.any { it.second == first.command })
+        assertEquals(listOf(second), store.load()!!.evaluations)
+        assertEquals("Candidate deletion cannot change the remaining probe configuration", fingerprint, store.load()!!.fingerprint)
+        assertEquals(fingerprint, probes.snapshot().fingerprint)
+        assertEquals(second.command, StrategyTestManager.bestStrategyResult)
+
+        // A stale row/action sheet cannot apply a command deleted since it was opened.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            StrategyTestManager.applyStrategy(context, 1, first.command)
+        }
+        assertEquals("-o2", settings.getString("byedpi_cmd_args", ""))
+
+        // Reload must also hide deleted entries from a pre-deletion/copy-restored matrix.
+        store.save(fingerprint, listOf(first, second))
+        StrategyTestManager.init(context)
+        assertEquals(setOf(second.command), StrategyTestManager.matrixResults.keys.toSet())
+        assertFalse(StrategyTestManager.testResults.any { it.second == first.command })
+        assertFalse(StrategyTestManager.hasStaleResults)
+
+        // Explicit user reimport restores the saved command without reviving HTTP evidence.
+        assertEquals(1, StrategyTestManager.importStrategiesFromJson(context,
+            """{"strategies":[{"strategy":"-s1","name":"Restored"}]}"""))
+        assertFalse(StrategyTestManager.deletedStrategies.containsKey(first.command))
+        assertFalse(StrategyTestManager.matrixResults.containsKey(first.command))
+    }
 }

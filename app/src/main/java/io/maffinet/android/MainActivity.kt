@@ -196,7 +196,6 @@ class MainActivity : ComponentActivity() {
                 io.maffinet.android.data.performanceModeGlobal = prefs.getBoolean("performance_mode", false)
                 val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
                 if (settings.anyModeRequested()) {
-                    prefs.edit().putBoolean("econom_mode", false).apply()
                     io.maffinet.android.core.connection.ConnectionCoordinator.recover(context)
                 }
                 if (prefs.getBoolean("auto_connect_on_start", false)) {

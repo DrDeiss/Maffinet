@@ -218,6 +218,14 @@ class NativeVpnLifecycleSmokeTest {
         assertFalse(preferences.getBoolean("service_enabled", true))
         assertTrue("A completed user STOP must leave the next explicit START available", ServiceManager.canStartVpn())
         assertFalse(ServiceManager.isStrategyTestInProgress)
+        startAndAwaitNativeTunnel()
+        ServiceManager.restart(context, Mode.VPN)
+        stopAndAwaitCleanup(common = true)
+        ConnectionCoordinator.recover(context)
+        SystemClock.sleep(350) // Allow the pending restart's stopped-pipeline continuation to run.
+        assertFalse("Common user STOP must invalidate a pending VPN restart", ByeDpiVpnService.hasProxyResources)
+        assertFalse(ByeDpiVpnService.isVpnActive)
+        assertFalse(settings.anyModeRequested())
     }
 
     @Test(timeout = 30_000)
@@ -315,6 +323,7 @@ class NativeVpnLifecycleSmokeTest {
         assertFalse(result.startedApplications)
         assertTrue(result.startedTelegram)
         assertTrue(result.errors.single().contains("приложение"))
+        assertEquals("Background/autostart errors must also remain visible to Home", result.errors, ConnectionCoordinator.startErrors.value)
         awaitTelegramRunning()
         assertFalse(settings.applicationsRequested())
         assertTrue(settings.telegramRequested())
@@ -351,6 +360,13 @@ class NativeVpnLifecycleSmokeTest {
         ConnectionCoordinator.recover(context, boot = true)
         assertFalse("Disabled boot autostart must not establish saved VPN requests", ByeDpiVpnService.hasProxyResources)
         assertFalse("Disabled boot autostart must not establish saved Telegram requests", TgProxyController.hasResources)
+        assertFalse("Disabled boot autostart must forget the previous boot's session requests", settings.anyModeRequested())
+        ConnectionCoordinator.recover(context)
+        WatchdogReceiver().onReceive(context, Intent("io.maffinet.android.action.WATCHDOG_PING"))
+        assertFalse("A later watchdog recovery must not revive a session from the previous boot", settings.anyModeRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
+        assertFalse(TgProxyController.hasResources)
+        assertTrue("Boot recovery must preserve the saved economy choice", preferences.getBoolean("econom_mode", false))
         settings.setRequested(false, false)
         settings.setApplicationsEnabled(false)
         preferences.edit().putBoolean("autostart", true).commit()
@@ -474,9 +490,9 @@ class NativeVpnLifecycleSmokeTest {
         assertTrue("Connected must follow actual TUN establishment", tunDescriptorCount() > originalTunCount)
     }
 
-    private fun stopAndAwaitCleanup() {
+    private fun stopAndAwaitCleanup(common: Boolean = false) {
         val beforeStop = stopped.get()
-        ServiceManager.stop(context)
+        if (common) ConnectionCoordinator.stopAll(context) else ServiceManager.stop(context)
         eventually("VPN must acknowledge STOP") { stopped.get() > beforeStop }
         awaitCleanResources()
     }

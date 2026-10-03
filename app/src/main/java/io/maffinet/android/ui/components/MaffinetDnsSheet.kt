@@ -79,6 +79,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
 
 private val SheetBackground = Color(0xFF10232D)
@@ -249,7 +250,7 @@ fun MaffinetDnsSheet(
                     .padding(frozenNavBarPadding)
                     .padding(bottom = if (useTvLayout) 0.dp else 16.dp)
                     .widthIn(max = if (useTvLayout) 640.dp else 500.dp)
-                    .fillMaxHeight(0.72f)
+                    .fillMaxHeight(if (useTvLayout) 0.72f else 0.94f)
                     .graphicsLayer {
                         alpha = cardProgress
                         val scale = 0.88f + 0.12f * cardProgress
@@ -362,7 +363,7 @@ fun MaffinetDnsSheet(
                             ) {
                                 LazyColumn(
                                     state = lazyListState,
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1f).testTag("dns-preset-list"),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     items(dnsList.size) { index ->
@@ -392,12 +393,12 @@ fun MaffinetDnsSheet(
                                 .fillMaxWidth()
                                 .weight(1f)
                                 .background(SheetBackground, RoundedCornerShape(28.dp))
-                                .padding(top = 24.dp, start = 22.dp, end = 22.dp, bottom = 22.dp),
+                                .padding(top = 16.dp, start = 22.dp, end = 22.dp, bottom = 16.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .size(84.dp)
+                                    .size(56.dp)
                                     .background(ButtonBorder, CircleShape)
                                     .padding(2.dp)
                                     .background(SheetBackground, CircleShape),
@@ -479,7 +480,7 @@ fun MaffinetDnsSheet(
                                 ) {
                                     LazyColumn(
                                         state = lazyListState,
-                                        modifier = Modifier.weight(1f),
+                                        modifier = Modifier.weight(1f).testTag("dns-preset-list"),
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         items(dnsList.size) { index ->

@@ -97,7 +97,7 @@ fun DomainListsScreen(focusRequester: FocusRequester, onBack: () -> Unit) {
         subtitle = "Домены для DPI bypass: встроенный General и ваше дополнение User. Выбор приложений не меняет hosts.") {
         ProductCard {
             Text("General · встроенный список", style = MaterialTheme.typography.titleLarge)
-            Text("Базовых доменов: ${builtInDomains.size}. Применяются всегда; User расширяет список.",
+            Text("Базовых доменов: ${builtInDomains.size}. При стандартном фильтре User расширяет General. Явный Advanced override заменяет этот фильтр.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedButton({ showBuiltIn = !showBuiltIn }, Modifier.fillMaxWidth()) {
                 Text(if (showBuiltIn) "Скрыть General" else "Показать General")

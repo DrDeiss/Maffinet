@@ -12,10 +12,17 @@ import io.maffinet.android.data.Mode
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.service.WatchdogReceiver
 import io.maffinet.android.service.WatchdogWorker
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import io.maffinet.android.core.debug.AppDebugManager as Log
 
 /** Every foreground/background entry point dispatches the two modes independently. */
 object ConnectionCoordinator {
+    private val _startErrors = MutableStateFlow<List<String>>(emptyList())
+    val startErrors = _startErrors.asStateFlow()
+
+    fun clearStartErrors() { _startErrors.value = emptyList() }
+
     data class StartResult(
         val hasSelectedModes: Boolean,
         val startedApplications: Boolean,
@@ -26,7 +33,11 @@ object ConnectionCoordinator {
     fun startSelected(context: Context, openTelegram: Boolean = false): StartResult {
         val settings = MaffinetSettingsRepository(context)
         val modes = settings.selectedModes()
-        if (!modes.any) return StartResult(false, false, false, listOf("Включите «Приложения» или «Telegram»"))
+        if (!modes.any) {
+            val errors = listOf("Включите «Приложения» или «Telegram»")
+            _startErrors.value = errors
+            return StartResult(false, false, false, errors)
+        }
         val errors = mutableListOf<String>()
         var vpn = false
         var telegram = false
@@ -45,10 +56,12 @@ object ConnectionCoordinator {
             } catch (error: Exception) { errors += error.message ?: "Не удалось запустить Telegram-прокси" }
         }
         refreshWatchdog(context)
+        _startErrors.value = errors.toList()
         return StartResult(true, vpn, telegram, errors)
     }
 
     fun stopAll(context: Context) {
+        clearStartErrors()
         // Clear both desired states before either asynchronous STOP is dispatched.
         MaffinetSettingsRepository(context).setRequested(false, false)
         try { ServiceManager.stop(context) }
@@ -63,7 +76,13 @@ object ConnectionCoordinator {
         val settings = MaffinetSettingsRepository(context)
         val prefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
         if (boot) {
-            return if (prefs.getBoolean("autostart", false)) startSelected(context).errors.isEmpty() else true
+            if (prefs.getBoolean("autostart", false)) return startSelected(context).errors.isEmpty()
+            // A saved desired connection belongs to the previous boot. WorkManager
+            // persists its periodic watchdog across reboot, so skipping just this
+            // broadcast would let a later normal recovery revive that old session.
+            settings.setRequested(false, false)
+            refreshWatchdog(context)
+            return true
         }
         var recovered = true
         if (settings.applicationsRequested() && settings.applicationsEnabled() && VpnService.prepare(context) == null) {
