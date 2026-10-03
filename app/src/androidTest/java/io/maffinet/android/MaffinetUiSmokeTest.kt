@@ -20,7 +20,7 @@ import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
-/** Exercises the real Activity and saved UI state without opening external apps or starting VPN. */
+/** Exercises real screens, saved state and the independent Telegram listener without opening external apps. */
 @RunWith(AndroidJUnit4::class)
 class MaffinetUiSmokeTest {
     @get:Rule val compose = createEmptyComposeRule()
@@ -56,6 +56,12 @@ class MaffinetUiSmokeTest {
     @After
     fun restoreSavedState() {
         closeActivity()
+        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+            io.maffinet.android.core.connection.ConnectionCoordinator.stopAll(context)
+            compose.waitUntil(10_000) {
+                !io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)
+            }
+        }
         val editor = preferences.edit().clear()
         originalPreferences.forEach { (key, value) ->
             when (value) {
@@ -213,6 +219,30 @@ class MaffinetUiSmokeTest {
         compose.onNode(isToggleable()).performScrollTo().assertIsOff()
         compose.onNode(hasSetTextAction()).performScrollTo().assertTextContains(SAVED_DOMAINS)
         saveScreenshot("12-domains-restored")
+    }
+
+    @Test
+    fun telegramOnlyHomeShowsActualStartStopAndLocksConfiguration() {
+        val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
+        settings.setApplicationsEnabled(false)
+        settings.setTelegramEnabled(true)
+        preferences.edit().putBoolean("open_tg_on_connect", false).putBoolean("tgproxy_cf_enabled", false).commit()
+        launchActivity()
+        waitForText("Подключиться")
+        compose.onNodeWithTag("connect").performClick()
+        waitForText("Подключено")
+        compose.onNodeWithTag("telegram-status").performScrollTo().assertTextEquals("Telegram-прокси: работает")
+        compose.onNodeWithTag("vpn-status").performScrollTo().assertTextEquals("VPN / ByeDPI: остановлен")
+        compose.waitUntil(10_000) {
+            compose.onAllNodes(hasTestTag("applications-mode") and !isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("applications-mode").assertIsNotEnabled()
+        saveScreenshot("18-telegram-running")
+        compose.onNodeWithTag("connect").performScrollTo().performClick()
+        waitForText("Подключиться")
+        compose.onNodeWithTag("telegram-status").performScrollTo().assertTextEquals("Telegram-прокси: остановлен")
+        check(!settings.anyModeRequested())
+        saveScreenshot("19-telegram-stopped")
     }
 
     private fun launchActivity(onboardingCompleted: Boolean = true, noticeSeen: Boolean = true) {
