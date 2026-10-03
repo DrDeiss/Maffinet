@@ -3,13 +3,15 @@ package io.maffinet.android.core.dpibypass
 import android.content.Context
 import android.content.SharedPreferences
 import android.util.Log
+import io.maffinet.android.data.domains.DomainListRepository
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 sealed interface ByeDpiProxyPreferences {
     companion object {
         fun fromSharedPreferences(preferences: SharedPreferences, context: Context): ByeDpiProxyPreferences =
             when (preferences.getBoolean("byedpi_enable_cmd_settings", false)) {
                 true -> ByeDpiProxyCmdPreferences(preferences, context)
-                false -> ByeDpiProxyUIPreferences(preferences)
+                false -> ByeDpiProxyUIPreferences(preferences, context)
             }
     }
 }
@@ -22,55 +24,45 @@ class ByeDpiProxyCmdPreferences(val args: Array<String>) : ByeDpiProxyPreference
     companion object {
         private fun parseCmdToArguments(preferences: SharedPreferences, context: Context): Array<String> {
             val cmd = preferences.getStringNotNull("byedpi_cmd_args", "-o1 -a1 -r-5+se")
-            val preparedCmd = getLists(cmd, context).replace("{sni}", StrategyTester.YOUTUBE_SNI_DOMAINS)
-
-            val firstArgIndex = preparedCmd.indexOf("-")
-            val args = (if (firstArgIndex > 0) preparedCmd.substring(firstArgIndex) else preparedCmd).trim()
-
-            Log.d("ProxyPref", "CMD: $args")
-
-            val (cmdIp, cmdPort) = preferences.checkIpAndPortInCmd()
             val ip = preferences.getStringNotNull("byedpi_proxy_ip", "127.0.0.1")
             val port = preferences.getStringNotNull("byedpi_proxy_port", "1080")
-
-            val prefix = buildString {
-                if (cmdIp == null) append("--ip $ip ")
-                if (cmdPort == null) append("--port $port ")
-            }
-
-            Log.d("ProxyPref", "Added from settings: $prefix")
-
-            val blacklist = setOf("--help", "--version", "-h", "-v")
-            val splitArgs = shellSplit("$prefix$args").filter { it !in blacklist }
-
-            return arrayOf("ciadpi") + splitArgs
+            return ByeDpiArgumentCompiler.compile(cmd, filterConfiguration(context), ip, port)
         }
 
-        private fun getLists(cmd: String, context: Context): String {
-            return Regex("""\{list:([^}]+)\}""").replace(cmd) { matchResult ->
-                val listName = matchResult.groupValues[1].trim()
-                val lists = DomainListUtils.getLists(context)
-                val domainList = lists.find { it.name.equals(listName, ignoreCase = true) }
-
-                if (domainList != null && domainList.domains.isNotEmpty()) {
-                    domainList.domains.joinToString(" ")
-                } else {
-                    Log.w("ProxyPref", "List '$listName' not found or empty")
-                    ""
-                }
-            }
+        /** Tests use production filtering, but always bind their own isolated listener. */
+        fun fromCommand(command: String, context: Context, ip: String = "127.0.0.1", port: Int = 1082): ByeDpiProxyCmdPreferences {
+            return ByeDpiProxyCmdPreferences(ByeDpiArgumentCompiler.compile(command, filterConfiguration(context), ip, port.toString(), forceListener = true))
         }
     }
 }
 
-class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpiProxyPreferences {
+private fun filterConfiguration(context: Context): ByeDpiFilterConfiguration {
+    val lists = DomainListRepository(context).getLists()
+    return ByeDpiFilterConfiguration(
+        lists,
+        lists.first { it.id == "general" }.domains,
+        MaffinetSettingsRepository(context).hostFilterOverride(),
+    )
+}
+
+class ByeDpiProxyUIPreferences(
+    val settings: UISettings = UISettings(),
+    private val filter: ByeDpiFilterConfiguration? = null,
+) : ByeDpiProxyPreferences {
 
     constructor(preferences: SharedPreferences) : this(
         UISettings.fromSharedPreferences(preferences)
     )
 
+    constructor(preferences: SharedPreferences, context: Context) : this(
+        UISettings.fromSharedPreferences(preferences), filterConfiguration(context)
+    )
+
     val uiargs: Array<String>
         get() {
+            require(filter?.hostFilterOverride != true || settings.hostsMode == UISettings.HostsMode.Disable || !settings.hosts.isNullOrBlank()) {
+                "The advanced hosts filter is empty"
+            }
             val args = mutableListOf("ciadpi")
 
             if (settings.ip.isNotEmpty()) args.add("-i${settings.ip}")
@@ -83,7 +75,7 @@ class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpi
                 if (settings.desyncHttp) add("h")
             }
 
-            if (!settings.hosts.isNullOrBlank()) {
+            if (filter?.hostFilterOverride != false && !settings.hosts.isNullOrBlank()) {
                 val hostStr = ":${settings.hosts.replace("\n", " ")}"
                 when (settings.hostsMode) {
                     UISettings.HostsMode.Blacklist -> {
@@ -124,7 +116,7 @@ class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpi
             }
 
             if (settings.desyncMethod == UISettings.DesyncMethod.OOB || settings.desyncMethod == UISettings.DesyncMethod.DISOOB) {
-                args.add("-e${settings.oobChar[0].code.toByte()}")
+                args.add("-e${(settings.oobChar.firstOrNull() ?: 'a').code.toByte()}")
             }
 
             val modHttpFlags = buildList {
@@ -151,7 +143,9 @@ class ByeDpiProxyUIPreferences(val settings: UISettings = UISettings()) : ByeDpi
                 args.add("-An")
             }
 
-            Log.d("ProxyPref", "UI to cmd: ${args.joinToString(" ")}")
-            return args.toTypedArray()
+            val compiled = filter?.let { ByeDpiArgumentCompiler.compileTokens(args, it, settings.ip, settings.port.toString()) }
+                ?: args.toTypedArray()
+            Log.d("ProxyPref", "Compiled ${compiled.size} ByeDPI arguments")
+            return compiled
         }
 }

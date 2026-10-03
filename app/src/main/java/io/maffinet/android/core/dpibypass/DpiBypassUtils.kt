@@ -16,19 +16,12 @@ import io.maffinet.android.data.Mode
 import io.maffinet.android.data.PAUSE_ACTION
 import io.maffinet.android.data.RESUME_ACTION
 import io.maffinet.android.data.STOP_ACTION
+import io.maffinet.android.data.domains.DomainListRepository
 
-data class DomainList(
-    val id: String,
-    val name: String,
-    val domains: List<String>,
-    val isActive: Boolean = true,
-    val isBuiltIn: Boolean = false,
-    val isModified: Boolean = false,
-    val isDeleted: Boolean = false
-)
+typealias DomainList = io.maffinet.android.core.domains.DomainList
 
 object DomainListUtils {
-    fun getLists(context: Context): List<DomainList> = emptyList()
+    fun getLists(context: Context): List<DomainList> = DomainListRepository(context).getLists()
 }
 
 fun Context.getPreferences(): SharedPreferences =
@@ -84,48 +77,7 @@ fun SharedPreferences.getProxyIpAndPort(): Pair<String, String> {
     return Pair(ip, port)
 }
 
-fun shellSplit(string: CharSequence): List<String> {
-    val tokens: MutableList<String> = ArrayList()
-    var quoteChar = ' '
-    var escaping = false
-    var quoting = false
-    var lastCloseQuoteIndex = Int.MIN_VALUE
-    var current = StringBuilder()
-
-    for (i in string.indices) {
-        val c = string[i]
-
-        if (escaping) {
-            current.append(c)
-            escaping = false
-        } else if (c == '\\' && quoting) {
-            if (i + 1 < string.length && string[i + 1] == quoteChar) {
-                escaping = true
-            } else {
-                current.append(c)
-            }
-        } else if (quoting && c == quoteChar) {
-            quoting = false
-            lastCloseQuoteIndex = i
-        } else if (!quoting && (c == '\'' || c == '"')) {
-            quoting = true
-            quoteChar = c
-        } else if (!quoting && Character.isWhitespace(c)) {
-            if (current.isNotEmpty() || lastCloseQuoteIndex == i - 1) {
-                tokens.add(current.toString())
-                current = StringBuilder()
-            }
-        } else {
-            current.append(c)
-        }
-    }
-
-    if (current.isNotEmpty() || lastCloseQuoteIndex == string.length - 1) {
-        tokens.add(current.toString())
-    }
-
-    return tokens
-}
+fun shellSplit(string: CharSequence): List<String> = CommandLineTokenizer.split(string)
 
 fun registerNotificationChannel(context: Context, id: String, @StringRes name: Int) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

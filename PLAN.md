@@ -75,4 +75,5 @@ At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environmen
 
 - Phase 0: complete; baseline build blocked by absent Java. GitHub fork created and audit recorded before modifying application code.
 - Phase 1: implementation completed for independent package/JNI identity, mint/navy/vector branding and required legal UI. Build toolchain being prepared; Google SDK/SDK Preview license acceptance requested explicitly, pending. Initial XML/reference/whitespace checks pass. Full build/tests have not yet passed.
-- Phases 2–6: pending.
+- Phase 2: complete. Domain parsing/normalization/merging, versioned atomic User storage, General/User/service lists, live compatibility adapter and structural ByeDPI argv compiler implemented. Fifteen focused Phase 2 tests passed in the standalone production-source JVM suite (20 total including five scoring tests being developed). Every strategy group is host-filtered with TCP constraints and an unmodified fallback; legacy fake-SNI/advanced host override are preserved. Full local APK build still waits on Google agreements; CI validation uses a stable NDK override under the runner's existing SDK agreement.
+- Phases 3–6: pending.
