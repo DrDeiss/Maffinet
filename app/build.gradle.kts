@@ -25,7 +25,7 @@ android {
 
     lint {
         checkReleaseBuilds = false
-        abortOnError = false
+        abortOnError = true
         disable.add("ExpiredTargetSdkVersion")
     }
 
@@ -76,6 +76,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.work:work-runtime-ktx:2.9.0")
     testImplementation(libs.junit)
+    androidTestImplementation("androidx.test:core-ktx:1.7.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

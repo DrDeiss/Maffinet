@@ -83,6 +83,8 @@ At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environmen
 
 ### Verification scope
 
+- Continued Phase 6: added AOSP API 29 instrumentation for the four UI destinations, required attribution, persisted service/domain edits, real JNI SOCKS/TUN start/stop/retry, startup cancellation and universal-test VPN restoration. Android Lint is now an error gate. A sixth production-native fixture test parses all 73 unchanged inherited presets after the actual selective argument compiler. These new Android runtime checks are pending their first CI execution; their presence is not recorded as a pass.
+
 - Local Windows: 26 JVM model tests passed; five Linux native fixture tests explicitly skipped. Full Kotlin syntax inspection passed for 71 application files. Android SDK agreement acceptance remains pending locally; no agreement was accepted by project automation.
 - GitHub CI: stable NDK r29 compiler override; all four native ABIs packaged in the debug build. Production native HTTP/TLS host selection, retry groups, TCP/IPv4 constraints and unchanged UDP forwarding were exercised successfully. Reports uploaded, with no public APK release.
 - Release limitations: device VPN/bypass/media/background/TV behavior remains unverified. Exact customized HEV source was not found in checked public provenance; retained binaries and JNI compatibility are documented. Source/provenance and device gates prevent claiming a verified alpha release.

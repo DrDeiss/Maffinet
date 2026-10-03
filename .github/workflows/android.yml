@@ -38,7 +38,7 @@ jobs:
           if-no-files-found: ignore
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
@@ -55,6 +55,7 @@ jobs:
         run: |
           test -s "$ANDROID_HOME/licenses/android-sdk-license"
       - name: Install pinned tools using runner agreements
+        timeout-minutes: 10
         # Stable r29 uses the runner's existing Android SDK agreement. No preview
         # agreement is accepted, and the app's inherited r30 beta default stays.
         shell: bash
@@ -70,9 +71,13 @@ jobs:
           fi
           echo "Using installed SDK manager: $SDK_MANAGER"
           "$SDK_MANAGER" --version
-          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" </dev/null
-      - name: Build APK and run JVM tests
-        run: bash ./gradlew :app:assembleDebug :app:testDebugUnitTest -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
+          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --channel=0 "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "platform-tools" "emulator" "system-images;android-29;default;x86_64" </dev/null
+      - name: Build APK, run JVM tests and Android Lint
+        timeout-minutes: 12
+        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
+      - name: Run instrumentation smoke on AOSP API 29
+        timeout-minutes: 20
+        run: bash tools/run-emulator-smoke.sh
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,4 +85,8 @@ jobs:
           name: android-validation
           path: |
             app/build/reports/tests/
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/reports/emulator-smoke/
+            app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
