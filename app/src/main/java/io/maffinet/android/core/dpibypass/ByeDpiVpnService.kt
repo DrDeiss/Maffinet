@@ -29,13 +29,15 @@ import io.maffinet.android.data.FAILED_BROADCAST
 import io.maffinet.android.data.SENDER
 import io.maffinet.android.data.setStatus
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.NonCancellable
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 import io.maffinet.android.core.services.ApplicationRouting
 import io.maffinet.android.core.services.ServiceCatalog
@@ -43,8 +45,10 @@ import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 class ByeDpiVpnService : LifecycleVpnService() {
     private val byeDpiProxy = ByeDpiProxy()
-    private var proxyJob: Job? = null
+    @Volatile private var proxyThread: Thread? = null
+    private var proxyStopping = AtomicBoolean(false)
     private var tunFd: ParcelFileDescriptor? = null
+    private var tunConfig: File? = null
     private val mutex = Mutex()
     private var wakeLock = null as android.os.PowerManager.WakeLock?
     private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
@@ -56,7 +60,13 @@ class ByeDpiVpnService : LifecycleVpnService() {
         private const val FOREGROUND_SERVICE_ID: Int = 1
         private const val PAUSE_NOTIFICATION_ID: Int = 3
         private const val NOTIFICATION_CHANNEL_ID: String = "ByeDPIVpn"
-        private var status: ServiceStatus = ServiceStatus.Disconnected
+        @Volatile private var status: ServiceStatus = ServiceStatus.Disconnected
+        @Volatile private var nativeProxyActive = false
+        @Volatile private var tunnelActive = false
+        @Volatile private var starting = false
+        val isVpnActive: Boolean get() = status == ServiceStatus.Connected
+        /** Remains true until the native worker actually exits and the TUN closes. */
+        val hasProxyResources: Boolean get() = starting || nativeProxyActive || tunnelActive
     }
 
     private fun acquireWakeLock() {
@@ -75,33 +85,48 @@ class ByeDpiVpnService : LifecycleVpnService() {
         val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
         val request = android.net.NetworkRequest.Builder()
             .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(android.net.NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
             .build()
         val callback = object : android.net.ConnectivityManager.NetworkCallback() {
             private var lastNetwork: android.net.Network? = null
+            private var networkLost = false
+            private val availableNetworks = linkedSetOf<android.net.Network>()
             override fun onAvailable(network: android.net.Network) {
                 super.onAvailable(network)
-                if (lastNetwork != null && lastNetwork != network) {
+                availableNetworks.add(network)
+                if (networkLost || (lastNetwork != null && lastNetwork != network)) {
                     if (isRunning) {
                         lifecycleScope.launch {
                             mutex.withLock {
+                                if (!isRunning || !ServiceManager.canStartVpn()) return@withLock
                                 try {
-                                    stopProxy()
+                                    updateStatus(ServiceStatus.Disconnected)
                                     stopTun2Socks()
+                                    stopProxy()
                                     startProxy()
                                     startTun2Socks()
+                                    updateStatus(ServiceStatus.Connected)
                                 } catch (e: Exception) {
                                     Log.e(TAG, "Watchdog reconnect failed", e)
+                                    cleanupPipeline()
+                                    updateStatus(ServiceStatus.Failed)
+                                    stopSelf()
                                 }
                             }
                         }
                     }
                 }
                 lastNetwork = network
+                networkLost = false
             }
             override fun onLost(network: android.net.Network) {
                 super.onLost(network)
-                if (network == lastNetwork) {
-                    lastNetwork = null
+                availableNetworks.remove(network)
+                if (network == lastNetwork || isRunning) {
+                    // Retain the baseline so the next physical network reconnects.
+                    networkLost = true
+                    // Mobile can already be available before Wi-Fi is lost.
+                    availableNetworks.firstOrNull()?.let { onAvailable(it) }
                 }
             }
         }
@@ -112,22 +137,27 @@ class ByeDpiVpnService : LifecycleVpnService() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
         networkCallback?.let {
             val connectivityManager = getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             try {
                 connectivityManager.unregisterNetworkCallback(it)
             } catch (_: Exception) {}
         }
-        tunFd?.close()
+        // Native JNI blocks outside lifecycleScope; canceling the scope cannot stop it.
+        // Always close both transports, including partially failed startup.
+        val failed = status == ServiceStatus.Failed
+        stopTun2Socks()
+        stopProxyBlocking()
+        updateStatus(if (failed) ServiceStatus.Failed else ServiceStatus.Disconnected)
         releaseWakeLock()
         val prefs = getSharedPreferences(packageName + "_preferences", android.content.Context.MODE_PRIVATE)
-        if (prefs.getBoolean("service_enabled", false)) {
+        if (!failed && !hasProxyResources && ServiceManager.canStartVpn() && prefs.getBoolean("service_enabled", false)) {
             val intent = Intent(this, io.maffinet.android.service.WatchdogReceiver::class.java).apply {
                 action = "io.maffinet.android.action.RESTART_SERVICE"
             }
             sendBroadcast(intent)
         }
+        super.onDestroy()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -138,16 +168,17 @@ class ByeDpiVpnService : LifecycleVpnService() {
         return when (val action = intent?.action) {
             START_ACTION -> {
                 lifecycleScope.launch {
-                    start()
+                    if (ServiceManager.isStartRequestCurrent(intent) && ServiceManager.canStartVpn()) start(intent)
                 }
                 START_STICKY
             }
 
             STOP_ACTION -> {
-                getSharedPreferences(packageName + "_preferences", android.content.Context.MODE_PRIVATE)
-                    .edit()
-                    .putBoolean("service_enabled", false)
-                    .apply()
+                if (!ServiceManager.isStopRequestCurrent(intent)) return START_NOT_STICKY
+                if (intent?.getBooleanExtra(ServiceManager.EXTRA_KEEP_DESIRED_STATE, false) != true &&
+                    !ServiceManager.handleUserStopIntent(this, intent)) {
+                    return START_NOT_STICKY
+                }
                 lifecycleScope.launch {
                     stop()
                 }
@@ -155,8 +186,10 @@ class ByeDpiVpnService : LifecycleVpnService() {
             }
 
             RESUME_ACTION -> {
+                getPreferences().edit().putBoolean("service_enabled", true).apply()
+                ServiceManager.onVpnResumed()
                 lifecycleScope.launch {
-                    if (prepare(this@ByeDpiVpnService) == null) {
+                    if (ServiceManager.canStartVpn() && prepare(this@ByeDpiVpnService) == null) {
                         start()
                     }
                 }
@@ -164,6 +197,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             }
 
             PAUSE_ACTION -> {
+                ServiceManager.onVpnPaused()
                 lifecycleScope.launch {
                     pause()
                 }
@@ -172,14 +206,21 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
             SERVICE_INTERFACE -> {
                 Log.i(TAG, "Started by Android")
-
-                lifecycleScope.launch {
-                    start()
-                }
+                ServiceManager.start(this, Mode.VPN)
 
                 START_STICKY
             }
 
+            null -> {
+                val desired = getPreferences().getBoolean("service_enabled", false)
+                if (desired && ServiceManager.canStartVpn() && prepare(this) == null) {
+                    lifecycleScope.launch { start() }
+                    START_STICKY
+                } else {
+                    stopSelf()
+                    START_NOT_STICKY
+                }
+            }
             else -> {
                 Log.w(TAG, "Unknown action: $action")
                 START_NOT_STICKY
@@ -189,37 +230,45 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
     override fun onRevoke() {
         Log.i(TAG, "VPN revoked")
+        ServiceManager.onUserStop(this)
         lifecycleScope.launch { stop() }
     }
 
-    private suspend fun start() {
+    private suspend fun start(request: Intent? = null) {
         Log.i(TAG, "Starting")
 
         val notificationManager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(PAUSE_NOTIFICATION_ID)
 
-        if (status == ServiceStatus.Connected) {
-            Log.w(TAG, "VPN already connected")
-            updateStatus(ServiceStatus.Connected)
-            return
-        }
-
-        try {
+        mutex.withLock {
+          if (!ServiceManager.canStartVpn() || !ServiceManager.isStartRequestCurrent(request) || status == ServiceStatus.Connected) return@withLock
+          starting = true
+          try {
             val prefs = getSharedPreferences(packageName + "_preferences", android.content.Context.MODE_PRIVATE)
             val economMode = prefs.getBoolean("econom_mode", false)
             if (!economMode) {
                 acquireWakeLock()
                 io.maffinet.android.service.WatchdogWorker.schedulePeriodicWork(this)
             }
-            mutex.withLock {
-                startProxy()
-                startTun2Socks()
-                updateStatus(ServiceStatus.Connected)
+            startProxy()
+            if (!ServiceManager.canStartVpn() || !ServiceManager.isStartRequestCurrent(request)) {
+                cleanupPipeline()
+                return@withLock
             }
+            startTun2Socks()
+            updateStatus(ServiceStatus.Connected)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start VPN", e)
+            cleanupPipeline()
+            releaseWakeLock()
+            io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
             updateStatus(ServiceStatus.Failed)
-            stop()
+            @Suppress("DEPRECATION")
+            stopForeground(true)
+            stopSelf()
+          } finally {
+            starting = false
+          }
         }
     }
 
@@ -240,22 +289,12 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.i(TAG, "Pausing")
 
         releaseWakeLock()
-        io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
+        // The shared watchdog may still be needed by the independent Telegram proxy.
 
-        if (status == ServiceStatus.Connected) {
-            mutex.withLock {
-                try {
-                    withContext(Dispatchers.IO) {
-                        stopProxy()
-                        stopTun2Socks()
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to pause VPN", e)
-                }
-            }
+        mutex.withLock {
+            cleanupPipeline()
+            updateStatus(ServiceStatus.Disconnected)
         }
-
-        updateStatus(ServiceStatus.Disconnected)
 
         val pausedNotification = createPauseNotification(
             this,
@@ -272,88 +311,111 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.i(TAG, "Stopping")
 
         releaseWakeLock()
-        io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
-
-        if (status != ServiceStatus.Connected) {
-            Log.w(TAG, "VPN not connected")
-            updateStatus(ServiceStatus.Disconnected)
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-            stopSelf()
-            return
+        if (!getPreferences().getBoolean("service_enabled", false)) {
+            io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(this)
         }
 
         mutex.withLock {
-            try {
-                withContext(Dispatchers.IO) {
-                    stopProxy()
-                    stopTun2Socks()
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to stop VPN", e)
-            }
+            cleanupPipeline()
+            updateStatus(ServiceStatus.Disconnected)
         }
-
-        updateStatus(ServiceStatus.Disconnected)
         @Suppress("DEPRECATION")
         stopForeground(true)
         stopSelf()
     }
 
-    private fun startProxy() {
-        Log.i(TAG, "Starting proxy")
-
-        if (proxyJob != null) {
-            Log.w(TAG, "Proxy fields not null")
-            throw IllegalStateException("Proxy fields not null")
-        }
-
-        val preferences = getByeDpiPreferences()
-
-        proxyJob = lifecycleScope.launch(Dispatchers.IO) {
-            val code = byeDpiProxy.startProxy(preferences)
-
-            delay(500)
-
-            if (code != 0) {
-                Log.e(TAG, "Proxy stopped with code $code")
-                updateStatus(ServiceStatus.Failed)
-                stopTun2Socks()
-                stopSelf()
-            }
-        }
-
-        Log.i(TAG, "Proxy started")
+    private suspend fun cleanupPipeline() = withContext(NonCancellable + Dispatchers.IO) {
+        stopTun2Socks()
+        stopProxyBlocking()
     }
 
-    private suspend fun stopProxy() {
-        Log.i(TAG, "Stopping proxy")
+    private suspend fun startProxy() {
+        Log.i(TAG, "Starting proxy")
 
-        if (status == ServiceStatus.Disconnected) {
-            Log.w(TAG, "Proxy already disconnected")
+        check(proxyThread?.isAlive != true && !nativeProxyActive) { "Previous proxy is still stopping" }
+
+        val preferences = getByeDpiPreferences()
+        val (configuredIp, port) = getPreferences().getProxyIpAndPort()
+        val listenerIp = when (configuredIp) {
+            "0.0.0.0" -> "127.0.0.1"
+            "::" -> "::1"
+            else -> configuredIp
+        }
+        withContext(Dispatchers.IO) {
+            val occupied = try {
+                Socket().use { it.connect(InetSocketAddress(listenerIp, port.toInt()), 100) }
+                true
+            } catch (_: java.io.IOException) { false }
+            check(!occupied) { "The configured SOCKS port is already occupied" }
+        }
+
+        val stopping = AtomicBoolean(false)
+        proxyStopping = stopping
+        nativeProxyActive = true
+        val worker = Thread({
+            try {
+                val code = byeDpiProxy.startProxy(preferences)
+                if (!stopping.get()) Log.e(TAG, "Proxy exited unexpectedly with code $code")
+            } catch (e: Exception) {
+                Log.e(TAG, "Native proxy failed", e)
+            } finally {
+                nativeProxyActive = false
+                if (!stopping.get()) lifecycleScope.launch {
+                    mutex.withLock {
+                        if (!stopping.get() && isRunning) {
+                            cleanupPipeline()
+                            updateStatus(ServiceStatus.Failed)
+                            stopSelf()
+                        }
+                    }
+                }
+            }
+        }, "Maffinet-VPN-ByeDPI").apply { isDaemon = true }
+        proxyThread = worker
+        worker.start()
+
+        withContext(Dispatchers.IO) {
+            repeat(40) {
+                check(worker.isAlive) { "ByeDPI exited before its SOCKS listener became ready" }
+                try {
+                    Socket().use { it.connect(InetSocketAddress(listenerIp, port.toInt()), 100) }
+                    return@withContext
+                } catch (_: java.io.IOException) {
+                    delay(50)
+                }
+            }
+            error("ByeDPI SOCKS listener did not become ready")
+        }
+        Log.i(TAG, "Proxy listener ready")
+    }
+
+    private suspend fun stopProxy() = withContext(NonCancellable + Dispatchers.IO) { stopProxyBlocking() }
+
+    private fun stopProxyBlocking() {
+        val worker = proxyThread ?: return
+        proxyStopping.set(true)
+        if (!worker.isAlive) {
+            proxyThread = null
+            nativeProxyActive = false
             return
         }
-
         try {
             byeDpiProxy.stopProxy()
-            proxyJob?.cancel()
-
-            val completed = withTimeoutOrNull(2000) {
-                proxyJob?.join()
-                true
-            }
-
-            if (completed == null) {
-                Log.w(TAG, "proxy not finish in time, cancelling...")
+            worker.join(2000)
+            if (worker.isAlive) {
                 byeDpiProxy.jniForceClose()
+                worker.join(1000)
             }
-
-            proxyJob = null
+            if (worker.isAlive) {
+                // Retain the flag and worker: no second JNI singleton may start.
+                Log.e(TAG, "Native proxy did not terminate; restart is blocked")
+            } else {
+                proxyThread = null
+                nativeProxyActive = false
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to close proxyJob", e)
+            Log.e(TAG, "Failed to stop native proxy", e)
         }
-
-        Log.i(TAG, "Proxy stopped")
     }
 
     private fun startTun2Socks() {
@@ -404,11 +466,13 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
 
         val isSmartTv = sharedPreferences.getBoolean("is_smart_tv", false)
+        tunConfig = configPath
 
-        val fd = createBuilder(emptyList(), ipv6, isSmartTv).establish()
+        val fd = createBuilder(dnsIps, ipv6, isSmartTv).establish()
             ?: throw IllegalStateException("VPN connection failed")
 
         this.tunFd = fd
+        tunnelActive = true
 
         TProxyService.TProxyStartService(configPath.absolutePath, fd.fd, isSmartTv)
 
@@ -418,19 +482,15 @@ class ByeDpiVpnService : LifecycleVpnService() {
     private fun stopTun2Socks() {
         Log.i(TAG, "Stopping tun2socks")
 
-        if (tunFd == null) {
-            Log.w(TAG, "VPN field is null, skipping")
-            return
-        }
-
         try {
-            TProxyService.TProxyStopService()
+            if (tunFd != null) TProxyService.TProxyStopService()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop TProxyService", e)
         }
 
         try {
-            File(cacheDir, "config.tmp").delete()
+            tunConfig?.delete()
+            tunConfig = null
         } catch (e: SecurityException) {
             Log.e(TAG, "Failed to delete config file", e)
         }
@@ -441,6 +501,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             Log.e(TAG, "Failed to close tunFd", e)
         } finally {
             tunFd = null
+            tunnelActive = false
         }
 
         Log.i(TAG, "Tun2socks stopped")
@@ -460,7 +521,6 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
                 ServiceStatus.Disconnected,
                 ServiceStatus.Failed -> {
-                    proxyJob = null
                     AppStatus.Halted
                 }
             },
@@ -504,7 +564,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         Log.d(TAG, "DNS: $dnsIps")
         val builder = Builder()
         val preferences = getPreferences()
-        builder.setSession("ByeDPI")
+        builder.setSession("Maffinet")
         builder.setConfigureIntent(
             PendingIntent.getActivity(
                 this,

@@ -13,6 +13,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import io.maffinet.android.core.domains.LegacyStrategyAliases
+import io.maffinet.android.core.strategy.StrategyEvaluation
+import io.maffinet.android.core.strategy.StrategyScorer
+import io.maffinet.android.data.strategy.StrategyMatrixStore
 
 object StrategyTestManager {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -29,6 +37,10 @@ object StrategyTestManager {
         private set
 
     val testResults = mutableStateListOf<Triple<Int, String, String>>()
+    val matrixResults = mutableStateMapOf<String, StrategyEvaluation>()
+    @Volatile private var testingJob: Job? = null
+
+    @Synchronized fun cancelTesting() { testingJob?.cancel() }
 
     var bestStrategyResult by mutableStateOf<String?>(null)
         private set
@@ -116,8 +128,16 @@ object StrategyTestManager {
         } catch (_: Exception) {}
     }
 
-    fun init(context: Context) {
+    @Synchronized fun init(context: Context) {
+        if (isTesting) return
         loadCustomizations(context)
+        matrixResults.clear()
+        StrategyMatrixStore(context).load().forEach { matrixResults[it.command] = it }
+        val settings = context.getPreferences()
+        val activeCommand = settings.getString("byedpi_cmd_args", null)
+            .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
+        bestStrategyResult = activeCommand
+        appliedStrategy = activeCommand
         val file = File(context.filesDir, "proxy_test_results.txt")
         if (file.exists()) {
             try {
@@ -132,16 +152,6 @@ object StrategyTestManager {
                     }
                 }
 
-                val prefs = context.getSharedPreferences(
-                    context.packageName + "_preferences",
-                    Context.MODE_PRIVATE
-                )
-                val activeCmd = prefs.getString("byedpi_cmd_args", null)
-                if (activeCmd != null && prefs.getBoolean("byedpi_enable_cmd_settings", false)) {
-                    bestStrategyResult = activeCmd
-                    appliedStrategy = activeCmd
-                }
-
                 if (loaded.isNotEmpty()) {
                     testResults.clear()
                     val activeApplied = appliedStrategy
@@ -149,7 +159,7 @@ object StrategyTestManager {
                     val sortedLoaded = filtered.sortedWith(compareBy<Triple<Int, String, String>> {
                         if (pinnedStrategies.containsKey(it.second)) 0 else 1
                     }.thenBy {
-                        if (activeApplied != null && it.second.replace("{sni}", "youtube.com,googlevideo.com,ytimg.com,ggpht.com,google.com") == activeApplied) 0 else 1
+                        if (activeApplied != null && it.second.replace("{sni}", LegacyStrategyAliases.SNI) == activeApplied) 0 else 1
                     })
                     testResults.addAll(sortedLoaded)
                 }
@@ -158,112 +168,67 @@ object StrategyTestManager {
         }
     }
 
-    private fun checkInternetConnection(): Boolean {
-        return try {
-            val url = java.net.URL("https://ya.ru")
-            val connection = url.openConnection() as java.net.HttpURLConnection
-            connection.connectTimeout = 3000
-            connection.readTimeout = 3000
-            connection.requestMethod = "HEAD"
-            val responseCode = connection.responseCode
-            connection.disconnect()
-            responseCode in 200..399
-        } catch (_: Exception) {
-            try {
-                val url = java.net.URL("https://connectivitycheck.gstatic.com/generate_204")
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = 3000
-                connection.readTimeout = 3000
-                connection.requestMethod = "GET"
-                val responseCode = connection.responseCode
-                connection.disconnect()
-                responseCode == 204
-            } catch (_: Exception) {
-                false
-            }
-        }
-    }
-
+    @Synchronized
     fun startTesting(context: Context): Job? {
         if (isTesting) return null
-
-        return scope.launch {
+        isTesting = true
+        val applicationContext = context.applicationContext
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             try {
                 Log.i("StrategyTestManager", "Запуск автоподбора стратегий")
-                isTesting = true
                 hasConnectionError = false
                 bestStrategyResult = null
                 testResults.clear()
+                matrixResults.clear()
                 currentTestIndex = 0
                 currentProgress = "Готовимся к тестированию..."
-
-                if (!checkInternetConnection()) {
-                    Log.e("StrategyTestManager", "Ошибка автоподбора: отсутствует интернет-соединение")
-                    hasConnectionError = true
-                    currentProgress = "Ошибка: отсутствует интернет-соединение."
-                    isTesting = false
-                    return@launch
-                }
-
-                val tester = StrategyTester(context)
-                val wasRunning = io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running
-                val best = tester.runTests { index, strategy, status ->
+                val tester = StrategyTester(applicationContext)
+                val best = tester.runTests(onProgress = { index, strategy, status ->
                     currentTestIndex = index + 1
                     currentProgress = "Проверяем стратегию ${index + 1} из $totalStrategiesCount"
                     if (!deletedStrategies.containsKey(strategy)) {
                         testResults.add(0, Triple(index + 1, strategy, status))
                     }
-                }
+                }, onEvaluation = { evaluation -> matrixResults[evaluation.command] = evaluation },
+                    excludedCommands = deletedStrategies.keys.toSet(), onBestReady = { best ->
+                        currentCoroutineContext().ensureActive()
+                        if (best != null) {
+                            bestStrategyResult = best
+                            appliedStrategy = best
+                            applicationContext.getPreferences().edit()
+                                .putString("byedpi_cmd_args", best)
+                                .putBoolean("byedpi_enable_cmd_settings", true)
+                                .apply()
+                        }
+                    })
 
                 Log.i("StrategyTestManager", "Автоподбор завершен. Лучшая стратегия: \"$best\"")
 
-                if (best != null) {
-                    val formattedBest = best.replace("{sni}", "youtube.com,googlevideo.com,ytimg.com,ggpht.com,google.com")
-                    bestStrategyResult = formattedBest
-                    appliedStrategy = formattedBest
-                    val prefs = context.getSharedPreferences(
-                        context.packageName + "_preferences",
-                        Context.MODE_PRIVATE
-                    )
-                    prefs.edit()
-                        .putString("byedpi_cmd_args", formattedBest)
-                        .putBoolean("byedpi_enable_cmd_settings", true)
-                        .apply()
-                }
-
-                val activeApplied = appliedStrategy
-                val filtered = testResults.filter { !deletedStrategies.containsKey(it.second) && !it.third.contains("тайм-аут") }
-                val sorted = filtered.sortedWith(compareBy<Triple<Int, String, String>> {
-                    if (pinnedStrategies.containsKey(it.second)) 0 else 1
-                }.thenBy {
-                    if (activeApplied != null && it.second.replace("{sni}", "youtube.com,googlevideo.com,ytimg.com,ggpht.com,google.com") == activeApplied) 0 else 1
-                }.thenBy {
-                    if (it.third.contains("мс")) 0 else 1
-                }.thenBy {
-                    if (it.third.contains("мс")) {
-                        it.third.substringBefore(" мс").toLongOrNull() ?: Long.MAX_VALUE
-                    } else {
-                        Long.MAX_VALUE
-                    }
-                })
-                testResults.clear()
-                testResults.addAll(sorted)
-
-                saveResults(context)
-                showNotification(context)
-
-                if (wasRunning) {
-                    io.maffinet.android.core.dpibypass.ServiceManager.start(
-                        context,
-                        io.maffinet.android.data.Mode.VPN
-                    )
-                }
+                resortResults(applicationContext)
+                showNotification(applicationContext)
+                currentProgress = if (best == null) "Рабочая стратегия не найдена" else "Тестирование завершено"
+            } catch (cancelled: CancellationException) {
+                currentProgress = "Проверка отменена"
+                throw cancelled
+            } catch (error: Exception) {
+                hasConnectionError = true
+                currentProgress = error.message ?: "Ошибка проверки стратегий"
+                Log.e("StrategyTestManager", "Strategy testing failed", error)
             } finally {
-                isTesting = false
-                currentProgress = "Тестирование завершено"
+                try {
+                    StrategyMatrixStore(applicationContext).save(matrixResults.toMap().values)
+                    saveResults(applicationContext)
+                } catch (error: Exception) { Log.e("StrategyTestManager", "Failed to save probe history", error) }
+                synchronized(this@StrategyTestManager) {
+                    isTesting = false
+                    testingJob = null
+                }
                 Log.i("StrategyTestManager", "Тестирование полностью завершено")
             }
         }
+        testingJob = job
+        job.start()
+        return job
     }
 
     private fun showNotification(context: Context) {
@@ -280,7 +245,7 @@ object StrategyTestManager {
         val builder = androidx.core.app.NotificationCompat.Builder(context, channelId)
             .setSmallIcon(io.maffinet.android.R.drawable.ic_notification)
             .setContentTitle("Maffinet")
-            .setContentText("Сканирование стратегий успешно завершено")
+            .setContentText("Проверка стратегий завершена")
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
@@ -323,7 +288,7 @@ object StrategyTestManager {
             android.widget.Toast.LENGTH_SHORT
         ).show()
 
-        if (io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running) {
+        if (ByeDpiVpnService.isVpnActive) {
             io.maffinet.android.core.dpibypass.ServiceManager.restart(
                 context,
                 io.maffinet.android.data.Mode.VPN
@@ -373,7 +338,11 @@ object StrategyTestManager {
         val sorted = current.sortedWith(compareBy<Triple<Int, String, String>> {
             if (pinnedStrategies.containsKey(it.second)) 0 else 1
         }.thenBy {
-            if (activeApplied != null && it.second.replace("{sni}", "youtube.com,googlevideo.com,ytimg.com,ggpht.com,google.com") == activeApplied) 0 else 1
+            if (activeApplied != null && it.second.replace("{sni}", LegacyStrategyAliases.SNI) == activeApplied) 0 else 1
+        }.thenByDescending {
+            matrixResults[it.second]?.passedServices ?: -1
+        }.thenBy {
+            matrixResults[it.second]?.averageLatencyMs ?: Long.MAX_VALUE
         }.thenBy {
             if (it.third.contains("мс")) 0 else 1
         }.thenBy {
@@ -389,12 +358,12 @@ object StrategyTestManager {
     }
 
     fun getStrategyName(strategy: String, context: Context? = null): String {
-        val clean = strategy.replace("{sni}", StrategyTester.YOUTUBE_SNI_DOMAINS)
+        val clean = strategy.replace("{sni}", LegacyStrategyAliases.SNI)
         val custom = customNames[clean] ?: customNames[strategy]
         if (custom != null) return custom
         
         val index = StrategyTester.defaultStrategies.indexOfFirst {
-            it.replace("{sni}", StrategyTester.YOUTUBE_SNI_DOMAINS) == clean
+            it.replace("{sni}", LegacyStrategyAliases.SNI) == clean
         }
         return if (index >= 0) "Способ ${index + 1}" else "Кастомный способ"
     }
@@ -422,7 +391,7 @@ object StrategyTestManager {
 
         testResults.forEach { item ->
             val strategy = item.second
-            val normalized = strategy.replace("{sni}", StrategyTester.YOUTUBE_SNI_DOMAINS)
+            val normalized = strategy.replace("{sni}", LegacyStrategyAliases.SNI)
             val manualStatus = prefs.getString("manual_status_$normalized", null)
             val isWorking = manualStatus == "working"
             if (isWorking && !deletedStrategies.containsKey(strategy)) {
@@ -468,7 +437,7 @@ object StrategyTestManager {
                 }
 
                 val prefs = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
-                val normalized = strategy.replace("{sni}", StrategyTester.YOUTUBE_SNI_DOMAINS)
+                val normalized = strategy.replace("{sni}", LegacyStrategyAliases.SNI)
                 prefs.edit().putString("manual_status_$normalized", "working").apply()
 
                 val existingIndex = testResults.indexOfFirst { it.second == strategy }

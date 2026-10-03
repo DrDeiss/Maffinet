@@ -65,7 +65,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                     TextButton({ expandedCommand = if (expandedCommand == evaluation.command) null else evaluation.command }, Modifier.weight(1f)) { Text("Подробности") }
                     Button({
                         settings.setBoolean("strategy_manual_mode", true)
-                        StrategyTestManager.applyStrategy(context, evaluation.candidateIndex, evaluation.command)
+                        StrategyTestManager.applyStrategy(context, evaluation.candidateIndex + 1, evaluation.command)
                     }, Modifier.weight(1f), enabled = !StrategyTestManager.isTesting) { Text(if (applied == evaluation.command) "Выбрана" else "Выбрать") }
                 }
             }
