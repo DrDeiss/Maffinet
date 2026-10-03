@@ -68,6 +68,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
@@ -131,7 +132,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.dark(
                 android.graphics.Color.TRANSPARENT
-            )
+            ),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.rgb(8, 20, 27))
         )
         setContent {
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -276,7 +278,13 @@ class MainActivity : ComponentActivity() {
                         ) { innerPadding ->
                             val density = androidx.compose.ui.platform.LocalDensity.current
                             val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
-                            val navOverlayReserve = safeBottomInset + 86.dp
+                            val navOverlayReserve = safeBottomInset + 96.dp
+                            val contentBottomInset = if (selectedTab in listOf(0, 2, 3, 5, 8, 9)) {
+                                navOverlayReserve
+                            } else {
+                                // Legacy screens already reserve the floating bar in their own layouts.
+                                safeBottomInset
+                            }
 
                             Box(
                                 modifier = Modifier.fillMaxSize()
@@ -284,7 +292,9 @@ class MainActivity : ComponentActivity() {
                                 AnimatedContent(
                                     targetState = selectedTab,
                                     modifier = Modifier
-                                        .fillMaxSize(),
+                                        .fillMaxSize()
+                                        .padding(bottom = contentBottomInset)
+                                        .clipToBounds(),
                                     transitionSpec = {
                                         if (io.maffinet.android.data.performanceModeGlobal) {
                                             fadeIn(tween(0)) togetherWith fadeOut(tween(0))

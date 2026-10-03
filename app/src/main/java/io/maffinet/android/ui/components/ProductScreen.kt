@@ -31,7 +31,7 @@ fun ProductScreen(
         Column(
             Modifier.widthIn(max = 760.dp).fillMaxWidth().statusBarsPadding()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 112.dp),
+                .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             if (onBack != null) {
