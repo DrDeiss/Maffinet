@@ -38,6 +38,8 @@ every other byte remains unchanged. The manifest records both original and
 shipped hashes, rather than presenting modified HEV files as unchanged.
 The original bytes remain recoverable in the imported Git history. Rust hashes
 are unaffected. The JNI make configuration and ProGuard keep rule use Maffinet.
+Inherited diagnostic source-file paths remain embedded in the ELF files; those
+paths are build metadata, not Java class lookups or application dependencies.
 
 This is an audited binary namespace adaptation, not a HEV source rebuild or a
 claim of complete native reproducibility. It removes the original application's

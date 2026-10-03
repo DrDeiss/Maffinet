@@ -1,11 +1,7 @@
 # Maffinet
 
-Maffinet is an independent project inspired by NetFix Mobile and uses parts of
-its open-source codebase. Upstream: [rupleide/NetFixMobile](https://github.com/rupleide/NetFixMobile).
-Maffinet is an independent development with its own identity, interface and
-selective DPI bypass architecture. It is not an official NetFix product.
-
-Attribution: **(fork of NetFix Mobile by rupleide)**.
+Maffinet is an Android application for local, selective DPI bypass with service
+profiles, editable domain lists and automatic strategy testing.
 
 During UI development, debug builds defer the upstream notice and attribution
 using `BuildConfig.SHOW_UPSTREAM_ATTRIBUTION=false`. Release builds set it to
@@ -23,7 +19,8 @@ installation alongside NetFix Mobile.
 ## Interface
 
 Original captures from the passing AOSP API29 emulator run, source
-`256dfaee5559eaf827e3228805d57653257bc56e`:
+`30ee86a15a6ed889f719a24b10a2577bcb5d6e6b`. Development UI defers upstream
+reminders:
 
 <img src="docs/screenshots/home-api29.png" width="270" alt="Maffinet Home with connection and service controls"> <img src="docs/screenshots/services-api29.png" width="270" alt="Maffinet service profiles">
 
@@ -114,8 +111,9 @@ control. Unit tests cover parsing/merging, profiles, arguments, scoring and
 persistence. `./gradlew -p verification test` runs pure production-source JVM tests
 without Android SDK. Linux CI also compiles unchanged pinned ByeDPI for actual
 host/protocol/retry/UDP contract checks; see [verification](verification/README.md).
-CI also assembles instrumentation tests, runs Android Lint with errors fatal and
-executes UI/native VPN smoke tests on an AOSP API29 x86_64 emulator. It collects
+CI assembles debug, unsigned release and instrumentation APKs, runs Android Lint
+with errors fatal and executes UI/native VPN smoke tests on an AOSP API29 x86_64
+emulator. It collects
 reports and screen captures. A licensed Linux SDK host can run the same checks
 with `bash tools/run-emulator-smoke.sh`; the script requires a provisioned AOSP
 API29 image, emulator, platform tools and KVM. Its simulated VPN consent is
@@ -126,6 +124,11 @@ Use [device validation](docs/DEVICE_VALIDATION.md)
 for VPN lifecycle, background, network switching and Android TV checks.
 
 ## License and attribution
+
+Maffinet uses parts of [rupleide/NetFixMobile](https://github.com/rupleide/NetFixMobile)
+and is an independent development with its own identity, interface and selective
+DPI bypass architecture. It is not an official NetFix product. Required release
+attribution: **(fork of NetFix Mobile by rupleide)**.
 
 Upstream README declares GPL-3.0 with additional terms; its imported checkout has
 no standalone LICENSE. [LICENSE](LICENSE) supplies standard GPLv3 text, while
