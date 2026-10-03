@@ -74,6 +74,7 @@ import io.maffinet.android.data.AppStatus
 import io.maffinet.android.data.Mode
 import io.maffinet.android.data.appStatus
 import io.maffinet.android.data.performanceModeGlobal
+import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -302,21 +303,21 @@ fun SettingsTab(
                 android.content.ComponentName(context, io.maffinet.android.service.MaffinetTileService::class.java)
             )
         } catch (_: Exception) {}
-        
+
         io.maffinet.android.service.WatchdogWorker.cancelPeriodicWork(context)
         io.maffinet.android.service.WatchdogReceiver.cancelWatchdogAlarm(context)
-        
+
         context.stopService(android.content.Intent(context, io.maffinet.android.core.dpibypass.ByeDpiVpnService::class.java))
         context.stopService(android.content.Intent(context, io.maffinet.android.core.tgproxy.TgProxyService::class.java))
         io.maffinet.android.core.tgproxy.TgProxyController.stop()
-        
+
         val notificationManager = context.getSystemService(android.content.Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
         notificationManager.cancelAll()
-        
+
         (context as? android.app.Activity)?.let { activity ->
             activity.finishAndRemoveTask()
         }
-        
+
         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
             kotlin.system.exitProcess(0)
         }, 150L)
@@ -437,42 +438,8 @@ fun SettingsTab(
         }
     }
 
-    val defaultPkgs = setOf(
-        "org.smarttube.stable",
-        "org.smarttube.beta",
-        "com.google.android.youtube",
-        "com.google.android.youtube.tv",
-        "com.liskovsoft.videomanager.v2",
-        "com.liskovsoft.smarttubetv.beta",
-        "com.teamsmart.videomanager.tv",
-        "app.revanced.android.youtube",
-        "com.google.android.apps.youtube.music",
-        "com.google.android.apps.youtube.kids",
-        "org.schabi.newpipe",
-        "org.schabi.newpipe.legacy",
-        "com.kapp.youtube",
-        "com.bg.vanced",
-        "com.libretube",
-        "com.liskovsoft.smarttubetv"
-    )
-    var selectedApps by remember {
-        val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
-        val saved = prefs.getStringSet("selected_apps", null)
-        val initial = if (saved == null) {
-            prefs.edit().putStringSet("selected_apps", defaultPkgs).apply()
-            defaultPkgs
-        } else {
-            val missing = defaultPkgs.filter { it !in saved }
-            if (missing.isNotEmpty()) {
-                val updated = saved + defaultPkgs
-                prefs.edit().putStringSet("selected_apps", updated).apply()
-                updated
-            } else {
-                saved
-            }
-        }
-        mutableStateOf(initial)
-    }
+    val settingsRepository = remember { MaffinetSettingsRepository(context) }
+    var selectedApps by remember { mutableStateOf(settingsRepository.manualApplications()) }
     var installedApps by remember { mutableStateOf<List<PackageInfo>>(emptyList()) }
     val actualSelectedCount = remember(selectedApps, installedApps) {
         if (installedApps.isEmpty()) {
@@ -800,7 +767,7 @@ fun SettingsTab(
                 }
 
                 SettingsClickRow(
-                    title = "Включить VPN для...",
+                    title = "Дополнительные приложения",
                     subtitle = if (actualSelectedCount > 0)
                         "Выбрано: $actualSelectedCount прил. (только они пойдут через VPN)"
                     else
@@ -847,7 +814,7 @@ fun SettingsTab(
                     )
                 }
                 Text(
-                    text = "Выберите, какие именно сервисы должен обходить Maffinet.",
+                    text = "Выберите режим VPN для выбранных сервисов и отдельного Telegram-прокси.",
                     color = Color(0xFFA1A1AA),
                     fontSize = 12.sp,
                     lineHeight = 16.sp,
@@ -855,14 +822,14 @@ fun SettingsTab(
                 )
 
                 val bypassModeText = when (bypassMode) {
-                    "both" -> "Telegram и YouTube"
+                    "both" -> "VPN и Telegram"
                     "telegram" -> "Только Telegram"
-                    "youtube" -> "Только YouTube"
-                    else -> "Telegram и YouTube"
+                    "youtube" -> "Только VPN"
+                    else -> "VPN и Telegram"
                 }
 
                 SettingsClickRow(
-                    title = "Обходить сервисы",
+                    title = "VPN и Telegram-прокси",
                     subtitle = "Выбрано: $bypassModeText",
                     actionContent = {
                         SettingsActionButton(
@@ -1200,18 +1167,15 @@ fun SettingsTab(
         visible = showExcludedAppsDialog,
         onDismissRequest = { showExcludedAppsDialog = false },
         icon = R.drawable.ic_settings,
-        title = "Включить VPN для...",
-        subtitle = "Только выбранные приложения будут направляться в обход через VPN. Остальные пойдут напрямую.",
+        title = "Дополнительные приложения",
+        subtitle = "Дополнительный ручной маршрут. Приложения включённых сервисов добавляются автоматически. Остальные идут напрямую.",
         installedApps = installedApps,
         selectedApps = selectedApps,
         onAppToggled = { pkg ->
             val newSet = selectedApps.toMutableSet()
             if (newSet.contains(pkg)) newSet.remove(pkg) else newSet.add(pkg)
             selectedApps = newSet
-            context.getSharedPreferences(
-                context.packageName + "_preferences",
-                android.content.Context.MODE_PRIVATE
-            ).edit().putStringSet("selected_apps", newSet).apply()
+            settingsRepository.setManualApplications(newSet)
         }
     )
 
@@ -1306,10 +1270,10 @@ fun SettingsTab(
         onDismissRequest = { showBypassModeDialog = false },
         icon = R.drawable.ic_bolt,
         title = "Режим работы",
-        subtitle = "Выберите, какие именно сервисы должен обходить Maffinet.",
+        subtitle = "Выберите режим VPN для выбранных сервисов и отдельного Telegram-прокси.",
         options = listOf(
             MaffinetSheetOption(
-                label = "Telegram и YouTube",
+                label = "VPN и Telegram",
                 selected = bypassMode == "both",
                 onClick = {
                     bypassMode = "both"
@@ -1343,7 +1307,7 @@ fun SettingsTab(
                 }
             ),
             MaffinetSheetOption(
-                label = "Только YouTube",
+                label = "Только VPN",
                 selected = bypassMode == "youtube",
                 onClick = {
                     bypassMode = "youtube"
@@ -1441,9 +1405,9 @@ fun SettingsTab(
         onDismissRequest = { showUnloadDialog = false },
         selectedKey = unloadCurrentMode,
         options = listOf(
-            UnloadOption(key = "both", label = "Telegram и YouTube", subtitle = "Обход для мессенджера и стриминга"),
+            UnloadOption(key = "both", label = "VPN и Telegram", subtitle = "Выбранные сервисы и MTProto-прокси"),
             UnloadOption(key = "telegram", label = "Только Telegram", subtitle = "Только MTProto-прокси, без VPN"),
-            UnloadOption(key = "youtube", label = "Только YouTube", subtitle = "Только VPN-тоннель, без прокси")
+            UnloadOption(key = "youtube", label = "Только VPN", subtitle = "Только VPN-тоннель, без прокси")
         ),
         onOptionSelected = { key ->
             showUnloadDialog = false

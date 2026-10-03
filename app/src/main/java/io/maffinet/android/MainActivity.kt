@@ -90,6 +90,12 @@ import io.maffinet.android.ui.InfoTab
 import io.maffinet.android.ui.YoutubeTab
 import io.maffinet.android.ui.OnboardingFlow
 import io.maffinet.android.ui.theme.MaffinetTheme
+import io.maffinet.android.ui.services.ServicesScreen
+import io.maffinet.android.ui.strategies.StrategiesScreen
+import io.maffinet.android.ui.settings.SettingsScreen
+import io.maffinet.android.ui.settings.AdvancedScreen
+import io.maffinet.android.ui.settings.DomainListsScreen
+import androidx.activity.compose.BackHandler
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -149,15 +155,9 @@ class MainActivity : ComponentActivity() {
                     }
                     if (key == "wants_youtube_bypass") {
                         wantsYoutubeBypass = sharedPreferences.getBoolean("wants_youtube_bypass", true)
-                        if (!wantsYoutubeBypass && selectedTab == 2) {
-                            selectedTab = 0
-                        }
                     }
                     if (key == "telegram_proxy_enabled_by_user") {
                         telegramProxyEnabledByUser = sharedPreferences.getBoolean("telegram_proxy_enabled_by_user", true)
-                        if (!telegramProxyEnabledByUser && selectedTab == 1) {
-                            selectedTab = 0
-                        }
                     }
                 }
                 prefs.registerOnSharedPreferenceChangeListener(listener)
@@ -166,49 +166,27 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            val tabFocusRequesters = remember { List(5) { FocusRequester() } }
+            val tabFocusRequesters = remember { List(10) { FocusRequester() } }
             val navBarFocusRequester = remember { FocusRequester() }
-            val allNavItems = listOf(
-                0 to NavItem("Главная", R.drawable.ic_power),
-                1 to NavItem("Прокси", R.drawable.ic_telegram),
-                2 to NavItem("Ютуб", R.drawable.ic_youtube),
-                3 to NavItem("Настройки", R.drawable.ic_settings),
-                4 to NavItem("Информация", R.drawable.ic_info)
+            val activeNavItems = listOf(
+                0 to NavItem("Главная", R.drawable.ic_home),
+                5 to NavItem("Сервисы", R.drawable.ic_star_custom),
+                2 to NavItem("Стратегии", R.drawable.ic_bolt),
+                3 to NavItem("Настройки", R.drawable.ic_settings)
             )
-            val activeNavItems = remember(telegramProxyEnabledByUser, wantsYoutubeBypass) {
-                allNavItems.filter { (idx, _) ->
-                    when (idx) {
-                        1 -> telegramProxyEnabledByUser
-                        2 -> wantsYoutubeBypass
-                        else -> true
-                    }
-                }
+            val primaryTab = if (selectedTab in listOf(0, 5, 2, 3)) selectedTab else 3
+            val navigate: (Int) -> Unit = { index ->
+                val testing = io.maffinet.android.core.dpibypass.StrategyTestManager.isTesting
+                val connected = io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running
+                if ((testing && index in listOf(1, 6, 7)) || (connected && index in listOf(1, 7))) {
+                    android.widget.Toast.makeText(context, "Остановите подключение или проверку, чтобы изменять эти настройки", android.widget.Toast.LENGTH_SHORT).show()
+                } else selectedTab = index.coerceIn(0, 9)
             }
-
+            BackHandler(enabled = onboardingCompleted && selectedTab !in listOf(0, 5, 2, 3)) { selectedTab = 3 }
             LaunchedEffect(selectedTab) {
-                io.maffinet.android.data.onNavigateToTab = { index ->
-                    val isVpnRunning = io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running
-                    if (isVpnRunning && index in listOf(1, 3)) {
-                        android.widget.Toast.makeText(
-                            context,
-                            "Выключите обход, чтобы изменять настройки",
-                            android.widget.Toast.LENGTH_SHORT
-                        ).show()
-                    } else {
-                        val tabName = when (index) {
-                            0 -> "Главная"
-                            1 -> "Telegram"
-                            2 -> "YouTube"
-                            3 -> "Настройки"
-                            4 -> "О программе"
-                            else -> "Вкладка $index"
-                        }
-                        io.maffinet.android.core.debug.AppDebugManager.log("Переход на вкладку: $tabName")
-                        selectedTab = index
-                    }
-                }
+                // Preserve old callback destinations while nesting legacy controls under Settings.
+                io.maffinet.android.data.onNavigateToTab = navigate
             }
-
             LaunchedEffect(Unit) {
                 val activity = context as? android.app.Activity
                 val showMsg = activity?.intent?.getBooleanExtra("showUpdateInstalledMessage", false) ?: false
@@ -324,18 +302,19 @@ class MainActivity : ComponentActivity() {
                                     label = "tabTransition"
                                 ) { tab ->
                                     when (tab) {
-                                        0 -> MainTab(
-                                            focusRequester = tabFocusRequesters[0],
-                                            navBarFocusRequester = navBarFocusRequester,
-                                            playEntranceAnimation = mainContentVisible && selectedTab == 0
-                                        )
+                                        0 -> MainTab(focusRequester = tabFocusRequesters[0], navBarFocusRequester = navBarFocusRequester,
+                                            playEntranceAnimation = mainContentVisible && selectedTab == 0)
                                         1 -> TgProxyTab(focusRequester = tabFocusRequesters[1], navBarFocusRequester = navBarFocusRequester)
-                                        2 -> YoutubeTab(focusRequester = tabFocusRequesters[2], navBarFocusRequester = navBarFocusRequester)
-                                        3 -> SettingsTab(focusRequester = tabFocusRequesters[3], navBarFocusRequester = navBarFocusRequester)
+                                        2 -> StrategiesScreen(tabFocusRequesters[2], navigate)
+                                        3 -> SettingsScreen(tabFocusRequesters[3], navigate)
                                         4 -> InfoTab(focusRequester = tabFocusRequesters[4], navBarFocusRequester = navBarFocusRequester)
+                                        5 -> ServicesScreen(tabFocusRequesters[5], navigate)
+                                        6 -> YoutubeTab(focusRequester = tabFocusRequesters[6], navBarFocusRequester = navBarFocusRequester)
+                                        7 -> SettingsTab(focusRequester = tabFocusRequesters[7], navBarFocusRequester = navBarFocusRequester)
+                                        8 -> AdvancedScreen(tabFocusRequesters[8], { selectedTab = 3 }, navigate)
+                                        9 -> DomainListsScreen(tabFocusRequesters[9], { selectedTab = 3 })
                                     }
                                 }
-
                                 val navBarProgress = rememberEntranceProgress(
                                     play = mainContentVisible,
                                     delayMillis = 300L,
@@ -365,22 +344,11 @@ class MainActivity : ComponentActivity() {
                                     ) {
                                         ProxyNavigationBar(
                                             activeNavItems = activeNavItems,
-                                            selectedTab = selectedTab,
+                                            selectedTab = primaryTab,
                                             tabFocusRequester = tabFocusRequesters[selectedTab],
                                             navBarFocusRequester = navBarFocusRequester,
-                                            showYoutubeAlert = onboardingCompleted && wantsYoutubeBypass && !setupDone,
-                                            onTabSelected = { originalIndex ->
-                                                val isVpnRunning = io.maffinet.android.data.appStatus.first == io.maffinet.android.data.AppStatus.Running
-                                                if (isVpnRunning && originalIndex in listOf(1, 3)) {
-                                                    android.widget.Toast.makeText(
-                                                        context,
-                                                        "Выключите обход, чтобы изменять настройки",
-                                                        android.widget.Toast.LENGTH_SHORT
-                                                    ).show()
-                                                } else {
-                                                    selectedTab = originalIndex
-                                                }
-                                            },
+                                            showYoutubeAlert = false,
+                                            onTabSelected = navigate,
                                             modifier = Modifier
                                         )
                                     }
@@ -596,7 +564,7 @@ private object MaterialTheme3TypeOverride {
 fun MaffinetSplashScreen(onDismiss: () -> Unit) {
     val scaleAnim = remember { Animatable(0.85f) }
     val alphaAnim = remember { Animatable(0f) }
-    
+
     val bgScaleAnim = remember { Animatable(1.0f) }
     val bgAlphaAnim = remember { Animatable(1f) }
 

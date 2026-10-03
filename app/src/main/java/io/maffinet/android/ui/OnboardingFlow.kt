@@ -609,7 +609,7 @@ private fun YoutubeBypassStep(
                     text = if (isSmartTv) {
                         "Разблокировать YouTube?"
                     } else {
-                        "Включить обход для YouTube?"
+                        "Включить VPN для сервисов?"
                     },
                     fontSize = 32.sp,
                     lineHeight = 38.sp,
@@ -622,9 +622,9 @@ private fun YoutubeBypassStep(
 
                 Text(
                     text = if (isSmartTv) {
-                        "YouTube в России заблокирован. Рекомендуем SmartTube, бесплатный плеер без рекламы с поддержкой обхода, Maffinet установит его сам."
+                        "Для YouTube на Android TV доступна настройка SmartTube. Выберите вариант подключения."
                     } else {
-                        "Без него видео может не запускаться или зависать в буферизации."
+                        "VPN направляет выбранные приложения через Maffinet. YouTube включён по умолчанию; Instagram, LinkedIn и другие сервисы можно выбрать на экране «Сервисы»."
                     },
                     fontSize = 16.sp,
                     lineHeight = 22.sp,
@@ -1381,7 +1381,7 @@ private fun SummaryStep(
 
                 SummaryCard(
                     iconRes = R.drawable.ic_youtube,
-                    text = if (strategyName != null) "YouTube, стратегия «$strategyName» выбрана автоматически" else "YouTube, обход не используется",
+                    text = if (strategyName != null) "VPN, стратегия «$strategyName» выбрана автоматически" else "VPN для сервисов не используется",
                     isActive = wantsYoutubeBypass == true
                 )
             }
@@ -1490,7 +1490,7 @@ private fun FinalGreetingScreen(onCompleted: () -> Unit) {
             contentAlignment = Alignment.Center
         ) {
             Image(
-                painter = painterResource(id = R.mipmap.ic_launcher_foreground),
+                painter = painterResource(id = R.drawable.ic_maffinet_mark),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize()
             )
