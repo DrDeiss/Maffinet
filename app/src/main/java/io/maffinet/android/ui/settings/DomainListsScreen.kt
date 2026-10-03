@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import io.maffinet.android.core.connection.ConnectionCoordinator
 import io.maffinet.android.core.domains.BuiltInDomainLists
@@ -138,7 +139,7 @@ fun DomainListsScreen(focusRequester: FocusRequester, onBack: () -> Unit) {
             Text("Сохранённых доменов: ${lists.first { it.id == "user" }.domains.size}",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             OutlinedTextField(text, { text = it; errors = emptyList(); message = null },
-                modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 360.dp), enabled = !locked && !working,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 200.dp, max = 360.dp).testTag("domain-editor"), enabled = !locked && !working,
                 label = { Text("Ваши домены") }, placeholder = { Text("example.com\nexample.net") },
                 isError = errors.isNotEmpty())
             errors.take(10).forEach { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }

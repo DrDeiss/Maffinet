@@ -216,7 +216,7 @@ class MaffinetUiSmokeTest {
         replaceDomains("EXAMPLE.COM\nsub.example.org\nexample.com")
         saveDomains()
         waitForText("Сохранено доменов: 2")
-        compose.onNode(hasSetTextAction()).assertTextContains(SAVED_DOMAINS)
+        compose.onNodeWithTag("domain-editor").assertTextContains(SAVED_DOMAINS)
         saveScreenshot("10-domains-saved")
 
         replaceDomains("https://example.com/path")
@@ -230,7 +230,7 @@ class MaffinetUiSmokeTest {
         waitForText("Подключиться")
         openDomainEditor()
         compose.onNode(isToggleable()).performScrollTo().assertIsOff()
-        compose.onNode(hasSetTextAction()).performScrollTo().assertTextContains(SAVED_DOMAINS)
+        compose.onNodeWithTag("domain-editor").performScrollTo().assertTextContains(SAVED_DOMAINS)
         saveScreenshot("12-domains-restored")
     }
 
@@ -302,11 +302,11 @@ class MaffinetUiSmokeTest {
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
         compose.onNodeWithText("Hosts").performScrollTo().performClick()
         waitForText("User · ваши домены")
-        compose.onNode(hasSetTextAction()).assertExists()
+        compose.onNodeWithTag("domain-editor").assertExists()
     }
 
     private fun replaceDomains(text: String) {
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement(text)
+        compose.onNodeWithTag("domain-editor").performScrollTo().performTextReplacement(text)
         closeSoftKeyboard()
     }
 
