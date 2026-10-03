@@ -19,6 +19,7 @@ kotlin {
                 "io/maffinet/android/core/services/ServiceProfile.kt",
                 "io/maffinet/android/core/services/ServiceCatalog.kt",
                 "io/maffinet/android/core/strategy/StrategyEvaluation.kt",
+                "io/maffinet/android/core/strategy/DefaultStrategyCatalog.kt",
             )
         }
         test {

@@ -16,6 +16,12 @@ int main(int argc, char **argv)
     const char *mode = argv[1], *host = argv[2];
     if (parse_args(argc - 3, argv + 3)) return 3;
 
+    if (!strcmp(mode, "parse")) {
+        printf("contract 0 0 0 %d\n", params.dp_n);
+        clear_params(0, 0);
+        return 0;
+    }
+
     union sockaddr_u destination = { 0 };
     destination.in.sin_family = AF_INET;
     destination.in.sin_port = htons(443);

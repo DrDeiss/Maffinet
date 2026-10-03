@@ -2,6 +2,8 @@ package io.maffinet.verification
 
 import io.maffinet.android.core.dpibypass.ByeDpiArgumentCompiler
 import io.maffinet.android.core.dpibypass.ByeDpiFilterConfiguration
+import io.maffinet.android.core.strategy.DefaultStrategyCatalog
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertEquals
 import org.junit.Assume.assumeTrue
 import org.junit.Before
@@ -66,6 +68,12 @@ class NativeParserContractTest {
             val result = selected(command, "udp", "youtube.com")
             assertEquals(0, result[1])
             assertEquals(0, result[2])
+        }
+    }
+
+    @Test fun allInheritedPresetsAreAcceptedByTheProductionNativeParser() {
+        for (command in DefaultStrategyCatalog.commands) {
+            assertTrue(command, selected(command, "parse", "youtube.com")[3] > 0)
         }
     }
 }
