@@ -17,6 +17,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /** Exercises the real Activity and saved UI state without opening external apps or starting VPN. */
 @RunWith(AndroidJUnit4::class)
@@ -236,6 +238,15 @@ class MaffinetUiSmokeTest {
     private fun saveScreenshot(name: String) {
         compose.waitForIdle()
         instrumentation.waitForIdleSync()
+        val framesRendered = CountDownLatch(1)
+        checkNotNull(scenario).onActivity { activity ->
+            val decor = activity.window.decorView
+            // Semantics can be current before SurfaceFlinger receives the updated Activity frame.
+            decor.postOnAnimation {
+                decor.postOnAnimation { framesRendered.countDown() }
+            }
+        }
+        check(framesRendered.await(3, TimeUnit.SECONDS)) { "Android did not deliver screenshot frames: $name" }
         val bitmap = instrumentation.uiAutomation.takeScreenshot()
         if (bitmap == null) {
             Log.w("MaffinetUiSmoke", "UiAutomation did not provide screenshot: $name")
