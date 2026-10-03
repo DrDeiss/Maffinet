@@ -66,9 +66,20 @@ test -r /dev/kvm && test -w /dev/kvm || {
   echo 'KVM is required; grant access on this Linux test host before running.' >&2
   exit 1
 }
-timeout 15s "$EMULATOR" -version > "$REPORT_DIR/emulator-version.txt" 2>&1
-timeout 15s "$EMULATOR" -accel-check > "$REPORT_DIR/acceleration.txt" 2>&1
-printf 'no\n' | timeout 60s "$AVD_MANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE" --path "$ANDROID_AVD_HOME/$AVD_NAME.avd" --device pixel > "$REPORT_DIR/avd-create.log" 2>&1
+if ! timeout 15s "$EMULATOR" -version > "$REPORT_DIR/emulator-version.txt" 2>&1; then
+  cat "$REPORT_DIR/emulator-version.txt" >&2
+  ldd "$SDK_ROOT/emulator/qemu/linux-x86_64/qemu-system-x86_64" > "$REPORT_DIR/emulator-loader.txt" 2>&1 || true
+  cat "$REPORT_DIR/emulator-loader.txt" >&2
+  exit 1
+fi
+if ! timeout 15s "$EMULATOR" -accel-check > "$REPORT_DIR/acceleration.txt" 2>&1; then
+  cat "$REPORT_DIR/acceleration.txt" >&2
+  exit 1
+fi
+if ! printf 'no\n' | timeout 60s "$AVD_MANAGER" create avd --force --name "$AVD_NAME" --package "$IMAGE" --path "$ANDROID_AVD_HOME/$AVD_NAME.avd" --device pixel > "$REPORT_DIR/avd-create.log" 2>&1; then
+  cat "$REPORT_DIR/avd-create.log" >&2
+  exit 1
+fi
 timeout 15s "$ADB" start-server
 if "$ADB" devices | awk '{print $1}' | grep -Fxq "$ANDROID_SERIAL"; then
   echo "An emulator already occupies $ANDROID_SERIAL; refusing to replace it." >&2

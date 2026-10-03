@@ -50,6 +50,11 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Install emulator runtime library
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
       - name: Verify runner SDK license provisioning
         shell: bash
         run: |
