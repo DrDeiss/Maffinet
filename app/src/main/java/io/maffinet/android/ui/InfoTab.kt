@@ -6,8 +6,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.verticalScroll
 import android.content.res.Configuration
 import androidx.compose.material3.Text
@@ -29,6 +27,7 @@ import android.net.Uri
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import io.maffinet.android.core.update.UpdateManager
+import io.maffinet.android.core.update.UpdateCheckResult
 import io.maffinet.android.ui.components.MaffinetButton
 import io.maffinet.android.ui.components.QrLinkDialog
 import io.maffinet.android.R
@@ -61,9 +60,6 @@ fun InfoTab(
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val scrollState = rememberScrollState()
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
-    val navOverlayReserve = safeBottomInset + 86.dp
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val currentVersion = remember(context) {
@@ -117,7 +113,7 @@ fun InfoTab(
                 .fillMaxWidth()
                 .statusBarsPadding()
                 .verticalScroll(scrollState)
-                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = navOverlayReserve + 16.dp),
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Column(
@@ -182,6 +178,16 @@ fun InfoTab(
                 val displayVersion = io.maffinet.android.data.updateInfoGlobal?.let {
                     if (it.version.startsWith("v", ignoreCase = true)) it.version else "v${it.version}"
                 } ?: ""
+                val checkResult = io.maffinet.android.data.updateCheckResultGlobal
+                val checking = io.maffinet.android.data.updateCheckInProgressGlobal
+                val checkStatus = if (checking) "Проверка обновлений…" else when (checkResult) {
+                    is UpdateCheckResult.Available -> "Найдено обновление: $displayVersion"
+                    is UpdateCheckResult.UpToDate -> "Обновлений не найдено"
+                    UpdateCheckResult.NoRelease -> "Опубликованный релиз не найден"
+                    is UpdateCheckResult.NoApk -> "В новом релизе нет APK"
+                    is UpdateCheckResult.Failed -> "Не удалось проверить обновления"
+                    null -> "Обновления ещё не проверены"
+                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -190,8 +196,13 @@ fun InfoTab(
                 ) {
                     Text(text = "Статус", color = Color(0xFF93AEB7), fontSize = 14.sp)
                     Text(
-                        text = if (io.maffinet.android.data.updateInfoGlobal != null) "Найдено обновление: $displayVersion" else "У вас последняя версия",
-                        color = if (io.maffinet.android.data.updateInfoGlobal != null) Color(0xFF8DE5C0) else Color(0xFF8DE5C0),
+                        text = checkStatus,
+                        color = when {
+                            checking -> Color(0xFF93AEB7)
+                            checkResult is UpdateCheckResult.Available || checkResult is UpdateCheckResult.UpToDate -> Color(0xFF8DE5C0)
+                            checkResult is UpdateCheckResult.Failed || checkResult is UpdateCheckResult.NoApk -> Color(0xFFFFC878)
+                            else -> Color(0xFF93AEB7)
+                        },
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
@@ -218,13 +229,13 @@ fun InfoTab(
 
                 val buttonText = when {
                     io.maffinet.android.data.updateProgressGlobal >= 0 -> "Скачивание: ${(io.maffinet.android.data.updateProgressGlobal * 100).toInt()}%"
-                    io.maffinet.android.data.updateStatusGlobal == "Проверка..." -> "Проверка..."
+                    checking -> "Проверка..."
                     io.maffinet.android.data.updateInfoGlobal != null -> "Скачать и установить $displayVersion"
                     io.maffinet.android.data.updateStatusGlobal != null -> io.maffinet.android.data.updateStatusGlobal!!
                     else -> "Проверить обновления"
                 }
 
-                val buttonEnabled = io.maffinet.android.data.updateStatusGlobal != "Проверка..." && io.maffinet.android.data.updateProgressGlobal < 0
+                val buttonEnabled = !checking && io.maffinet.android.data.updateProgressGlobal < 0
 
                 val infoBgColor by animateColorAsState(
                     targetValue = if (buttonEnabled) {
@@ -279,16 +290,7 @@ fun InfoTab(
                                 }
                             } else {
                                 scope.launch {
-                                    io.maffinet.android.data.updateStatusGlobal = "Проверка..."
-                                    val info = UpdateManager.checkUpdate(context)
-                                    if (info != null) {
-                                        io.maffinet.android.data.updateInfoGlobal = info
-                                        io.maffinet.android.data.updateStatusGlobal = null
-                                    } else {
-                                        io.maffinet.android.data.updateStatusGlobal = "У вас последняя версия"
-                                        delay(3000)
-                                        io.maffinet.android.data.updateStatusGlobal = null
-                                    }
+                                    io.maffinet.android.data.refreshUpdateCheck(context)
                                 }
                             }
                         }

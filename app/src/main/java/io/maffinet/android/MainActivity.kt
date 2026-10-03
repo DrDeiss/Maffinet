@@ -197,9 +197,8 @@ class MainActivity : ComponentActivity() {
                     activity?.intent?.removeExtra("showUpdateInstalledMessage")
                 }
                 io.maffinet.android.core.dpibypass.StrategyTestManager.init(context)
-                val info = io.maffinet.android.core.update.UpdateManager.checkUpdate(context)
-                if (info != null) {
-                    io.maffinet.android.data.updateInfoGlobal = info
+                if (io.maffinet.android.core.update.UpdateManager.isAutoUpdateEnabled(context)) {
+                    launch { io.maffinet.android.data.refreshUpdateCheck(context) }
                 }
                 val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                 io.maffinet.android.data.performanceModeGlobal = prefs.getBoolean("performance_mode", false)
@@ -279,7 +278,7 @@ class MainActivity : ComponentActivity() {
                             val density = androidx.compose.ui.platform.LocalDensity.current
                             val safeBottomInset = with(density) { WindowInsets.safeDrawing.getBottom(density).toDp() }
                             val navOverlayReserve = safeBottomInset + 96.dp
-                            val contentBottomInset = if (selectedTab in listOf(0, 2, 3, 5, 8, 9)) {
+                            val contentBottomInset = if (selectedTab in listOf(0, 2, 3, 4, 5, 8, 9)) {
                                 navOverlayReserve
                             } else {
                                 // Legacy screens already reserve the floating bar in their own layouts.

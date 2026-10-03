@@ -114,6 +114,7 @@ class MaffinetUiSmokeTest {
         compose.onNodeWithText("Версия, исходники, лицензия и благодарности").assertDoesNotExist()
         waitForText(FORK_MARKING, substring = true)
         compose.onNodeWithText(FORK_MARKING, substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Обновления ещё не проверены").assertIsDisplayed()
         saveScreenshot("07-about-attribution")
 
         navigate("Главная", "Подключиться")

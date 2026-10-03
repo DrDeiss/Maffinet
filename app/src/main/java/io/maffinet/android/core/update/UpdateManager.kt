@@ -7,12 +7,23 @@ import android.os.Build
 import android.provider.Settings
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
+
+sealed interface UpdateCheckResult {
+    data class Available(val info: UpdateManager.UpdateInfo) : UpdateCheckResult
+    data class UpToDate(val version: String) : UpdateCheckResult
+    data object NoRelease : UpdateCheckResult
+    data class NoApk(val version: String) : UpdateCheckResult
+    data class Failed(val message: String) : UpdateCheckResult
+}
 
 object UpdateManager {
 
@@ -24,18 +35,24 @@ object UpdateManager {
         val description: String
     )
 
-    suspend fun checkUpdate(context: Context): UpdateInfo? {
+    suspend fun checkUpdate(context: Context): UpdateCheckResult {
         return withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
             try {
-                val connection = URL(GITHUB_API_URL).openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                connection.setRequestProperty("User-Agent", "Maffinet")
-                connection.connectTimeout = 5000
-                connection.readTimeout = 5000
+                currentCoroutineContext().ensureActive()
+                val request = URL(GITHUB_API_URL).openConnection() as HttpURLConnection
+                connection = request
+                request.requestMethod = "GET"
+                request.setRequestProperty("Accept", "application/vnd.github.v3+json")
+                request.setRequestProperty("User-Agent", "Maffinet")
+                request.connectTimeout = 5000
+                request.readTimeout = 5000
 
-                if (connection.responseCode == 200) {
-                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                val responseCode = request.responseCode
+                currentCoroutineContext().ensureActive()
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    val response = request.inputStream.bufferedReader().use { it.readText() }
+                    currentCoroutineContext().ensureActive()
                     val json = JSONObject(response)
                     val tagName = json.optString("tag_name", "")
                     val body = json.optString("body", "")
@@ -53,33 +70,81 @@ object UpdateManager {
                         }
                     }
 
-                    val currentVersion = context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
+                    val currentVersion = context.packageManager.getPackageInfo(context.packageName, 0).versionName
+                        ?: error("Не удалось определить установленную версию")
 
-                    if (tagName.isNotEmpty() && isNewerVersion(currentVersion, tagName) && downloadUrl.isNotEmpty()) {
-                        UpdateInfo(tagName, downloadUrl, body)
+                    if (!isNewerVersion(currentVersion, tagName)) {
+                        UpdateCheckResult.UpToDate(tagName)
+                    } else if (downloadUrl.isEmpty()) {
+                        UpdateCheckResult.NoApk(tagName)
                     } else {
-                        null
+                        UpdateCheckResult.Available(UpdateInfo(tagName, downloadUrl, body))
                     }
+                } else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                    UpdateCheckResult.NoRelease
                 } else {
-                    null
+                    UpdateCheckResult.Failed("HTTP $responseCode")
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                null
+                currentCoroutineContext().ensureActive()
+                UpdateCheckResult.Failed(e.message ?: e.javaClass.simpleName)
+            } finally {
+                connection?.disconnect()
             }
         }
     }
 
-    private fun isNewerVersion(current: String, latest: String): Boolean {
-        val currentClean = current.replace("v", "").split(".")
-        val latestClean = latest.replace("v", "").split(".")
-        val maxLength = maxOf(currentClean.size, latestClean.size)
+    internal fun isNewerVersion(current: String, latest: String): Boolean {
+        val currentVersion = parseVersion(current)
+        val latestVersion = parseVersion(latest)
+        val maxLength = maxOf(currentVersion.numbers.size, latestVersion.numbers.size)
         for (i in 0 until maxLength) {
-            val currVal = currentClean.getOrNull(i)?.toIntOrNull() ?: 0
-            val lateVal = latestClean.getOrNull(i)?.toIntOrNull() ?: 0
+            val currVal = currentVersion.numbers.getOrNull(i) ?: 0L
+            val lateVal = latestVersion.numbers.getOrNull(i) ?: 0L
             if (lateVal > currVal) return true
             if (currVal > lateVal) return false
         }
-        return false
+        val currentPre = currentVersion.prerelease
+        val latestPre = latestVersion.prerelease
+        if (currentPre == null) return false // A stable version outranks every prerelease of that version.
+        if (latestPre == null) return true
+        for (i in 0 until minOf(currentPre.size, latestPre.size)) {
+            val currPart = currentPre[i]
+            val latePart = latestPre[i]
+            if (currPart == latePart) continue
+            val currNumeric = currPart.all { it.isDigit() }
+            val lateNumeric = latePart.all { it.isDigit() }
+            val order = when {
+                currNumeric && lateNumeric -> {
+                    val currDigits = currPart.trimStart('0').ifEmpty { "0" }
+                    val lateDigits = latePart.trimStart('0').ifEmpty { "0" }
+                    lateDigits.length.compareTo(currDigits.length).takeIf { it != 0 }
+                        ?: lateDigits.compareTo(currDigits)
+                }
+                currNumeric -> 1
+                lateNumeric -> -1
+                else -> latePart.compareTo(currPart)
+            }
+            if (order != 0) return order > 0
+        }
+        return latestPre.size > currentPre.size
+    }
+
+    private data class ReleaseVersion(val numbers: List<Long>, val prerelease: List<String>?)
+
+    private fun parseVersion(version: String): ReleaseVersion {
+        val clean = version.trim().let { if (it.startsWith("v", ignoreCase = true)) it.drop(1) else it }
+        require(clean.matches(Regex("[0-9]+(?:\\.[0-9]+)*(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?"))) {
+            "Некорректная версия релиза: $version"
+        }
+        val release = clean.substringBefore('+')
+        val numbers = release.substringBefore('-').split('.').map {
+            it.toLongOrNull() ?: throw IllegalArgumentException("Некорректная версия релиза: $version")
+        }
+        val prerelease = release.substringAfter('-', "").takeIf { it.isNotEmpty() }?.split('.')
+        return ReleaseVersion(numbers, prerelease)
     }
 
     suspend fun getSmartTubeLatestUrl(): String {
