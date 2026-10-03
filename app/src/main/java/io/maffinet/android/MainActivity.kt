@@ -143,7 +143,9 @@ class MainActivity : ComponentActivity() {
             val storedVal = prefs.getBoolean("onboarding_completed", false)
             Log.e("MaffinetDebug", "MainActivity: onboarding_completed read as: $storedVal")
             var onboardingCompleted by remember { mutableStateOf(storedVal) }
-            var showForkNotice by remember { mutableStateOf(!prefs.getBoolean("maffinet_fork_notice_seen", false)) }
+            var showForkNotice by remember {
+                mutableStateOf(BuildConfig.SHOW_UPSTREAM_ATTRIBUTION && !prefs.getBoolean("maffinet_fork_notice_seen", false))
+            }
             val isSmartTv = prefs.getBoolean("is_smart_tv", false)
             var setupDone by remember { mutableStateOf(prefs.getBoolean("wizard_is_setup_complete", false)) }
             var wantsYoutubeBypass by remember { mutableStateOf(prefs.getBoolean("wants_youtube_bypass", true)) }
@@ -375,7 +377,7 @@ class MainActivity : ComponentActivity() {
                     } else if (!mainContentVisible) {
                         mainContentVisible = true
                     }
-                    if (showForkNotice && !showSplash) {
+                    if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION && showForkNotice && !showSplash) {
                         AlertDialog(
                             onDismissRequest = {},
                             title = { Text("Maffinet") },

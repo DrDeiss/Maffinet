@@ -7,6 +7,11 @@ selective DPI bypass architecture. It is not an official NetFix product.
 
 Attribution: **(fork of NetFix Mobile by rupleide)**.
 
+During UI development, debug builds defer the upstream notice and attribution
+using `BuildConfig.SHOW_UPSTREAM_ATTRIBUTION=false`. Release builds set it to
+`true` and restore the notice, Home/About marking and author details. LICENSE,
+NOTICE and source provenance remain in the repository in both cases.
+
 ## Status and requirements
 
 Development version: **0.1.0-alpha**. [PLAN.md](PLAN.md) records implementation
@@ -92,10 +97,15 @@ Microsoft/Google tools and agreements in ignored .toolchain without accepting
 terms. See [portable Windows setup](docs/BUILD_WINDOWS.md).
 
 Fetch only the available ByeDPI submodule. The inherited HEV commit is unavailable,
-so recursive initialization fails. Normal builds preserve the HEV/Rust binaries
-and original JNI compatibility bridge. [Native provenance](docs/NATIVE_PROVENANCE.md)
+so recursive initialization fails. Normal builds use the audited Maffinet JNI
+binding for HEV and preserve the Rust binaries. The bridge belongs to
+`io.maffinet.android.core.dpibypass`; no original application namespace is required.
+[Native provenance](docs/NATIVE_PROVENANCE.md)
 records exact source pins and binary hashes. The optional `:app:rebuildHevTunnel`
 requires the recovered matching customized source; stock HEV has a different ABI.
+`python3 tools/rebind_hev_jni.py --check` proves the four HEV files differ from
+their recorded originals only in the fixed-width JNI class name. `--apply`
+reproduces that binding from recognized originals and refuses unknown binaries.
 
 CI builds/tests with stable NDK29.0.14206865 and the runner's existing standard
 SDK agreement; -Pmaffinet.ndkVersion supplies that compiler override. Debug APKs appear in app/build/outputs/apk/debug.

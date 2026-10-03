@@ -77,9 +77,9 @@ jobs:
           echo "Using installed SDK manager: $SDK_MANAGER"
           "$SDK_MANAGER" --version
           "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --channel=0 "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "platform-tools" "emulator" "system-images;android-29;default;x86_64" </dev/null
-      - name: Build APK, run JVM tests and Android Lint
+      - name: Build debug and release APKs, run JVM tests and Android Lint
         timeout-minutes: 12
-        run: bash ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
+        run: bash ./gradlew :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
       - name: Run instrumentation smoke on AOSP API 29
         timeout-minutes: 20
         run: bash tools/run-emulator-smoke.sh

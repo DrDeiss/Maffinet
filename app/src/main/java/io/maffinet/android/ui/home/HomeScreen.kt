@@ -12,6 +12,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.maffinet.android.R
+import io.maffinet.android.BuildConfig
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
@@ -40,7 +41,8 @@ fun HomeScreen(
     val command = settings.getString("byedpi_cmd_args", "")
     val evaluation = StrategyTestManager.matrixResults[command]
     val relevantEvaluation = evaluation?.takeIf { it.services.map { service -> service.serviceId }.toSet() == selected }
-    ProductScreen("Maffinet", focusRequester, modifier, subtitle = stringResource(R.string.fork_marking)) {
+    ProductScreen("Maffinet", focusRequester, modifier,
+        subtitle = if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) stringResource(R.string.fork_marking) else null) {
         Button(
             onClick = onConnect,
             modifier = Modifier.fillMaxWidth().height(164.dp),

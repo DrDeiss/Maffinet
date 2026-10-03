@@ -30,7 +30,12 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Attribution is deferred while the product UI is being developed.
+            buildConfigField("boolean", "SHOW_UPSTREAM_ATTRIBUTION", "false")
+        }
         release {
+            buildConfigField("boolean", "SHOW_UPSTREAM_ATTRIBUTION", "true")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -88,8 +93,8 @@ dependencies {
 }
 
 // The inherited HEV binaries have a custom JNI ABI whose exact source commit
-// is missing upstream. Keep these binaries and their compatibility bridge by
-// default. Only run this task after recovering that precise source revision.
+// is missing upstream. Normal builds use the audited Maffinet JNI namespace
+// binding. Only run this task after recovering that precise source revision.
 tasks.register<Exec>("rebuildHevTunnel") {
     group = "build"
     description = "Rebuild the pinned custom HEV tunnel after recovering its source."

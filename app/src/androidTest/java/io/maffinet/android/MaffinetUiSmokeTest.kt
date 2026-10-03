@@ -72,31 +72,39 @@ class MaffinetUiSmokeTest {
     }
 
     @Test
-    fun firstLaunchShowsRequiredNoticeAndAcknowledgmentSurvivesRelaunch() {
+    fun firstLaunchRespectsAttributionGateAndWelcomeSurvivesRelaunch() {
         launchActivity(onboardingCompleted = false, noticeSeen = false)
-        waitForText(UNOFFICIAL_NOTICE)
-        compose.onNodeWithText(UNOFFICIAL_NOTICE).assertIsDisplayed()
-        saveScreenshot("01-first-launch-notice")
+        if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+            waitForText(UNOFFICIAL_NOTICE)
+            compose.onNodeWithText(UNOFFICIAL_NOTICE).assertIsDisplayed()
+            saveScreenshot("01-first-launch")
+            compose.onNodeWithText("Продолжить").performClick()
+        } else {
+            waitForDisplayedText("Начать")
+            assertUpstreamAttributionAbsent()
+            check(!preferences.getBoolean("maffinet_fork_notice_seen", false))
+            saveScreenshot("01-first-launch")
+        }
 
-        compose.onNodeWithText("Продолжить").performClick()
         waitForText("Добро пожаловать в Maffinet")
         compose.onNodeWithText(UNOFFICIAL_NOTICE).assertDoesNotExist()
         waitForDisplayedText("Начать")
         compose.onNodeWithText("Начать").assertIsDisplayed()
-        saveScreenshot("02-onboarding-welcome")
 
         relaunchActivity()
         waitForText("Добро пожаловать в Maffinet")
         compose.onNodeWithText(UNOFFICIAL_NOTICE).assertDoesNotExist()
         waitForDisplayedText("Начать")
         compose.onNodeWithText("Начать").assertIsDisplayed()
+        if (!BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) assertUpstreamAttributionAbsent()
+        saveScreenshot("02-onboarding-welcome")
     }
 
     @Test
-    fun fourPrimaryDestinationsOpenAndAttributionRemainsVisible() {
+    fun fourPrimaryDestinationsOpenAndAboutRespectsAttributionGate() {
         launchActivity()
         waitForText("Подключиться")
-        compose.onNodeWithText(FORK_MARKING).assertIsDisplayed()
+        assertHomeAttributionVisibility()
         saveScreenshot("03-home")
 
         navigate("Сервисы", "Выберите сервисы для подключения и автоматической проверки.")
@@ -112,13 +120,21 @@ class MaffinetUiSmokeTest {
         compose.onNodeWithText("О Maffinet").performScrollTo().performClick()
         waitForTextToDisappear("Версия, исходники, лицензия и благодарности")
         compose.onNodeWithText("Версия, исходники, лицензия и благодарности").assertDoesNotExist()
-        waitForText(FORK_MARKING, substring = true)
-        compose.onNodeWithText(FORK_MARKING, substring = true).performScrollTo().assertIsDisplayed()
+        if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+            waitForText(FORK_MARKING, substring = true)
+            compose.onNodeWithText(FORK_MARKING, substring = true).performScrollTo().assertIsDisplayed()
+        } else {
+            waitForText("Версия и обновление")
+            assertUpstreamAttributionAbsent()
+            compose.onNodeWithText("Исходный проект").assertDoesNotExist()
+            compose.onNodeWithText("Поддержать автора исходного проекта").assertDoesNotExist()
+            compose.onNodeWithText("Разработчик:", substring = true).assertDoesNotExist()
+        }
         compose.onNodeWithText("Обновления ещё не проверены").assertIsDisplayed()
-        saveScreenshot("07-about-attribution")
+        saveScreenshot("07-about")
 
         navigate("Главная", "Подключиться")
-        compose.onNodeWithText(FORK_MARKING).assertIsDisplayed()
+        assertHomeAttributionVisibility()
     }
 
     @Test
@@ -192,6 +208,19 @@ class MaffinetUiSmokeTest {
         compose.onNodeWithContentDescription(label).assertIsDisplayed().performClick()
         waitForText(destinationText)
         compose.onNodeWithText(destinationText).assertIsDisplayed()
+    }
+
+    private fun assertHomeAttributionVisibility() {
+        if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+            compose.onNodeWithText(FORK_MARKING).assertIsDisplayed()
+        } else {
+            assertUpstreamAttributionAbsent()
+        }
+    }
+
+    private fun assertUpstreamAttributionAbsent() {
+        compose.onAllNodesWithText("NetFix", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("rupleide", substring = true).assertCountEquals(0)
     }
 
     private fun serviceSwitch(name: String, otherCard: String): SemanticsNodeInteraction {

@@ -31,6 +31,7 @@ import io.maffinet.android.core.update.UpdateCheckResult
 import io.maffinet.android.ui.components.MaffinetButton
 import io.maffinet.android.ui.components.QrLinkDialog
 import io.maffinet.android.R
+import io.maffinet.android.BuildConfig
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -142,7 +143,11 @@ fun InfoTab(
                     )
                 }
                 Text(
-                    text = stringResource(R.string.fork_marking) + "\n\n" + stringResource(R.string.independent_attribution) + "\n\nНезависимый Android-клиент выборочного обхода DPI. Настройки и работа приложения развиваются отдельно от исходного проекта.",
+                    text = if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+                        stringResource(R.string.fork_marking) + "\n\n" + stringResource(R.string.independent_attribution) + "\n\nНезависимый Android-клиент выборочного обхода DPI. Настройки и работа приложения развиваются отдельно от исходного проекта."
+                    } else {
+                        "Android-клиент выборочного обхода DPI. Выбирайте сервисы, приложения и домены, проверяйте стратегии и управляйте подключением."
+                    },
                     color = Color(0xFF93AEB7),
                     fontSize = 14.sp,
                     lineHeight = 20.sp
@@ -266,6 +271,7 @@ fun InfoTab(
                         .clip(RoundedCornerShape(12.dp))
                         .background(infoBgColor)
                         .border(1.dp, infoBorderColor, RoundedCornerShape(12.dp))
+                        .then(if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) Modifier else Modifier.focusRequester(focusRequester))
                         .clickable(
                             enabled = buttonEnabled,
                             interactionSource = infoInteractionSource,
@@ -306,45 +312,47 @@ fun InfoTab(
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF10232D).copy(alpha = 0.85f))
-                    .padding(16.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Campaign,
-                        contentDescription = null,
-                        tint = Color(0xFFEAF5F0),
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = "Исходный проект",
-                        color = Color(0xFFEAF5F0),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
-                    )
-                }
-                Text(
-                    text = "Оригинальный NetFix Mobile разработан rupleide. Maffinet использует части открытой кодовой базы и сохраняет авторство исходного проекта.",
-                    color = Color(0xFF93AEB7),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                MaffinetButton(
-                    text = "NetFix Mobile на GitHub",
-                    onClick = { handleLinkClick("https://github.com/rupleide/NetFixMobile", "Исходный проект NetFix Mobile") },
+            if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(focusRequester)
-                )
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF10232D).copy(alpha = 0.85f))
+                        .padding(16.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = null,
+                            tint = Color(0xFFEAF5F0),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Исходный проект",
+                            color = Color(0xFFEAF5F0),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
+                    Text(
+                        text = "Оригинальный NetFix Mobile разработан rupleide. Maffinet использует части открытой кодовой базы и сохраняет авторство исходного проекта.",
+                        color = Color(0xFF93AEB7),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    MaffinetButton(
+                        text = "NetFix Mobile на GitHub",
+                        onClick = { handleLinkClick("https://github.com/rupleide/NetFixMobile", "Исходный проект NetFix Mobile") },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(focusRequester)
+                    )
+                }
             }
 
             Column(
@@ -373,7 +381,11 @@ fun InfoTab(
                     )
                 }
                 Text(
-                    text = "Ошибки и предложения по Maffinet можно оставить в независимом репозитории проекта. Автор NetFix Mobile не оказывает поддержку этой сборке.",
+                    text = if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+                        "Ошибки и предложения по Maffinet можно оставить в независимом репозитории проекта. Автор NetFix Mobile не оказывает поддержку этой сборке."
+                    } else {
+                        "Ошибки и предложения по Maffinet можно оставить в репозитории проекта."
+                    },
                     color = Color(0xFF93AEB7),
                     fontSize = 14.sp,
                     lineHeight = 20.sp
@@ -396,58 +408,60 @@ fun InfoTab(
                 }
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF10232D).copy(alpha = 0.85f))
-                    .padding(16.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(bottom = 8.dp)
+            if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF10232D).copy(alpha = 0.85f))
+                        .padding(16.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = null,
-                        tint = Color(0xFFEAF5F0),
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = null,
+                            tint = Color(0xFFEAF5F0),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = "Поддержать автора исходного проекта",
+                            color = Color(0xFFEAF5F0),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                    }
                     Text(
-                        text = "Поддержать автора исходного проекта",
-                        color = Color(0xFFEAF5F0),
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                        text = "Эти исходные реквизиты сохранены без изменений. Перевод направляется rupleide, автору NetFix Mobile, и не является пожертвованием разработчикам Maffinet.",
+                        color = Color(0xFF93AEB7),
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp
                     )
-                }
-                Text(
-                    text = "Эти исходные реквизиты сохранены без изменений. Перевод направляется rupleide, автору NetFix Mobile, и не является пожертвованием разработчикам Maffinet.",
-                    color = Color(0xFF93AEB7),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MaffinetButton(
-                        text = "СБП",
-                        onClick = { handleLinkClick("https://www.tinkoff.ru/rm/r_eELpDmupvc.SCiWRkVJON/bgKkD30493", "Донат через СБП") },
-                        iconRes = io.maffinet.android.R.drawable.ic_sbp,
-                        backgroundColor = Color(0xFFFF6B00),
-                        highlightedColor = Color(0xFFE05E00),
-                        modifier = Modifier.weight(1f)
-                    )
-                    MaffinetButton(
-                        text = "TON",
-                        onClick = { handleLinkClick("https://app.tonkeeper.com/transfer/UQCx8X4z86Jej2hc8l_IVni8e0Q8uDHhC8_PJ2zymxngVc2Q", "Донат через TON") },
-                        iconRes = io.maffinet.android.R.drawable.ic_ton,
-                        backgroundColor = Color(0xFF0088CC),
-                        highlightedColor = Color(0xFF0077BB),
-                        modifier = Modifier.weight(1f)
-                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        MaffinetButton(
+                            text = "СБП",
+                            onClick = { handleLinkClick("https://www.tinkoff.ru/rm/r_eELpDmupvc.SCiWRkVJON/bgKkD30493", "Донат через СБП") },
+                            iconRes = io.maffinet.android.R.drawable.ic_sbp,
+                            backgroundColor = Color(0xFFFF6B00),
+                            highlightedColor = Color(0xFFE05E00),
+                            modifier = Modifier.weight(1f)
+                        )
+                        MaffinetButton(
+                            text = "TON",
+                            onClick = { handleLinkClick("https://app.tonkeeper.com/transfer/UQCx8X4z86Jej2hc8l_IVni8e0Q8uDHhC8_PJ2zymxngVc2Q", "Донат через TON") },
+                            iconRes = io.maffinet.android.R.drawable.ic_ton,
+                            backgroundColor = Color(0xFF0088CC),
+                            highlightedColor = Color(0xFF0077BB),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
             }
 
@@ -590,87 +604,90 @@ fun InfoTab(
                 }
 
                 Text(
-                    text = "Maffinet является полностью свободным проектом с открытым исходным кодом и распространяется под лицензией GNU General Public License v3.0 (GPL-3.0).\n\nВыражаем огромную благодарность авторам оригинальных нативных решений, на которых базируется работа Maffinet Android:",
+                    text = "Maffinet является полностью свободным проектом с открытым исходным кодом и распространяется под лицензией GNU General Public License v3.0 (GPL-3.0)." +
+                        if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) "\n\nВыражаем огромную благодарность авторам оригинальных нативных решений, на которых базируется работа Maffinet Android:" else "",
                     color = Color(0xFF93AEB7),
                     fontSize = 14.sp,
                     lineHeight = 20.sp
                 )
 
-                val openBbdUrl = "https://github.com/romanvht/ByeByeDPI"
-                val bbdInteraction = remember { MutableInteractionSource() }
-                val bbdPressed by bbdInteraction.collectIsPressedAsState()
-                val bbdHovered by bbdInteraction.collectIsHoveredAsState()
-                val bbdFocused by bbdInteraction.collectIsFocusedAsState()
-                val bbdHighlighted = bbdPressed || bbdHovered || bbdFocused
-                val bbdBg by animateColorAsState(if (bbdHighlighted) Color(0xFF284451) else Color(0xFF193440), tween(150), label = "")
-                val bbdBorder by animateColorAsState(if (bbdHighlighted) Color.White else Color(0x1AFFFFFF), tween(150), label = "")
+                if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) {
+                    val openBbdUrl = "https://github.com/romanvht/ByeByeDPI"
+                    val bbdInteraction = remember { MutableInteractionSource() }
+                    val bbdPressed by bbdInteraction.collectIsPressedAsState()
+                    val bbdHovered by bbdInteraction.collectIsHoveredAsState()
+                    val bbdFocused by bbdInteraction.collectIsFocusedAsState()
+                    val bbdHighlighted = bbdPressed || bbdHovered || bbdFocused
+                    val bbdBg by animateColorAsState(if (bbdHighlighted) Color(0xFF284451) else Color(0xFF193440), tween(150), label = "")
+                    val bbdBorder by animateColorAsState(if (bbdHighlighted) Color.White else Color(0x1AFFFFFF), tween(150), label = "")
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(bbdBg)
-                        .border(1.dp, bbdBorder, RoundedCornerShape(12.dp))
-                        .clickable(
-                            interactionSource = bbdInteraction,
-                            indication = null
-                        ) {
-                            handleLinkClick(openBbdUrl, "ByeByeDPI GitHub")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(bbdBg)
+                            .border(1.dp, bbdBorder, RoundedCornerShape(12.dp))
+                            .clickable(
+                                interactionSource = bbdInteraction,
+                                indication = null
+                            ) {
+                                handleLinkClick(openBbdUrl, "ByeByeDPI GitHub")
+                            }
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "ByeByeDPI (GitHub)",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Разработчик: romanvht (обход DPI на уровне VPN)",
+                                color = Color(0xFF93AEB7),
+                                fontSize = 12.sp
+                            )
                         }
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "ByeByeDPI (GitHub)",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "Разработчик: romanvht (обход DPI на уровне VPN)",
-                            color = Color(0xFF93AEB7),
-                            fontSize = 12.sp
-                        )
                     }
-                }
 
-                val openTgwsUrl = "https://github.com/amurcanov/tg-ws-proxy-android"
-                val tgwsInteraction = remember { MutableInteractionSource() }
-                val tgwsPressed by tgwsInteraction.collectIsPressedAsState()
-                val tgwsHovered by tgwsInteraction.collectIsHoveredAsState()
-                val tgwsFocused by tgwsInteraction.collectIsFocusedAsState()
-                val tgwsHighlighted = tgwsPressed || tgwsHovered || tgwsFocused
-                val tgwsBg by animateColorAsState(if (tgwsHighlighted) Color(0xFF284451) else Color(0xFF193440), tween(150), label = "")
-                val tgwsBorder by animateColorAsState(if (tgwsHighlighted) Color.White else Color(0x1AFFFFFF), tween(150), label = "")
+                    val openTgwsUrl = "https://github.com/amurcanov/tg-ws-proxy-android"
+                    val tgwsInteraction = remember { MutableInteractionSource() }
+                    val tgwsPressed by tgwsInteraction.collectIsPressedAsState()
+                    val tgwsHovered by tgwsInteraction.collectIsHoveredAsState()
+                    val tgwsFocused by tgwsInteraction.collectIsFocusedAsState()
+                    val tgwsHighlighted = tgwsPressed || tgwsHovered || tgwsFocused
+                    val tgwsBg by animateColorAsState(if (tgwsHighlighted) Color(0xFF284451) else Color(0xFF193440), tween(150), label = "")
+                    val tgwsBorder by animateColorAsState(if (tgwsHighlighted) Color.White else Color(0x1AFFFFFF), tween(150), label = "")
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(tgwsBg)
-                        .border(1.dp, tgwsBorder, RoundedCornerShape(12.dp))
-                        .clickable(
-                            interactionSource = tgwsInteraction,
-                            indication = null
-                        ) {
-                            handleLinkClick(openTgwsUrl, "TG WS Proxy GitHub")
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(tgwsBg)
+                            .border(1.dp, tgwsBorder, RoundedCornerShape(12.dp))
+                            .clickable(
+                                interactionSource = tgwsInteraction,
+                                indication = null
+                            ) {
+                                handleLinkClick(openTgwsUrl, "TG WS Proxy GitHub")
+                            }
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text(
+                                text = "TG WS Proxy Android (GitHub)",
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "Разработчик: amurcanov (локальный прокси Telegram)",
+                                color = Color(0xFF93AEB7),
+                                fontSize = 12.sp
+                            )
                         }
-                        .padding(horizontal = 14.dp, vertical = 14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text(
-                            text = "TG WS Proxy Android (GitHub)",
-                            color = Color.White,
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
-                        )
-                        Text(
-                            text = "Разработчик: amurcanov (локальный прокси Telegram)",
-                            color = Color(0xFF93AEB7),
-                            fontSize = 12.sp
-                        )
                     }
                 }
             }

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.maffinet.android.R
+import io.maffinet.android.BuildConfig
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.data.OnboardingStep
 import androidx.compose.material3.Icon
@@ -953,11 +954,11 @@ private fun StrategyTestingRunningStep(
         Spacer(modifier = Modifier.height(32.dp))
 
         val facts = remember {
-            listOf(
+            listOfNotNull(
                 "Первый реестр запрещённых сайтов создан в России 1 ноября 2012 года на основании закона № 139-ФЗ.",
                 "Закон о «суверенном Рунете» № 90-ФЗ вступил в силу 1 ноября 2019 года, обязав операторов установить ТСПУ.",
                 "ТСПУ (технические средства противодействия угрозам) - это оборудование DPI, управляемое напрямую Роскомнадзором.",
-                "Maffinet — независимый проект на основе открытого кода NetFix Mobile. Автор исходного проекта: rupleide.",
+                if (BuildConfig.SHOW_UPSTREAM_ATTRIBUTION) "Maffinet — независимый проект на основе открытого кода NetFix Mobile. Автор исходного проекта: rupleide." else null,
                 "Мобильный Maffinet объединил в одном приложении два сложных нативных ядра на Rust и C. Главная цель проекта, убрать сложные настройки и консоли из рук пользователя.",
                 "Instagram и Facebook были официально внесены в реестр запрещённых сайтов и заблокированы в России в марте 2022 года.",
                 "С 2021 года Роскомнадзор активно блокирует VPN-протоколы (OpenVPN, WireGuard) по цифровым сигнатурам пакетов.",

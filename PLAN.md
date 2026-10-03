@@ -29,19 +29,19 @@ SharedPreferences `${packageName}_preferences`, a separate hints preference file
 * MainActivity callbacks rely on indexes 0–4; retain compatibility when introducing the four product tabs.
 * Most UI colors are hardcoded. A theme-only change cannot provide a distinct product design.
 * Updater points at NetFix APKs and must move to an independent source or stay disabled.
-* Native C ByeDPI symbols contain the old namespace. All bundled HEV ABIs register `com/rupleide/netfix/core/dpibypass/TProxyService`, including a custom three-argument start method. Keep that single compatibility class until exact native sources are recoverable.
+* At audit time, native C ByeDPI symbols and the bundled HEV JNI class used the old namespace. ByeDPI symbols now rebuild to Maffinet; HEV's equal-width JNI class literal is rebound to Maffinet with inverse-hash verification, preserving the custom three-argument start. The old Kotlin class is removed.
 
 ### Licensing and native provenance
 
 Upstream root has NOTICE but no LICENSE. README declares GPL-3.0 and additional terms: rename product/package/assets; exact first-launch notice; persistent `(fork of NetFix Mobile by rupleide)` marking on Home/About; preserve authorship and disclose corresponding source alongside distributed APKs. User states author permission to fork. Preserve the upstream terms verbatim in a dedicated provenance document, include GPL text and original NOTICE, and clearly distinguish independent changes. Do not invent an upstream license exception or claim complete native source reproducibility.
 
-ByeDPI submodule is available at `ba532298de7b28cfe854aea83d061369d13ca290`. HEV submodule pins `c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1`, unavailable from the configured heiher repository; bundled four-ABI libraries are present. Default builds should preserve these exact binaries; rebuilding HEV must be explicit and requires recovering the matching custom source. Audit and retain dependency license texts/notices. Public binary release remains gated on source/provenance completeness.
+ByeDPI submodule is available at `ba532298de7b28cfe854aea83d061369d13ca290`. HEV submodule pins `c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1`, unavailable from the configured heiher repository; bundled four-ABI libraries are present. Default builds preserve HEV engine bytes with the audited Maffinet JNI class binding; rebuilding HEV must be explicit and requires recovering the matching custom source. Audit and retain dependency license texts/notices. Public binary release remains gated on source/provenance completeness.
 
 ## Execution plan and change ownership
 
 ### Phase 1 — clean fork and identity
 
-Use `io.maffinet.android` for namespace/applicationId and main Kotlin sources; preserve only the binary-required legacy HEV bridge. Update JNI C bindings, action names, FileProvider authority, root project and APK names. Create a distinct dark-first mint/navy visual system and vector M icon; replace old marketing assets/copy, add independent About and required first-launch notice. Preserve all existing operating controls and advanced workflows. Add README, LICENSE, upstream terms and dependency notices. Commit independently after build/test attempt.
+Use `io.maffinet.android` for namespace/applicationId and Kotlin sources, including the HEV bridge. Update JNI C bindings, action names, FileProvider authority, root project and APK names. Create a distinct dark-first mint/navy visual system and vector M icon; replace old marketing assets/copy, add independent About and required first-launch notice. Preserve all existing operating controls and advanced workflows. Add README, LICENSE, upstream terms and dependency notices. Commit independently after build/test attempt.
 
 ### Phase 2 — Domain Lists
 
@@ -69,7 +69,7 @@ Identity: Gradle settings/app build, manifest/resources, main/test Kotlin packag
 
 ## Verification and risks
 
-At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environment failures accurately and rerun after toolchain repair. Required final checks also include manifest/applicationId/authority isolation, JNI legacy bridge retention, unchanged bundled HEV/Rust binary hashes, domain argv correctness for multiple groups, app-empty routing behavior, deterministic matrix scoring, source/license provenance and stale upstream updater removal. Real provider bypass success depends on network/device and cannot be promised from HTTP-only probes. Existing targetSdk 26, missing exact HEV source, broad package visibility, JNI global proxy singleton and VPN lifecycle races remain explicit risks; no broad target-SDK/network rewrite in this fork.
+At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environment failures accurately and rerun after toolchain repair. Required final checks also include manifest/applicationId/authority isolation, Maffinet JNI bridge/binary binding, inverse-verified HEV namespace delta and unchanged Rust hashes, domain argv correctness for multiple groups, app-empty routing behavior, deterministic matrix scoring, source/license provenance and stale upstream updater removal. Real provider bypass success depends on network/device and cannot be promised from HTTP-only probes. Existing targetSdk 26, missing exact HEV source, broad package visibility, JNI global proxy singleton and VPN lifecycle races remain explicit risks; no broad target-SDK/network rewrite in this fork.
 
 ## Progress
 
@@ -89,3 +89,9 @@ At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environmen
 - GitHub CI: stable NDK r29 compiler override; all four native ABIs packaged in the debug build. Production native HTTP/TLS host selection, retry groups, TCP/IPv4 constraints and unchanged UDP forwarding were exercised successfully. Eight inherited binary hashes and four HEV JNI contracts remain verified. Lint reports zero errors, 157 warnings and nine hints; inherited target SDK and JNA page alignment remain documented limitations. Test reports/logs/PNG evidence are uploaded, with no public APK release.
 - Final localized fixes: the update-install receiver is private; About uses the same reserved scroll viewport as product screens. Update checks distinguish available/up-to-date/no-release/no-APK/failure states, respect disabled automatic checks, close HTTP resources and propagate cancellation. Four new Android JVM tests covering alpha/stable, numeric ordering and malformed tags passed in the final CI. The Activity smoke test confirms disabled automatic checks leave About explicitly unchecked.
 - Release limitations: physical-device VPN/bypass/media/background/TV behavior and traffic generated by a separately routed helper app remain unverified. Exact customized HEV source was not found in checked public provenance; retained binaries and JNI compatibility are documented. Source/provenance and physical-device gates prevent claiming a verified alpha release.
+
+### User-directed namespace independence and development UI
+
+- Removed the last original Kotlin namespace: HEV now registers `io.maffinet.android.core.dpibypass.TProxyService` on all four ABIs. A deterministic 48-byte class-literal adaptation preserves every other native byte, proven by inverse original hashes; original/target records are in docs/native-jni-rebind.json. The bridge, NDK package macro and keep rule use Maffinet. Exact customized sources remain a separate release gate.
+- Per the user's instruction, debug UI defers upstream reminders with `SHOW_UPSTREAM_ATTRIBUTION=false`. Release sets the flag true, preserving first-launch notice, Home/About marking and author cards for the final UI. LICENSE/NOTICE/provenance remain intact.
+- CI now assembles debug and unsigned release variants. Updated UI smoke assertions check clean development Home/About/onboarding and preserve release-branch checks. Native inverse/hash checks passed locally; new Android runtime validation is pending.
