@@ -1,19 +1,60 @@
 # Alpha device validation
 
-## Current independent-mode validation
+## Completed independent-mode validation
 
-Applications/Telegram choices, explicit `selected_apps` routing, independent
-General/User hosts and configurable strategy checking addresses supersede the
-service-catalog UI tested below. Updated JVM/Android/native/Lint checks and new
-emulator screenshots are pending until the updated CI run. Preserve the previous
-run as baseline evidence, not proof of the clarified model.
+Source: `34ed3a1d13d55ab8c25f21c6042a930dd85842c5`.
+[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402),
+2026-10-03 UTC / 2026-10-04 Moscow, GitHub Linux runner, stable NDK r29,
+AOSP API29 `default;x86_64` Pixel emulator, portrait 1080×1920, three-button
+navigation. Applications/Telegram, explicit routing and independent hosts/targets
+supersede the historical service-catalog model below.
 
-Required updated emulator checks: all three nonempty mode combinations and both
-off; partial/failed starts; STOP/repeat start; preserved app selection and empty
-allowlist rejection; General/User independence from app/service flags; saved User
-enable/edit/import/export; VPN DNS persistence; strategy snapshot invalidation;
-background/boot/watchdog desired-state isolation; Home/Strategies/Settings/Hosts
-and direct app/Telegram/DNS controls. Physical acceptance remains separate.
+| Check | Recorded result |
+| --- | --- |
+| Debug, unsigned release and test APKs | All assembled; four native ABIs packaged |
+| Standalone JVM/native | 43 passed, zero failures/skips; six actual C-parser contracts including all 73 preset commands |
+| Android JVM | 42 passed, zero failures/skips |
+| Android instrumentation | 22 passed, zero failures/errors/skips: 11 native lifecycle, six UI, three probe/history, one migration and inherited application-ID check |
+| Android Lint | Zero errors, 135 warnings, five hints; warnings remain release work, not a clean-lint claim |
+| Mode combinations | Actual Applications only, Telegram only and both; neither selected rejects start; empty installed allowlist never creates a device-wide VPN |
+| Partial failures/retry | Invalid app selection still permits Telegram; occupied Telegram port reports failure without stopping VPN; stop/retry cleans up native resources |
+| STOP/restart | Native SOCKS/TUN establish repeatedly; common STOP cancels pending VPN restart; actual Telegram notification STOP PendingIntent closes the listener and permits retry |
+| Telegram UI | Home shows actual running/stopped listener states; choices/configuration lock while running; notification has real proxy status and only supported STOP action |
+| Routing/migration | All four inherited choice combinations migrate once; manual selection and DNS survive; later service flags never insert packages; own app excluded |
+| Direct app/DNS controls | Actual app selection/deselection/reselection via picker; preset selection survives Activity relaunch; native VPN LinkProperties contain selected DNS before/after restart |
+| Hosts | General/User independent of application/service choices; normalized edits, disabled state and invalid-save protection survive relaunch; repository merge/import/export round trip and native host-filter contracts pass |
+| Strategy probes/history | Independent addresses persist; one real candidate uses current compiled hosts and restores VPN after testing/cancellation; hosts/URL/override invalidate history; deleted commands cannot return or be applied, explicit reimport keeps no old measurements |
+| Recovery policy | Saved per-mode recovery/foreground service and simulated boot/watchdog entry points tested; boot with autostart off clears old session requests so later watchdog cannot revive them; economy choice retained |
+| Branding/navigation | Home/Strategies/Settings with direct Hosts, app picker, DNS and Telegram settings; debug Home/About/welcome have no upstream reminders; release attribution branch assembles |
+| Native contracts | Eight shipped binary hashes and four inverse HEV provenance checks pass; x86_64 runtime resolves the Maffinet JNI class; no fatal/JNI linkage errors found in recorded logcat |
+| Visual evidence | 19 original UIAutomation PNGs inspected; compact app/DNS lists have usable scrolling; Home state, General list, saved User data and validation error captured |
+
+Reports/logs and all 19 captures are in `android-validation` artifact
+`11284907595` (ZIP SHA-256
+`cfdae66f48883d6bb2e777aceda6c37a2fd18aff7acb5b27b66995f91c291751`).
+The standalone report is `jvm-validation` artifact `11284912100`. Original PNGs
+are saved in [screenshots](screenshots/README.md), with per-file hashes.
+Documentation-only commits after this source do not change tested application code.
+
+Local Windows verification passed 37 JVM tests; six Linux C-fixture tests were
+explicitly skipped locally and executed successfully in CI. Syntax inspection
+covered 92 Kotlin files; native hash/JNI checks passed. Local Android Gradle tasks
+could not configure because the SDK is absent; Android assembly/tests/lint above
+were executed on the provisioned CI runner.
+
+The emulator-only VPN-consent shortcut is restricted to qemu; actual physical
+consent is unverified. Probes run from Maffinet's excluded UID. A distinct installed
+test APK UID enters the TUN allowlist, but these tests do not generate routed
+traffic from that helper. Remote HTTP success is not required by lifecycle tests;
+provider bypass, authentication/media and complete selected-app traffic remain
+unverified. Document-picker SAF interaction and external Telegram deep-link use
+were not automated; their existing flows are retained and repository round trips
+were checked. Boot/watchdog checks invoke real components under simulated policy,
+not a physical reboot or OEM process-kill campaign. Instrumentation uses debug;
+release attribution UI and other ABI device runtimes are unverified. TV, landscape,
+large fonts, other Android versions and 16KB-page environments need separate checks.
+Scrolling captures may show a neighbouring card at the viewport edge; User editing
+can show the keyboard. Phone/TV acceptance below remains open.
 
 ## Historical completed emulator baseline
 
@@ -42,8 +83,8 @@ device permission flow is inferred from it.
 | Universal candidate/restoration | One real native candidate probes every selected profile; candidate resources stop before original VPN restoration |
 | Visual evidence | 12 UI PNGs collected and inspected; product and About scroll content stay clear of floating/system navigation |
 
-Original captures of Home, Services, Strategies, About and the domain validation
-error are retained in [screenshots](screenshots/README.md). The full 12-image set,
+The historical Services capture is retained in [screenshots](screenshots/README.md);
+stable screenshot filenames now show the clarified model. The full original 12-image set,
 JUnit/Lint reports and emulator/logcat output are in CI artifact
 `android-validation` (ID `11280884164`, SHA-256
 `916601120da4fe952f88004d6081387bf8cc084e742ec4e0afcc057ec25b2ff5`).

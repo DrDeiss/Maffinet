@@ -21,7 +21,10 @@ installation alongside NetFix Mobile.
 Home retains Maffinet's large connection button and exposes Applications,
 installed-app selection, Telegram, DNS, Strategy and Hosts. The main navigation
 contains Home, Strategies and Settings; the former Services destination is retired.
-New verification and captures for this model are pending until the updated CI run.
+[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
+passed debug/release assembly, 43 JVM/native tests, 42 Android JVM tests and 22
+instrumentation tests without failures/skips. Lint has zero errors, 135 warnings
+and five hints. Nineteen new emulator captures document this model.
 
 [Additional screen captures](docs/screenshots/README.md) and
 [recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the actual tested scope.

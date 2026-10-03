@@ -4,8 +4,9 @@ This is an alpha development checkout. PLAN.md records completed phases and
 actual validation. Product intent does not imply successful device tests.
 
 The clarified Applications/Telegram/Hosts model supersedes service profiles.
-The previous passing CI is baseline evidence; updated integrated tests and new
-emulator captures are pending until the new run completes.
+[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
+passed the updated integrated checks and produced 19 inspected emulator captures.
+See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open.
 
 - **Missing custom HEV source:** gitlink `c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1`
   cannot be fetched from its declared origin. Builds retain the engine bytes with
@@ -41,7 +42,7 @@ emulator captures are pending until the new run completes.
   Changing that configuration invalidates measured history. HTTP protection/rate
   limits can cause false failures.
 - **Independent Telegram/DNS:** the standalone Telegram proxy and VPN have
-  separate runtime/desired states; both combinations and failed partial starts
+  separate runtime/desired states; all three combinations and failed partial starts
   need physical-device/background verification. VPN DNS does not configure the
   separate Telegram proxy.
 - **Native termination:** a worker that still runs after bounded stop/force-close

@@ -2,7 +2,8 @@
 
 The 2026-10-03 clarification replaces the former service-catalog interface.
 Application routing, Telegram, hosts, DNS and strategy targets have independent
-configuration. Updated integrated/emulator validation is pending; see
+configuration. Integrated tests and API29 emulator validation passed for
+`34ed3a1`; see
 [device validation](DEVICE_VALIDATION.md) for evidence and remaining checks.
 
 ## Connection modes and lifecycle
@@ -27,6 +28,11 @@ Actual states come from the VPN and Telegram controllers. The legacy
 mode must not stop the other running mode. The global STOP clears desired flags
 before dispatching asynchronous engine stops. Engine-specific notification STOP
 affects that engine's desired state independently.
+
+With boot autostart disabled, recovery discards the previous boot's desired
+session and cancels its persisted watchdog work. Activity recreation preserves
+the user's economy setting. Startup validation errors are shared with Home even
+when a background/autostart entry point requested the modes.
 
 Migration snapshots existing mode preferences once and preserves `selected_apps`,
 User hosts and engine preferences. Configuration changes remain locked while
@@ -79,6 +85,10 @@ available. Snapshot mismatch also prevents automatic application of stale result
 Scoring prioritizes successful target coverage, then latency, then stable candidate
 order. These are HTTP/TLS reachability results; app authentication, media and
 provider bypass require separate device tests.
+
+Deleting a strategy removes it from both history views and persisted measured
+rows; stale actions cannot apply it. An explicit reimport restores the command
+without restoring its prior measurements.
 
 The four-ABI HEV binding remains
 `io.maffinet.android.core.dpibypass.TProxyService`. Native/provenance and physical

@@ -27,11 +27,18 @@ routing, domains or strategy checking addresses.
   imports/exports, background features, TV navigation, LICENSE/NOTICE and deferred
   development attribution.
 
-Implementation of this clarification is in progress. The previous passing
-baseline remains historical evidence (32 standalone JVM, 31 Android JVM, nine
-instrumentation tests, debug/release assembly and Lint). Updated checks,
-emulator screenshots and physical-device results must be recorded separately;
-new-model integrated validation is pending until the updated CI completes.
+Implementation of this clarification is complete in source. For source
+`34ed3a1d13d55ab8c25f21c6042a930dd85842c5`,
+[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
+passed debug/unsigned release/test APK assembly, 43 JVM/native, 42 Android JVM and
+22 instrumentation tests, with zero failures/skips. Lint reports zero errors,
+135 warnings and five hints. Nineteen original API29 emulator captures were
+inspected and saved. Regression checks cover independent mode combinations,
+partial/failed starts, notification STOP, pending restart cancellation, app
+selection/migration, VPN DNS, hosts/probe independence, stale/deleted history and
+boot/watchdog isolation. See [device validation](docs/DEVICE_VALIDATION.md) for
+the exact tested scope and physical-device limitations. The previous 32/31/9 run
+remains historical baseline evidence.
 
 ## Historical audit and superseded implementation plan
 
