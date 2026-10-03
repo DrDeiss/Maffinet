@@ -21,9 +21,11 @@ SharedPreferences `${packageName}_preferences`, a separate hints preference file
 * `DomainListUtils.getLists` is an empty stub in `DpiBypassUtils.kt`.
 * YouTube package defaults are reinserted by both VPN startup and SettingsTab, overriding deselection.
 * `wants_youtube_bypass` means VPN enabled, not a YouTube service profile, throughout existing lifecycle code.
-* StrategyTester tests YouTube only; fake-SNI `{sni}` is YouTube-specific. `-n` is fake SNI, whereas `-H` filters domains; they cannot be interchanged.
+* StrategyTester tests YouTube only; fake-SNI `{sni}` is YouTube-specific. `-n` is fake SNI, whereas `-H` filters domains; they cannot be interchanged. Preserve the legacy comma string verbatim: this native revision does not split it into fake-SNI rotation.
 * ByeDPI `-H` applies to a desync group. Selective filtering must cover every `-A` group and preserve an unmodified fallback, with tests against actual parser semantics.
 * DNS preset is parsed for tun2socks but ignored in VPN builder; start failure cleanup/readiness and status transitions need targeted stabilization.
+* ACCESS_NETWORK_STATE and the WatchdogReceiver declaration are missing; onLost clears the reconnect baseline. Actual temp-config filenames are not retained for cleanup.
+* Native UDP desync ignores host lists. Selective mode must keep UDP forwarding without hostname-selected UDP desync; unrestricted behavior remains an explicit Advanced override.
 * MainActivity callbacks rely on indexes 0–4; retain compatibility when introducing the four product tabs.
 * Most UI colors are hardcoded. A theme-only change cannot provide a distinct product design.
 * Updater points at NetFix APKs and must move to an independent source or stay disabled.
@@ -72,4 +74,5 @@ At each phase run `:app:assembleDebug :app:testDebugUnitTest`; record environmen
 ## Progress
 
 - Phase 0: complete; baseline build blocked by absent Java. GitHub fork created and audit recorded before modifying application code.
-- Phases 1–6: pending.
+- Phase 1: implementation completed for independent package/JNI identity, mint/navy/vector branding and required legal UI. Build toolchain being prepared; Google SDK/SDK Preview license acceptance requested explicitly, pending. Initial XML/reference/whitespace checks pass. Full build/tests have not yet passed.
+- Phases 2–6: pending.

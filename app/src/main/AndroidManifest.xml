@@ -21,12 +21,12 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NetFixMobile">
+        android:theme="@style/Theme.Maffinet">
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.NetFixMobile.Splash">
+            android:theme="@style/Theme.Maffinet.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -34,7 +34,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name="com.rupleide.netfix.core.dpibypass.ByeDpiVpnService"
+        <service android:name="io.maffinet.android.core.dpibypass.ByeDpiVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:foregroundServiceType="specialUse"
             android:exported="false">
@@ -49,7 +49,7 @@
                 android:value="vpn" />
         </service>
 
-        <service android:name="com.rupleide.netfix.core.tgproxy.TgProxyService"
+        <service android:name="io.maffinet.android.core.tgproxy.TgProxyService"
             android:foregroundServiceType="specialUse"
             android:exported="false">
             <property
@@ -72,13 +72,13 @@
             android:name=".service.UpdateStatusReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.rupleide.netfix.action.INSTALL_STATUS" />
+                <action android:name="io.maffinet.android.action.INSTALL_STATUS" />
             </intent-filter>
         </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.rupleide.netfix.fileprovider"
+            android:authorities="io.maffinet.android.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -87,9 +87,9 @@
         </provider>
 
         <service
-            android:name=".service.NetFixTileService"
+            android:name=".service.MaffinetTileService"
             android:icon="@drawable/ic_notification"
-            android:label="NetFix"
+            android:label="Maffinet"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>

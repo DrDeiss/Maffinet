@@ -34,7 +34,7 @@ void reset_params(void) {
 }
 
 JNIEXPORT jint JNICALL
-Java_com_rupleide_netfix_core_dpibypass_ByeDpiProxy_jniStartProxy(JNIEnv *env, __attribute__((unused)) jobject thiz, jobjectArray args) {
+Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniStartProxy(JNIEnv *env, __attribute__((unused)) jobject thiz, jobjectArray args) {
     if (g_proxy_running) {
         LOG(LOG_S, "proxy already running");
         return -1;
@@ -81,7 +81,7 @@ Java_com_rupleide_netfix_core_dpibypass_ByeDpiProxy_jniStartProxy(JNIEnv *env, _
 }
 
 JNIEXPORT jint JNICALL
-Java_com_rupleide_netfix_core_dpibypass_ByeDpiProxy_jniStopProxy(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
+Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniStopProxy(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
     LOG(LOG_S, "send shutdown to proxy");
 
     if (!g_proxy_running) {
@@ -96,7 +96,7 @@ Java_com_rupleide_netfix_core_dpibypass_ByeDpiProxy_jniStopProxy(__attribute__((
 }
 
 JNIEXPORT jint JNICALL
-Java_com_rupleide_netfix_core_dpibypass_ByeDpiProxy_jniForceClose(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
+Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniForceClose(__attribute__((unused)) JNIEnv *env, __attribute__((unused)) jobject thiz) {
     LOG(LOG_S, "closing server socket (fd: %d)", server_fd);
 
     if (close(server_fd) == -1) {

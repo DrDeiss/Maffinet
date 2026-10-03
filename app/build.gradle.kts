@@ -7,18 +7,18 @@ plugins {
 }
 
 android {
-    namespace = "com.rupleide.netfix"
+    namespace = "io.maffinet.android"
     ndkVersion = "30.0.14904198"
     compileSdk {
         version = release(36)
     }
 
     defaultConfig {
-        applicationId = "com.rupleide.netfix"
+        applicationId = "io.maffinet.android"
         minSdk = 26
         targetSdk = 26
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 1
+        versionName = "0.1.0-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -84,37 +84,48 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-tasks.register<Exec>("runNdkBuild") {
+// The inherited HEV binaries have a custom JNI ABI whose exact source commit
+// is missing upstream. Keep these binaries and their compatibility bridge by
+// default. Only run this task after recovering that precise source revision.
+tasks.register<Exec>("rebuildHevTunnel") {
     group = "build"
-
-    val localProperties = Properties().apply {
-        val file = rootProject.file("local.properties")
-        if (file.exists()) {
-            file.inputStream().use { load(it) }
+    description = "Rebuild the pinned custom HEV tunnel after recovering its source."
+    doFirst {
+        val sourceDir = file("src/main/jni/hev-socks5-tunnel")
+        if (!sourceDir.resolve("src/hev-jni.c").isFile ||
+            !sourceDir.resolve("Android.mk").isFile) {
+            throw GradleException(
+                "Custom HEV source c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1 is unavailable. " +
+                    "Use the bundled binaries, or recover that source before rebuilding. " +
+                    "Stock HEV has a different JNI ABI; see docs/NATIVE_PROVENANCE.md."
+            )
         }
+        val jniSource = sourceDir.resolve("src/hev-jni.c").readText()
+        if (!jniSource.contains("(Ljava/lang/String;IZ)V")) {
+            throw GradleException("HEV source does not contain the inherited Smart TV JNI ABI.")
+        }
+        val properties = Properties().apply {
+            val localFile = rootProject.file("local.properties")
+            if (localFile.isFile) localFile.inputStream().use { load(it) }
+        }
+        val sdkDir = properties.getProperty("sdk.dir")
+            ?: System.getenv("ANDROID_HOME")
+            ?: System.getenv("ANDROID_SDK_ROOT")
+            ?: throw GradleException("Set sdk.dir or ANDROID_HOME to rebuild native code.")
+        val ndkDir = File(sdkDir, "ndk/${android.ndkVersion}")
+        val windows = System.getProperty("os.name").startsWith("Windows", ignoreCase = true)
+        val ndkBuild = File(ndkDir, if (windows) "ndk-build.cmd" else "ndk-build")
+        if (!ndkBuild.isFile) throw GradleException("Install NDK ${android.ndkVersion} in $sdkDir.")
+        executable = ndkBuild.absolutePath
+        args(
+            "NDK_PROJECT_PATH=${layout.buildDirectory.get().asFile.absolutePath}/intermediates/ndkBuild",
+            "NDK_LIBS_OUT=${projectDir.absolutePath}/src/main/jniLibs",
+            "APP_BUILD_SCRIPT=${projectDir.absolutePath}/src/main/jni/Android.mk",
+            "NDK_APPLICATION_MK=${projectDir.absolutePath}/src/main/jni/Application.mk"
+        )
     }
-    val sdkDir = localProperties.getProperty("sdk.dir")
-    val ndkDir = File(sdkDir, "ndk").listFiles()?.firstOrNull { it.isDirectory } ?: File(sdkDir, "ndk-bundle")
-
-    executable = if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) {
-        "$ndkDir\\ndk-build.cmd"
-    } else {
-        "$ndkDir/ndk-build"
-    }
-    setArgs(listOf(
-        "NDK_PROJECT_PATH=${project.layout.buildDirectory.get().asFile.absolutePath}/intermediates/ndkBuild",
-        "NDK_LIBS_OUT=${project.projectDir.absolutePath}/src/main/jniLibs",
-        "APP_BUILD_SCRIPT=${project.projectDir.absolutePath}/src/main/jni/Android.mk",
-        "NDK_APPLICATION_MK=${project.projectDir.absolutePath}/src/main/jni/Application.mk"
-    ))
-
-    println("Command: $commandLine")
-}
-
-tasks.named("preBuild") {
-    dependsOn("runNdkBuild")
 }
 
 base {
-    archivesName.set("NetFix-Mobile-v1.0.3")
+    archivesName.set("Maffinet-0.1.0-alpha")
 }

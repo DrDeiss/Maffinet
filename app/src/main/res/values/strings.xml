@@ -1,9 +1,12 @@
 <resources>
-    <string name="app_name">NetFix Mobile</string>
+    <string name="app_name">Maffinet</string>
+    <string name="fork_marking">(fork of NetFix Mobile by rupleide)</string>
+    <string name="independent_attribution">Maffinet is an independent project inspired by NetFix Mobile and uses parts of its open-source codebase.</string>
+    <string name="unofficial_fork_notice">ВНИМАНИЕ! Вы запускаете неофициальный форк программы NetFix Mobile. Оригинальный автор (rupleide) не имеет отношения к этой сборке, не гарантирует её безопасность и не оказывает поддержку. Оригинальный чистый NetFix Mobile доступен по адресу: github.com/rupleide/NetFixMobile</string>
     <string name="vpn_channel_name">VPN</string>
     <string name="proxy_channel_name">Прокси</string>
-    <string name="notification_title">NetFix</string>
-    <string name="vpn_notification_content">NetFix работает</string>
+    <string name="notification_title">Maffinet</string>
+    <string name="vpn_notification_content">Maffinet работает</string>
     <string name="service_paused_text">Приостановлен</string>
     <string name="service_start_btn">Старт</string>
     <string name="service_pause_btn">Пауза</string>

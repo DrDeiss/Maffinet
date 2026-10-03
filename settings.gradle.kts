@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NetFix Mobile"
+rootProject.name = "Maffinet"
 include(":app")
  
