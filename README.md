@@ -15,6 +15,16 @@ release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
 installation alongside NetFix Mobile.
 
+## Interface
+
+Original captures from the passing AOSP API29 emulator run, source
+`256dfaee5559eaf827e3228805d57653257bc56e`:
+
+<img src="docs/screenshots/home-api29.png" width="270" alt="Maffinet Home with connection and service controls"> <img src="docs/screenshots/services-api29.png" width="270" alt="Maffinet service profiles">
+
+[Additional screen captures](docs/screenshots/README.md) and
+[recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the actual tested scope.
+
 ## Features
 
 Choose services while separate models handle Android package routing, domain
