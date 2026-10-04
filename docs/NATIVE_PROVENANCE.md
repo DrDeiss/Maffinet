@@ -151,8 +151,10 @@ mode does not classify a first read shorter than the six-byte ServerHello prefix
 as a TLS failure; forwarding that partial response releases the saved Hello and
 prevents later replay of a connection which has already returned peer bytes.
 The runner also builds a separately instrumented production fixture and executes
-the pooled-buffer case with ASan, UBSan and leak detection; this sanitizer check
-awaits the next CI snapshot.
+the pooled-buffer case with ASan, UBSan and leak detection. This check, all 21
+automatic cases, 12 streaming cases, four invalid-value checks and all 141
+JVM/native-parser tests passed for `8266a409f085a6e1050a5d54400ff199cb1de207` in
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071).
 
 The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
 published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.

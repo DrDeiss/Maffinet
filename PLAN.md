@@ -14,11 +14,20 @@ bounded native observation, network-scoped decisions, direct DNS/body probes,
 generic data-based route hints and host-route updates for new connections without
 restarting VPN. Plain HTTP application payloads must not be automatically replayed.
 Manual settings and General/User remain available in expert mode.
-The general implementation and native/runtime checks are in progress; the earlier
-LinkedIn diagnostic success is evidence for one candidate, not completion of this
-new requirement. See [Automatic Access](docs/AUTOMATIC_ACCESS.md).
+Version 0.3.0-alpha implements this general mechanism. Source
+`8266a409f085a6e1050a5d54400ff199cb1de207` passed
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071):
+141 standalone JVM/native-parser tests, 139 Android JVM tests, 21 automatic socket
+cases, focused ASan/UBSan/leak checks, APK assembly and API29/API36 runtime checks.
+API29 passed 25 instrumentation cases with one Android 13+ notification case
+skipped; API36 passed all 26 and a separate denied-notification invocation.
+Lint reports zero errors, 140 warnings and five hints. The signed local APK and
+its exact hash are in `build/apk/build-info.json`. Physical acceptance of the new
+automatic mode remains open after losing ADB connectivity. The earlier manual
+LinkedIn success is evidence for one candidate, not proof of the new automatic
+mode on that device. See [Automatic Access](docs/AUTOMATIC_ACCESS.md).
 
-## Current update — Android compatibility and LinkedIn, 2026-10-04
+## Earlier update — Android compatibility and LinkedIn, 2026-10-04
 
 Physical feedback on 0.1.0-alpha reported Android's old-target warning and failed
 LinkedIn access in both its application and browser, while other services worked.
@@ -35,18 +44,20 @@ LinkedIn's root domains and their subdomains already match General. On the conne
 Android16 phone, both usual Cloudflare endpoints return HTTP200 but stall after
 13,781 body bytes. LinkedIn's alternative `gcp-lb.www.linkedin.com` endpoint completes
 a certificate-verified response of140,059 bytes and loads the native app and Chrome
-feed; a VPN restart and cold app launch also passed. An optional default-off route
-now resolves this endpoint at startup and applies only to TLS `www.linkedin.com:443`.
-The integrated profile still needs CI and physical-device validation.
+feed; a VPN restart and cold app launch also passed. The proposed optional
+default-off LinkedIn route was superseded by the generic Automatic Access
+controller above; the endpoint remains an initial data hint. These phone results
+used a temporary manual diagnostic command.
 
 HTTP probes now require64KiB of body or the complete smaller response, preventing
 this observed header-only false success. A paced native TLS buffer was also observed
 being transformed twice after an early server response; a bounded patch and native
 regressions are being verified. Telegram state ownership/publication is atomic, and
 internal status broadcasts explicitly target the app package for modern Android.
-Local verification passed84 JVM tests; six Linux native checks remain CI-only.
+At this earlier stage, local verification passed84 JVM tests; six Linux native
+checks remained CI-only.
 The revised CI builds one app/test APK pair and tests it on API29 andAPI36,
-including notification denial onAPI36. Updated CI/runtime results are pending.
+including notification denial onAPI36. Final CI/runtime results are recorded above.
 See [investigation notes](docs/ANDROID36_AND_LINKEDIN.md).
 
 ## Current update — Hosts and DNS, 2026-10-04

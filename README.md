@@ -29,7 +29,10 @@ select applications on Home and connect. It combines a short TLS fallback chain,
 observed-host diagnostics, direct checks of selected/public Smart DNS and verified
 host routes. Unknown hostnames are eligible too; General/User remain manual-mode
 filters. LinkedIn is an initial route hint, rather than a separate product toggle.
-The implementation still needs CI and device validation. See
+The integrated implementation passed
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071)
+on Android 10/API29 and Android 16/API36; physical-device acceptance of this new
+automatic mode remains open. See
 [Automatic Access](docs/AUTOMATIC_ACCESS.md) for its exact scope and limitations.
 
 ## Interface
@@ -37,17 +40,21 @@ The implementation still needs CI and device validation. See
 Home retains Maffinet's large connection button and exposes Applications,
 installed-app selection, Telegram, DNS, access mode and Hosts. The main navigation
 contains Home, Strategies and Settings; the former Services destination is retired.
-[CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931)
-passed the expanded Hosts/Smart DNS implementation: debug/release assembly,
-66 JVM/native tests, 65 Android JVM tests and 22 API29 instrumentation tests
-without failures/skips. Lint has zero errors, 136 warnings and five hints.
+The current source `8266a409f085a6e1050a5d54400ff199cb1de207` passed debug/unsigned
+release assembly, 141 standalone JVM/native-parser tests, 139 Android JVM tests,
+21 automatic native socket cases and the focused ASan/UBSan/leak check. API29
+passed 25 instrumentation cases and skipped the Android 13+ notification case;
+API36 passed all 26 and a separate denied-notification invocation. Lint has zero
+errors, 140 warnings and five hints.
 The signed debug APK and its build metadata are saved locally in `build/apk/`;
 CI also retains `maffinet-debug-apk` for seven days. See
-[Hosts/DNS validation](docs/HOSTS_AND_DNS.md) for the exact source and APK hash.
+[APK metadata](docs/build-info-0.3.0-alpha.json) for the current local APK hash and
+[Hosts/DNS validation](docs/HOSTS_AND_DNS.md) for the preceding catalog snapshot.
 
-[Additional screen captures](docs/screenshots/README.md) and
-[recorded runtime checks](docs/DEVICE_VALIDATION.md) document the preceding
-independent-mode baseline. Physical-device Smart DNS acceptance remains open.
+[Additional screen captures](docs/screenshots/README.md) include the current
+automatic-mode interface and the preceding independent-mode baseline.
+[Recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the earlier scope.
+Physical-device automatic Smart DNS acceptance remains open.
 
 ## Features
 

@@ -35,12 +35,15 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   check does not prove a complete large download, authentication, API/media
   delivery or every feature of an application. The General base and explicit
   checking addresses are initial values and require maintenance.
-- **Automatic Access:** the default mode now being implemented uses local TLS
+- **Automatic Access:** the implemented default mode uses local TLS
   strategies, bounded public Smart DNS checks and verified exact-host routes for
   selected applications. It includes observable names outside General. There is
   no per-service product switch; LinkedIn is an initial endpoint hint in a data
   registry. The successful manual diagnostic on the OnePlus/network does not
-  certify the new automatic implementation; its integrated checks are pending.
+  certify the new automatic implementation. Integrated native/JVM, focused
+  ASan/UBSan/leak and Android API29/API36 checks passed for `8266a409` in
+  [CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071);
+  physical-device acceptance of the new automatic APK remains open.
   Only new connections receive a learned route. Established TLS sessions and
   application requests are never migrated or replayed. An application's own retry
   can therefore be required after its first failed connection. The public `/`

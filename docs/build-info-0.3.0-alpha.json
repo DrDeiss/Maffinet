@@ -1,0 +1,86 @@
+{
+  "applicationId": "io.maffinet.android",
+  "version": "0.3.0-alpha",
+  "versionCode": 3,
+  "variant": "debug",
+  "minSdk": 26,
+  "targetSdk": 36,
+  "compileSdk": 36,
+  "sourceCommit": "8266a409f085a6e1050a5d54400ff199cb1de207",
+  "sourceUrl": "https://github.com/DrDeiss/Maffinet/commit/8266a409f085a6e1050a5d54400ff199cb1de207",
+  "ciRun": "https://github.com/DrDeiss/Maffinet/actions/runs/37199682071",
+  "file": "Maffinet-0.3.0-alpha-debug.apk",
+  "bytes": 30711975,
+  "sha256": "823a54ff5c0d155ecdf5074124eeeca41e3356e6963811af4c6e8e23b6c418af",
+  "signature": {
+    "scheme": "v2",
+    "verified": true,
+    "certificateSha256": "4674e6c303c1a766b57216096d29395b65b2330fb5aac9e0dfecfff4199601f2",
+    "nonSignaturePayloadMatchesCi": true
+  },
+  "nativeAbis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "nativeZipAlignmentBytes": 16384,
+  "validation": {
+    "standaloneJvmNativeParser": {
+      "tests": 141,
+      "failures": 0,
+      "skipped": 0
+    },
+    "androidJvm": {
+      "tests": 139,
+      "failures": 0,
+      "skipped": 0
+    },
+    "automaticNativeSocketCases": 21,
+    "streamingNativeCases": 12,
+    "nativeInvalidValueChecks": 4,
+    "pooledBufferSanitizers": {
+      "address": true,
+      "undefinedBehavior": true,
+      "leakDetection": true,
+      "passed": true
+    },
+    "api29Instrumentation": {
+      "tests": 26,
+      "passed": 25,
+      "failures": 0,
+      "skipped": 1,
+      "skipReason": "Runtime notification permission exists only on Android 13+"
+    },
+    "api36Instrumentation": {
+      "tests": 26,
+      "passed": 26,
+      "failures": 0,
+      "skipped": 0
+    },
+    "api36NotificationsDenied": {
+      "tests": 1,
+      "passed": 1,
+      "failures": 0,
+      "skipped": 0
+    },
+    "lintErrors": 0,
+    "lintWarnings": 140,
+    "lintHints": 5,
+    "newAutomaticModePhysicalDeviceAcceptance": "pending; ADB device currently unavailable"
+  },
+  "scope": {
+    "defaultMode": "Automatic Access",
+    "routing": "explicitly selected installed applications",
+    "recovery": "visible public TCP/443 TLS hostname; local DPI and verified public Smart DNS candidates",
+    "externalServer": false
+  },
+  "limitations": [
+    "ECH including GREASE is excluded from automatic host-route learning",
+    "QUIC and IPv6-only recovery are outside this increment",
+    "No automatic recovery before a TLS hostname can be observed, including DNS NXDOMAIN/private blocking replies",
+    "New learned routes apply to subsequent connections; the application may need to retry",
+    "No guarantee for arbitrary IP/account restrictions, server outages, or every authenticated API",
+    "Complete APK runtime compatibility on 16 KiB-page devices remains unverified"
+  ]
+}
