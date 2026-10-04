@@ -1,4 +1,4 @@
-/* Test fixture around the pinned, unchanged native parser and group selector. */
+/* Test fixture around the production pinned/patched native parser and selector. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

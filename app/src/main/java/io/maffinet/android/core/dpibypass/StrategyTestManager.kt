@@ -143,7 +143,8 @@ object StrategyTestManager {
         testResults.clear()
         val store = StrategyMatrixStore(context)
         val saved = store.load()
-        val fingerprint = ProbeTargetRepository(context).snapshot().fingerprint
+        val snapshot = ProbeTargetRepository(context).snapshot()
+        val fingerprint = snapshot.fingerprint
         historyFingerprint = fingerprint
         val currentHistory = saved?.takeIf { it.fingerprint == fingerprint }
         hasStaleResults = store.hasSavedHistory() && currentHistory == null
@@ -152,7 +153,7 @@ object StrategyTestManager {
         val settings = context.getPreferences()
         val activeCommand = settings.getString("byedpi_cmd_args", null)
             .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
-        bestStrategyResult = StrategyScorer.best(matrixResults.values)?.command
+        bestStrategyResult = StrategyScorer.bestComplete(matrixResults.values, snapshot.urls)?.command
         appliedStrategy = activeCommand
         val file = File(context.filesDir, "proxy_test_results.txt")
         if (file.exists()) {
@@ -243,6 +244,7 @@ object StrategyTestManager {
                 currentProgress = "Готовимся к тестированию..."
                 val tester = StrategyTester(applicationContext)
                 var selectedBest: String? = null
+                var bestObserved: StrategyEvaluation? = null
                 tester.runTests(onProgress = { index, strategy, status ->
                     currentTestIndex = index + 1
                     currentProgress = "Проверяем стратегию ${index + 1} из $totalStrategiesCount"
@@ -255,16 +257,19 @@ object StrategyTestManager {
                 }, excludedCommands = deletedStrategies.keys.toSet(), snapshot = snapshot, onBestReady = {
                         currentCoroutineContext().ensureActive()
                         synchronized(this@StrategyTestManager) {
-                            val best = StrategyScorer.best(matrixResults.values.filterNot {
+                            val evaluations = matrixResults.values.filterNot {
                                 deletedStrategies[it.command] == true
-                            })?.command
+                            }
+                            bestObserved = evaluations.minWithOrNull(StrategyScorer.comparator)
+                            val best = StrategyScorer.bestComplete(evaluations, snapshot.urls)?.command
                             selectedBest = best
-                            if (best != null) {
+                            if (best != null && !io.maffinet.android.data.settings.MaffinetSettingsRepository(applicationContext).automaticAccessEnabled()) {
                                 bestStrategyResult = best
                                 appliedStrategy = best
                                 applicationContext.getPreferences().edit()
                                     .putString("byedpi_cmd_args", best)
                                     .putBoolean("byedpi_enable_cmd_settings", true)
+                                    .putBoolean("strategy_manual_mode", false)
                                     .apply()
                             }
                         }
@@ -274,8 +279,10 @@ object StrategyTestManager {
                 Log.i("StrategyTestManager", "Автоподбор завершен. Лучшая стратегия: \"$best\"")
 
                 resortResults(applicationContext)
-                showNotification(applicationContext)
-                currentProgress = if (best == null) "Рабочая стратегия не найдена" else "Тестирование завершено"
+                currentProgress = if (io.maffinet.android.data.settings.MaffinetSettingsRepository(applicationContext).automaticAccessEnabled()) {
+                    "Диагностика завершена: ${bestObserved?.passedServices ?: 0}/${snapshot.urls.size} адресов. Автоматический доступ сохранён."
+                } else completionSummary(bestObserved, best != null)
+                showNotification(applicationContext, currentProgress)
             } catch (cancelled: CancellationException) {
                 currentProgress = "Проверка отменена"
                 throw cancelled
@@ -308,7 +315,21 @@ object StrategyTestManager {
         return job
     }
 
-    private fun showNotification(context: Context) {
+    private fun completionSummary(evaluation: StrategyEvaluation?, applied: Boolean): String {
+        if (applied && evaluation != null) {
+            return "Проверка завершена: ${evaluation.passedServices}/${evaluation.totalServices} адресов. Стратегия применена."
+        }
+        val result = when {
+            evaluation == null -> "Нет результатов проверки."
+            evaluation.passedServices == 0 -> "Ни один из ${evaluation.totalServices} адресов не прошёл проверку."
+            else -> "Полного результата нет. Лучший результат: ${evaluation.passedServices}/${evaluation.totalServices} адресов."
+        }
+        val failedUrls = evaluation?.failedTargets?.map { it.url }?.distinct().orEmpty()
+        return "$result Прежняя стратегия сохранена." +
+            if (failedUrls.isEmpty()) "" else "\nНе прошли проверку: ${failedUrls.joinToString(", ")}"
+    }
+
+    private fun showNotification(context: Context, summary: String) {
         val channelId = "MaffinetNotifications"
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -322,7 +343,8 @@ object StrategyTestManager {
         val builder = androidx.core.app.NotificationCompat.Builder(context, channelId)
             .setSmallIcon(io.maffinet.android.R.drawable.ic_notification)
             .setContentTitle("Maffinet")
-            .setContentText("Проверка стратегий завершена")
+            .setContentText(summary.substringBefore('\n'))
+            .setStyle(androidx.core.app.NotificationCompat.BigTextStyle().bigText(summary))
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
 
@@ -345,8 +367,13 @@ object StrategyTestManager {
     }
 
     fun applyStrategy(context: Context, originalIndex: Int, strategy: String) {
+        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+            android.widget.Toast.makeText(context, "Остановите подключение перед выбором ручной стратегии", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val accepted = synchronized(this) {
             if (deletedStrategies[strategy] == true) false else {
+                io.maffinet.android.data.settings.MaffinetSettingsRepository(context).setAutomaticAccessEnabled(false)
                 context.getPreferences().edit()
                     .putString("byedpi_cmd_args", strategy)
                     .putBoolean("byedpi_enable_cmd_settings", true)
@@ -411,7 +438,9 @@ object StrategyTestManager {
         saveCustomizations(context)
         testResults.removeAll { it.second == strategy }
         matrixResults.remove(strategy)
-        if (bestStrategyResult == strategy) bestStrategyResult = StrategyScorer.best(matrixResults.values)?.command
+        if (bestStrategyResult == strategy) bestStrategyResult = StrategyScorer.bestComplete(
+            matrixResults.values, ProbeTargetRepository(context).urls()
+        )?.command
         saveResults(context)
         try { StrategyMatrixStore(context).removeCommand(strategy) }
         catch (error: Exception) { Log.e("StrategyTestManager", "Failed to delete saved matrix candidate", error) }

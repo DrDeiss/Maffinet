@@ -11,6 +11,8 @@ import java.net.Proxy
 import java.net.URL
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.currentCoroutineContext
@@ -21,6 +23,8 @@ import io.maffinet.android.core.strategy.StrategyScorer
 import io.maffinet.android.core.domains.LegacyStrategyAliases
 import io.maffinet.android.data.strategy.ProbeTargetRepository
 import io.maffinet.android.data.strategy.StrategyProbeSnapshot
+import io.maffinet.android.core.strategy.HttpProbeBodyValidator
+import kotlinx.coroutines.CancellationException
 
 class StrategyTester(private val context: Context) {
     companion object {
@@ -55,9 +59,12 @@ class StrategyTester(private val context: Context) {
                 val configuration = ByeDpiProxyCmdPreferences(ByeDpiArgumentCompiler.compile(
                     strategy, filters, "127.0.0.1", testPort.toString(), forceListener = true))
                 val exitCode = AtomicInteger(Int.MIN_VALUE)
+                val stopping = AtomicBoolean(false)
+                val startupError = AtomicReference<String?>(null)
                 val nativeThread = Thread({
-                    try { exitCode.set(proxy.startProxy(configuration)) }
+                    try { exitCode.set(proxy.startProxy(configuration) { !stopping.get() }) }
                     catch (error: Throwable) {
+                        startupError.set(error.message ?: error.javaClass.simpleName)
                         Log.e("StrategyTester", "Native candidate failed", error)
                         exitCode.set(-1)
                     }
@@ -77,12 +84,13 @@ class StrategyTester(private val context: Context) {
                         currentCoroutineContext().ensureActive()
                         ServiceConnectivityResult("probe_$targetIndex", URL(url).host, listOf(
                             if (ready) probe(url, testPort) else TargetConnectivityResult(
-                                url, false, 0, error = "Локальный proxy не запустился (код ${exitCode.get()})"
+                                url, false, 0, error = startupError.get() ?: "Локальный proxy не запустился (код ${exitCode.get()})"
                             )
                         ))
                     }
                 } finally {
                     withContext(NonCancellable + Dispatchers.IO) {
+                        stopping.set(true)
                         try { proxy.stopProxy() }
                         catch (error: Throwable) { Log.e("StrategyTester", "Candidate stop failed", error) }
                         nativeThread.join(2_000)
@@ -101,7 +109,7 @@ class StrategyTester(private val context: Context) {
                 val latency = evaluation.averageLatencyMs?.let { "$it мс" } ?: "нет соединения"
                 onProgress(index, strategy, "${evaluation.passedServices}/${evaluation.totalServices} адресов · $latency")
             }
-            val best = StrategyScorer.best(evaluations)?.command
+            val best = StrategyScorer.bestComplete(evaluations, snapshot.urls)?.command
             currentCoroutineContext().ensureActive()
             check(snapshot.fingerprint == ProbeTargetRepository(context).snapshot().fingerprint) {
                 "Hosts или проверочные адреса изменились. Повторите проверку для текущих настроек."
@@ -120,22 +128,38 @@ class StrategyTester(private val context: Context) {
         true
     } catch (_: Exception) { false }
 
-    private fun probe(url: String, port: Int): TargetConnectivityResult {
+    private suspend fun probe(url: String, port: Int): TargetConnectivityResult {
         val started = System.nanoTime()
+        val coroutineContext = currentCoroutineContext()
         var connection: HttpURLConnection? = null
+        var status: Int? = null
         return try {
             val socks = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-            connection = URL(url).openConnection(socks) as HttpURLConnection
-            connection.connectTimeout = 2_500
-            connection.readTimeout = 2_500
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Connection", "close")
-            val status = connection.responseCode
-            TargetConnectivityResult(url, status in 200..399,
-                (System.nanoTime() - started) / 1_000_000, status,
-                if (status in 200..399) null else "HTTP $status")
+            val request = URL(url).openConnection(socks) as HttpURLConnection
+            connection = request
+            request.connectTimeout = 2_500
+            request.readTimeout = 2_500
+            request.instanceFollowRedirects = false
+            request.setRequestProperty("Connection", "close")
+            // Keep Content-Length comparable with the bytes read, without transparent gzip.
+            request.setRequestProperty("Accept-Encoding", "identity")
+            val responseCode = request.responseCode
+            status = responseCode
+            coroutineContext.ensureActive()
+            if (responseCode in 200..399) {
+                HttpProbeBodyValidator.validate(responseCode, request.contentLengthLong,
+                    openBody = { request.inputStream }, checkCancelled = { coroutineContext.ensureActive() })
+            }
+            TargetConnectivityResult(url, responseCode in 200..399,
+                (System.nanoTime() - started) / 1_000_000, responseCode,
+                if (responseCode in 200..399) null else "HTTP $responseCode")
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: Exception) {
+            // A cancelled blocking read may first wake with its socket timeout.
+            coroutineContext.ensureActive()
             TargetConnectivityResult(url, false, (System.nanoTime() - started) / 1_000_000,
+                httpStatus = status,
                 error = error.message ?: error.javaClass.simpleName)
         } finally {
             connection?.disconnect()

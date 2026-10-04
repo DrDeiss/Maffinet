@@ -38,6 +38,23 @@ Migration snapshots existing mode preferences once and preserves `selected_apps`
 User hosts and engine preferences. Configuration changes remain locked while
 connection requests/resources or a strategy test are active.
 
+## Automatic Access
+
+The 2026-10-04 requirement makes Automatic Access the default Applications mode.
+Users select installed applications and connect. A bounded TLS fallback chain
+handles observable traffic without restricting it to General. Manual commands,
+Hosts filters and the isolated strategy tester remain available separately.
+
+The native TLS observer queues public hostname/port/original-address observations.
+One Kotlin worker checks a public credential-free response, then DNS/Smart DNS
+candidates when necessary. Every candidate preserves the original TLS identity
+and certificate checks. Verified exact-host routes have a TTL, network/policy
+scope and generation guard; JNI updates affect subsequent connections without
+restarting the VPN. Internal loopback probes bypass learned routes to measure
+the actual candidate. Account traffic and established TLS sessions are never
+replayed. See [Automatic Access](AUTOMATIC_ACCESS.md) for pending validation and
+the limits of local-only recovery.
+
 ## Explicit Android routing
 
 Only packages stored by the user in `selected_apps` are candidates for the VPN
@@ -48,10 +65,12 @@ Legacy profile flags never add packages during migration, launch or selection.
 
 ## Hosts
 
-`BuiltInDomainLists` defines the fixed General base: `youtube.com`,
-`googlevideo.com`, `ytimg.com`, `ggpht.com`, `instagram.com`, `cdninstagram.com`,
-`linkedin.com` and `licdn.com`. This preserves the existing curated host values
-without depending on service switches. `DomainListRepository` merges that base
+`BuiltInDomainLists` defines General with 130 curated domain filters in eight
+categories: video/music, social networks, Discord, Telegram, AI/translation,
+development/work, Xbox/games and DNS infrastructure. The original eight hostnames
+remain first and the legacy named aliases retain their original values.
+Categories are read-only names for `{list:ID}` expansion, not application/profile
+switches. `DomainListRepository` merges that base
 with enabled User domains in stable deduplicated order; its General entry remains
 the active aggregate for existing callers.
 
@@ -60,9 +79,13 @@ URLs, ports, wildcards, IP literals and command arguments are rejected.
 `UserDomainStore` saves normalized domains atomically in a versioned local file.
 Invalid edits/imports preserve the prior saved list. Editing replaces the User
 list, import merges it, and export writes the saved list. Disabling User preserves
-its content. The Hosts screen exposes the base and these user controls.
+its content. The import parser additionally extracts names from IP/hostname files,
+excluding mappings to blocked or local destinations; it does not apply those IPs.
+The Hosts screen exposes the categories, User editor, document import/export and
+manual HTTPS import. The downloader bounds response size/time and rejects HTML,
+failed responses and redirects away from HTTPS. See [source policy](HOSTS_AND_DNS.md).
 
-`ByeDpiArgumentCompiler` injects a native `-H` whitelist in every selective desync
+In manual mode, `ByeDpiArgumentCompiler` injects a native `-H` whitelist in every selective desync
 group, constrains processing to TCP and adds an unchanged fallback for other
 hosts and UDP. This ByeDPI revision ignores hosts for UDP, so selective mode
 does not apply UDP desync. It is not configured with desktop winws arguments.

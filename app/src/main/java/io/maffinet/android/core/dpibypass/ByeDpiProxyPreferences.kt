@@ -7,16 +7,29 @@ import io.maffinet.android.data.domains.DomainListRepository
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 sealed interface ByeDpiProxyPreferences {
+    val automaticAccess: Boolean get() = false
+
     companion object {
-        fun fromSharedPreferences(preferences: SharedPreferences, context: Context): ByeDpiProxyPreferences =
-            when (preferences.getBoolean("byedpi_enable_cmd_settings", false)) {
+        fun fromSharedPreferences(preferences: SharedPreferences, context: Context): ByeDpiProxyPreferences {
+            if (MaffinetSettingsRepository(preferences).automaticAccessEnabled()) {
+                val (ip, port) = preferences.getProxyIpAndPort()
+                return ByeDpiAutomaticPreferences(io.maffinet.android.core.access.AutomaticAccessArguments.create(ip, port.toInt()))
+            }
+            return when (preferences.getBoolean("byedpi_enable_cmd_settings", false)) {
                 true -> ByeDpiProxyCmdPreferences(preferences, context)
                 false -> ByeDpiProxyUIPreferences(preferences, context)
             }
+        }
     }
 }
 
-class ByeDpiProxyCmdPreferences(val args: Array<String>) : ByeDpiProxyPreferences {
+class ByeDpiAutomaticPreferences(val args: Array<String>) : ByeDpiProxyPreferences {
+    override val automaticAccess = true
+}
+
+class ByeDpiProxyCmdPreferences(
+    val args: Array<String>,
+) : ByeDpiProxyPreferences {
     constructor(preferences: SharedPreferences, context: Context) : this(
         parseCmdToArguments(preferences, context)
     )
@@ -50,7 +63,7 @@ class ByeDpiProxyUIPreferences(
 ) : ByeDpiProxyPreferences {
 
     constructor(preferences: SharedPreferences) : this(
-        UISettings.fromSharedPreferences(preferences)
+        UISettings.fromSharedPreferences(preferences), null
     )
 
     constructor(preferences: SharedPreferences, context: Context) : this(

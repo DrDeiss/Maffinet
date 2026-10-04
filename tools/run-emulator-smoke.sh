@@ -9,13 +9,26 @@ SDK_ROOT="${ANDROID_HOME:?Set ANDROID_HOME to the provisioned Android SDK.}"
 ADB="$SDK_ROOT/platform-tools/adb"
 EMULATOR="$SDK_ROOT/emulator/emulator"
 AVD_MANAGER="$SDK_ROOT/cmdline-tools/latest/bin/avdmanager"
-IMAGE="system-images;android-29;default;x86_64"
-AVD_NAME="maffinet-smoke-api29"
-REPORT_DIR="$ROOT_DIR/app/build/reports/emulator-smoke"
-WORK_DIR="${RUNNER_TEMP:-$ROOT_DIR/.toolchain}/maffinet-emulator-smoke"
+API_LEVEL="${MAFFINET_SMOKE_API_LEVEL:-29}"
+IMAGE_TAG="${MAFFINET_SMOKE_IMAGE_TAG:-default}"
+IMAGE_ARCH="${MAFFINET_SMOKE_IMAGE_ARCH:-x86_64}"
+EMULATOR_PORT="${MAFFINET_SMOKE_EMULATOR_PORT:-5580}"
+PREBUILT="${MAFFINET_SMOKE_PREBUILT:-false}"
+[[ "$API_LEVEL" =~ ^[0-9]+$ && "$IMAGE_TAG" =~ ^[a-z0-9_]+$ && "$IMAGE_ARCH" =~ ^[a-z0-9_-]+$ ]] || {
+  echo 'API level, image tag and architecture must identify an SDK system-image package.' >&2; exit 1;
+}
+[[ "$EMULATOR_PORT" =~ ^[0-9]+$ ]] && (( EMULATOR_PORT >= 5554 && EMULATOR_PORT <= 5682 && EMULATOR_PORT % 2 == 0 )) || {
+  echo 'Choose an unused even emulator port between 5554 and 5682.' >&2; exit 1;
+}
+[[ "$PREBUILT" == true || "$PREBUILT" == false ]] || { echo 'MAFFINET_SMOKE_PREBUILT must be true or false.' >&2; exit 1; }
+IMAGE="system-images;android-$API_LEVEL;$IMAGE_TAG;$IMAGE_ARCH"
+RUN_ID="api$API_LEVEL-$IMAGE_TAG-$IMAGE_ARCH"
+AVD_NAME="maffinet-smoke-$RUN_ID"
+REPORT_DIR="${MAFFINET_SMOKE_REPORT_DIR:-$ROOT_DIR/app/build/reports/emulator-smoke/$RUN_ID}"
+WORK_DIR="${MAFFINET_SMOKE_WORK_DIR:-${RUNNER_TEMP:-$ROOT_DIR/.toolchain}/maffinet-emulator-smoke/$RUN_ID-port$EMULATOR_PORT}"
 export ANDROID_USER_HOME="$WORK_DIR/android-user"
 export ANDROID_AVD_HOME="$WORK_DIR/avd"
-export ANDROID_SERIAL="emulator-5580"
+export ANDROID_SERIAL="emulator-$EMULATOR_PORT"
 EMULATOR_PID=""
 
 mkdir -p "$REPORT_DIR/screenshots" "$ANDROID_USER_HOME" "$ANDROID_AVD_HOME"
@@ -30,7 +43,7 @@ fi
 for executable in "$ADB" "$EMULATOR" "$AVD_MANAGER"; do
   test -x "$executable" || { echo "Missing SDK executable: $executable" >&2; exit 1; }
 done
-test -s "$SDK_ROOT/system-images/android-29/default/x86_64/package.xml" || {
+test -s "$SDK_ROOT/system-images/android-$API_LEVEL/$IMAGE_TAG/$IMAGE_ARCH/package.xml" || {
   echo "Install $IMAGE with agreements already accepted by its owner." >&2
   exit 1
 }
@@ -41,6 +54,24 @@ cleanup() {
   set +e
   if [[ -n "$EMULATOR_PID" ]]; then
     timeout 15s "$ADB" -s "$ANDROID_SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
+    # Engine traces distinguish initialization/quit waits from worker joins.
+    # run-as accesses only this debug APK's files, including on failed smoke.
+    for trace_name in hev-lifecycle.log hev-lifecycle.previous.log; do
+      timeout 10s "$ADB" -s "$ANDROID_SERIAL" exec-out run-as io.maffinet.android cat "files/$trace_name" > "$REPORT_DIR/$trace_name" 2> "$REPORT_DIR/$trace_name-pull.log"
+    done
+    if (( status != 0 )) && [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+      # Only this newly created, ephemeral CI emulator is eligible. debuggerd
+      # requires root; -b captures thread backtraces without a memory tombstone.
+      # Failure to obtain diagnostic access never changes the test result.
+      timeout 10s "$ADB" -s "$ANDROID_SERIAL" root > "$REPORT_DIR/native-backtrace-access.log" 2>&1
+      if timeout 10s "$ADB" -s "$ANDROID_SERIAL" wait-for-device >> "$REPORT_DIR/native-backtrace-access.log" 2>&1; then
+        local app_pid=""
+        app_pid="$(timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pidof -s io.maffinet.android 2>> "$REPORT_DIR/native-backtrace-access.log" | tr -d '\r')"
+        if [[ "$app_pid" =~ ^[1-9][0-9]*$ ]]; then
+          timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell debuggerd -b "$app_pid" > "$REPORT_DIR/native-backtrace.txt" 2>&1
+        fi
+      fi
+    fi
     timeout 10s "$ADB" -s "$ANDROID_SERIAL" exec-out screencap -p > "$REPORT_DIR/screenshots/final-screen.png" 2> "$REPORT_DIR/screencap.log"
     timeout 20s "$ADB" -s "$ANDROID_SERIAL" pull /sdcard/Android/data/io.maffinet.android/files/ui-smoke "$REPORT_DIR/screenshots/" > "$REPORT_DIR/screenshot-pull.log" 2>&1
     local screenshot_count=0
@@ -97,7 +128,7 @@ if "$ADB" devices | awk '{print $1}' | grep -Fxq "$ANDROID_SERIAL"; then
   echo "An emulator already occupies $ANDROID_SERIAL; refusing to replace it." >&2
   exit 1
 fi
-"$EMULATOR" -avd "$AVD_NAME" -port 5580 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -accel on -memory 2048 -cores 2 -camera-back none -camera-front none > "$REPORT_DIR/emulator.log" 2>&1 &
+"$EMULATOR" -avd "$AVD_NAME" -port "$EMULATOR_PORT" -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader -accel on -memory 2048 -cores 2 -camera-back none -camera-front none > "$REPORT_DIR/emulator.log" 2>&1 &
 EMULATOR_PID=$!
 
 # Avoid an unbounded adb wait-for-device: each command and the boot loop have
@@ -117,14 +148,131 @@ while (( SECONDS < BOOT_DEADLINE )); do
   (( REMAINING > 0 )) && sleep "$((REMAINING < 3 ? REMAINING : 3))"
 done
 [[ "$BOOTED" == true ]] || { echo 'Emulator failed to boot within six minutes.' >&2; exit 1; }
+ACTUAL_API="$(timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell getprop ro.build.version.sdk | tr -d '\r')"
+[[ "$ACTUAL_API" == "$API_LEVEL" ]] || { echo "Expected API $API_LEVEL, booted API $ACTUAL_API." >&2; exit 1; }
+printf 'API=%s\nimage=%s\nserial=%s\n' "$ACTUAL_API" "$IMAGE" "$ANDROID_SERIAL" > "$REPORT_DIR/device.txt"
 timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell input keyevent 82
 for setting in window_animation_scale transition_animation_scale animator_duration_scale; do
   timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell settings put global "$setting" 0
 done
 timeout 10s "$ADB" -s "$ANDROID_SERIAL" logcat -c
 cd "$ROOT_DIR"
+
+# adb exits successfully even when AndroidJUnitRunner reports a failed test.
+# Check its final JUnit result and preserve per-test XML alongside the raw log.
+verify_instrumentation() {
+  python3 - "$REPORT_DIR/$1.log" "$REPORT_DIR/$1-results.xml" "$API_LEVEL" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+log_file, xml_file = map(Path, sys.argv[1:3])
+api_level = int(sys.argv[3])
+log = log_file.read_text(encoding="utf-8", errors="replace")
+suite = ET.Element("testsuite", name=log_file.stem)
+status = {}
+last_key = None
+failed = 0
+skipped = 0
+for line in log.splitlines():
+    if line.startswith("INSTRUMENTATION_STATUS: "):
+        field = line.removeprefix("INSTRUMENTATION_STATUS: ")
+        key, separator, value = field.partition("=")
+        if separator:
+            status[key] = value
+            last_key = key
+    elif line.startswith("INSTRUMENTATION_STATUS_CODE: "):
+        code = int(line.rsplit(": ", 1)[1])
+        if code <= 0 and "test" in status:
+            case = ET.SubElement(suite, "testcase", name=status["test"], classname=status.get("class", "AndroidJUnitRunner"))
+            if code in (-1, -2):
+                failed += 1
+                ET.SubElement(case, "failure", message="Instrumentation test failed").text = status.get("stack", status.get("stream", ""))
+            elif code in (-3, -4):
+                skipped += 1
+                ET.SubElement(case, "skipped").text = status.get("stack", status.get("stream", ""))
+        status = {}
+        last_key = None
+    elif line.startswith("INSTRUMENTATION_"):
+        last_key = None
+    elif last_key in ("stack", "stream"):
+        status[last_key] += "\n" + line
+completed = re.search(r"^\s*OK \(([1-9][0-9]*) tests?\)", log, re.MULTILINE)
+runner_failed = re.search(r"^INSTRUMENTATION_(?:FAILED|ABORTED):|^FAILURES!!!|^INSTRUMENTATION_STATUS_CODE: -(?:1|2)\s*$", log, re.MULTILINE)
+if not completed or runner_failed:
+    if not failed:
+        failed = 1
+        case = ET.SubElement(suite, "testcase", name="runnerCompletion", classname="AndroidJUnitRunner")
+        ET.SubElement(case, "failure", message="Runner did not finish successfully").text = log[-12000:]
+required = ["modernForegroundServicesWorkWithDeniedOrGrantedNotifications"] if log_file.stem.endswith("notifications-denied") else ["nativeSocksAndTunStartStopAndStartAgain"]
+if api_level >= 33 and not log_file.stem.endswith("notifications-denied"):
+    required.append("modernForegroundServicesWorkWithDeniedOrGrantedNotifications")
+for name in required:
+    matches = [case for case in suite if case.get("name") == name and case.get("classname") == "io.maffinet.android.network.NativeVpnLifecycleSmokeTest"]
+    if not matches or any(len(case) for case in matches):
+        failed += 1
+        case = ET.SubElement(suite, "testcase", name="requiredLifecycleCheck", classname="AndroidJUnitRunner")
+        ET.SubElement(case, "failure", message="Required lifecycle check did not pass").text = name
+suite.set("tests", str(len(suite)))
+suite.set("failures", str(failed))
+suite.set("skipped", str(skipped))
+ET.ElementTree(suite).write(xml_file, encoding="utf-8", xml_declaration=True)
+if failed:
+    sys.exit("Instrumentation failed; see " + str(log_file))
+print(f"{log_file.stem}: {completed.group(1)} tests, {skipped} skipped; result XML: {xml_file}")
+PY
+}
+
+check_denied_notifications() {
+  (( API_LEVEL >= 33 )) || return 0
+  # Revoking a runtime permission can kill the target process. Do it only
+  # between runner invocations, then check real FGS/VPN lifecycle with denial.
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm revoke io.maffinet.android android.permission.POST_NOTIFICATIONS
+  timeout --signal=TERM --kill-after=20s 2m "$ADB" -s "$ANDROID_SERIAL" shell am instrument -w -r \
+    -e maffinet.allowEmulatorVpnConsent true \
+    -e maffinet.expectedNotificationPermission denied \
+    -e class io.maffinet.android.network.NativeVpnLifecycleSmokeTest#modernForegroundServicesWorkWithDeniedOrGrantedNotifications \
+    io.maffinet.android.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$REPORT_DIR/instrumentation-notifications-denied.log"
+  verify_instrumentation instrumentation-notifications-denied
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
+}
+
+if [[ "$PREBUILT" == true ]]; then
+  mapfile -t APP_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' | sort)
+  mapfile -t TEST_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/androidTest/debug" -maxdepth 1 -type f -name '*.apk' | sort)
+  (( ${#APP_APKS[@]} == 1 && ${#TEST_APKS[@]} == 1 )) || { echo 'Expected exactly one debug app APK and one test APK from the build job.' >&2; exit 1; }
+  sha256sum "${APP_APKS[0]}" "${TEST_APKS[0]}" > "$REPORT_DIR/apk-sha256.txt"
+  timeout 120s "$ADB" -s "$ANDROID_SERIAL" install -r "${APP_APKS[0]}"
+  timeout 120s "$ADB" -s "$ANDROID_SERIAL" install -r "${TEST_APKS[0]}"
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell dumpsys package io.maffinet.android > "$REPORT_DIR/installed-app.txt"
+  if (( API_LEVEL >= 33 )); then
+    # Avoid a system permission dialog during existing UI smoke. Permission
+    # denial is exercised in a separate invocation below, outside the target UID.
+    timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
+  fi
+  timeout --signal=TERM --kill-after=20s 12m "$ADB" -s "$ANDROID_SERIAL" shell am instrument -w -r \
+    -e maffinet.allowEmulatorVpnConsent true \
+    -e maffinet.expectedNotificationPermission granted \
+    io.maffinet.android.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+  verify_instrumentation instrumentation
+  check_denied_notifications
+  exit 0
+fi
+
+if (( API_LEVEL >= 33 )); then
+  # connectedDebugAndroidTest installs the app immediately before testing.
+  # Preinstall it so notification permission is already granted at first launch.
+  timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:assembleDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/manual-build.log"
+  mapfile -t MANUAL_APP_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' | sort)
+  (( ${#MANUAL_APP_APKS[@]} == 1 )) || { echo 'Expected exactly one assembled debug app APK.' >&2; exit 1; }
+  timeout 120s "$ADB" -s "$ANDROID_SERIAL" install -r "${MANUAL_APP_APKS[0]}"
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
+fi
+
 # AGP 9.0.1 marks this retention option stable and wires it to keepInstalledApks.
 # Retain APKs only on this isolated test emulator until screenshots are pulled.
 # AndroidX uses the same option for screenshot outputs:
 # https://android.googlesource.com/platform/frameworks/support/+/eb74b1a4b3527414639994574a201f125aff90f5
-timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true -Pandroid.testInstrumentationRunnerArguments.maffinet.expectedNotificationPermission=granted --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+check_denied_notifications

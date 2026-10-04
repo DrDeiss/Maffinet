@@ -1,5 +1,18 @@
 # Recorded Android interface
 
+## Automatic Access, Android 16
+
+The current unedited API36 Google APIs x86_64 Activity captures come from source
+`8266a409f085a6e1050a5d54400ff199cb1de207`, passing
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071).
+[Home](automatic-access-api36/03-home.png) shows the common connection button and
+application picker; [Strategies](automatic-access-api36/05-strategies.png) shows
+the default general automatic mode and retained manual diagnostics.
+[SHA256SUMS](automatic-access-api36/SHA256SUMS) records the original image hashes.
+These emulator captures do not certify connectivity on the physical phone.
+
+## Earlier independent-mode baseline, Android 10
+
 These are original, unedited UIAutomation captures from the real Activity on an
 AOSP API29 x86_64 Pixel emulator, portrait 1080×1920 with three-button navigation.
 Source: `34ed3a1d13d55ab8c25f21c6042a930dd85842c5`.

@@ -1,0 +1,80 @@
+{
+  "applicationId": "io.maffinet.android",
+  "version": "0.3.1-alpha",
+  "versionCode": 4,
+  "variant": "debug",
+  "minSdk": 26,
+  "targetSdk": 36,
+  "compileSdk": 36,
+  "sourceCommit": "f596fe954c5fbafea40f270ec3bc4251f6a4847a",
+  "sourceUrl": "https://github.com/DrDeiss/Maffinet/commit/f596fe954c5fbafea40f270ec3bc4251f6a4847a",
+  "ciRun": "https://github.com/DrDeiss/Maffinet/actions/runs/37205002273",
+  "file": "Maffinet-0.3.1-alpha-debug.apk",
+  "bytes": 30744743,
+  "sha256": "b3044c160e8841b4024602c225699602128a51fa408df12bce237e608d303707",
+  "signature": {
+    "scheme": "v2",
+    "verified": true,
+    "certificateSha256": "4674e6c303c1a766b57216096d29395b65b2330fb5aac9e0dfecfff4199601f2",
+    "nonSignaturePayloadMatchesCi": true
+  },
+  "nativeAbis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "nativeZipAlignmentBytes": 16384,
+  "validation": {
+    "standaloneJvmNativeParser": {
+      "tests": 158,
+      "failures": 0,
+      "skipped": 0
+    },
+    "localStandaloneJvm": {
+      "tests": 158,
+      "failures": 0,
+      "skipped": 7
+    },
+    "androidJvm": {
+      "tests": 156,
+      "failures": 0,
+      "skipped": 0
+    },
+    "automaticNativeSocketCases": 21,
+    "streamingNativeCases": 12,
+    "nativeInvalidValueChecks": 4,
+    "pooledBufferSanitizers": {
+      "address": true,
+      "undefinedBehavior": true,
+      "leakDetection": true,
+      "passed": true
+    },
+    "api29Instrumentation": { "tests": 26, "passed": 25, "failures": 0, "skipped": 1, "skipReason": "Notification permission requires Android 13+" },
+    "api36Instrumentation": { "tests": 26, "passed": 26, "failures": 0, "skipped": 0 },
+    "api36NotificationsDenied": { "tests": 1, "passed": 1, "failures": 0, "skipped": 0 },
+    "lintErrors": 0,
+    "lintWarnings": 140,
+    "lintHints": 5,
+    "physicalDeviceAcceptance": "Installed on OnePlus CPH2747 Android 16; manual strategy loaded LinkedIn feed, ordinary-SNI Auto probe loaded full anonymous response, but actual app remained loading; control example.com rejected before TLS. Follow-up 0.3.2 records ECH exclusion and fixes control host."
+  },
+  "scope": {
+    "defaultMode": "Automatic Access",
+    "dnsEvidence": "saved / assigned-to-VPN / physical / active Private DNS separated; app-owned DoH/DoT and actual query resolver unknown",
+    "dnsProbe": "direct plaintext IPv4 A query over physical-network UDP; TCP only after truncated UDP; example.com control plus observed recovery hostname evidence",
+    "controlHttpsProbe": "Intended hostname/certificate/body check did not run for example.com: hostname policy rejected it before TLS. Fixed in 0.3.2; this artifact retains the defect.",
+    "dnsSettings": "never rewritten automatically",
+    "externalServer": false
+  },
+  "limitations": [
+    "Control checks do not intercept or observe selected applications' DNS traffic",
+    "DoH/DoT not tested; physical plain-DNS probes do not prove the VPN query path",
+    "IPv6-only resolver/destination recovery remains unsupported",
+    "DNS NXDOMAIN/sinkhole recovery before TLS is not implemented",
+    "ECH including GREASE is excluded from host-route learning; QUIC is forwarded unchanged",
+    "Routes apply to subsequent connections without replaying app requests",
+    "Real OnePlus LinkedIn automatic-access acceptance failed; control-host defect present in this artifact",
+    "Complete 16 KiB-page runtime compatibility remains unverified"
+  ],
+  "artifactNote": "CI's internal APK filename retained 0.3.0; compiled manifest is 0.3.1 (4). Delivered file renamed; archive basename corrected separately without changing runtime payload."
+}

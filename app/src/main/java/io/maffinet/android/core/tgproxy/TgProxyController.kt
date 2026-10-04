@@ -117,22 +117,21 @@ object TgProxyController {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val operations = Mutex()
-    private val generation = java.util.concurrent.atomic.AtomicLong()
     private val state = MutableStateFlow(ModeConnectionState.Stopped)
+    private val lifecycle = ProxyLifecycleState { state.value = it }
     val status: StateFlow<ModeConnectionState> = state.asStateFlow()
     @Volatile private var nativeStarted = false
     @Volatile private var boundPort = DEFAULT_PORT
     val hasResources: Boolean get() = nativeStarted
 
-    internal fun markStartRequested() { state.value = ModeConnectionState.Starting }
+    internal fun markStartRequested() { lifecycle.beginStart() }
 
     fun startAsync(context: Context, onSuccess: () -> Unit, onError: () -> Unit) {
-        val token = generation.incrementAndGet()
-        state.value = ModeConnectionState.Starting
+        val token = lifecycle.beginStart()
         val app = context.applicationContext
         scope.launch {
             operations.withLock {
-                if (token != generation.get()) return@withLock
+                if (!lifecycle.isCurrent(token)) return@withLock
                 try {
                     check(stopNative()) { "Previous Telegram proxy did not stop" }
                     boundPort = getPort(app)
@@ -145,19 +144,21 @@ object TgProxyController {
                     nativeStarted = true
                     val code = NativeProxy.startProxy(DEFAULT_BIND_IP, boundPort, getDcIps(app), getOrGenerateSecret(app), 1)
                     check(code == 0) { "Telegram proxy failed to bind (code $code)" }
-                    if (token != generation.get()) {
+                    if (!lifecycle.isCurrent(token)) {
                         stopNative()
                         return@withLock
                     }
                     check(isPortOpen(DEFAULT_BIND_IP, boundPort, 500)) { "Telegram proxy listener did not become ready" }
-                    state.value = ModeConnectionState.Running
+                    if (!lifecycle.publishIfCurrent(token, ModeConnectionState.Running)) {
+                        stopNative()
+                        return@withLock
+                    }
                     onSuccess()
                     monitorListener(token, onError)
                 } catch (error: Throwable) {
                     Log.e("TgProxyController", "Telegram proxy startup failed", error)
                     stopNative()
-                    if (token == generation.get()) {
-                        state.value = ModeConnectionState.Failed
+                    if (lifecycle.publishIfCurrent(token, ModeConnectionState.Failed)) {
                         onError()
                     }
                 }
@@ -167,15 +168,14 @@ object TgProxyController {
 
     private fun monitorListener(token: Long, onError: () -> Unit) {
         scope.launch {
-            while (token == generation.get() && nativeStarted) {
+            while (lifecycle.isCurrent(token) && nativeStarted) {
                 delay(1_000)
-                if (token != generation.get()) return@launch
+                if (!lifecycle.isCurrent(token)) return@launch
                 if (!isPortOpen(DEFAULT_BIND_IP, boundPort, 500)) {
                     operations.withLock {
-                        if (token != generation.get()) return@withLock
+                        if (!lifecycle.isCurrent(token)) return@withLock
                         stopNative()
-                        state.value = ModeConnectionState.Failed
-                        onError()
+                        if (lifecycle.publishIfCurrent(token, ModeConnectionState.Failed)) onError()
                     }
                     return@launch
                 }
@@ -184,15 +184,16 @@ object TgProxyController {
     }
 
     fun stop(preserveFailure: Boolean = false, onStopped: () -> Unit = {}) {
-        val token = generation.incrementAndGet() // Invalidates readiness before dispatching STOP.
-        val keepFailed = preserveFailure && state.value == ModeConnectionState.Failed
-        if (!keepFailed) state.value = ModeConnectionState.Stopping
+        // Allocate ownership and publish Stopping together: an older caller must not
+        // overwrite a newer STOP's already-completed state after being preempted.
+        val request = lifecycle.beginStop(preserveFailure, nativeStarted)
+        val token = request.generation
         scope.launch {
             operations.withLock {
-                if (token != generation.get()) return@withLock
+                if (!lifecycle.isCurrent(token)) return@withLock
                 val clean = stopNative()
-                if (token == generation.get()) {
-                    state.value = if (clean && !keepFailed) ModeConnectionState.Stopped else ModeConnectionState.Failed
+                val terminal = if (clean && !request.keepFailure) ModeConnectionState.Stopped else ModeConnectionState.Failed
+                if (lifecycle.publishIfCurrent(token, terminal)) {
                     onStopped()
                 }
             }

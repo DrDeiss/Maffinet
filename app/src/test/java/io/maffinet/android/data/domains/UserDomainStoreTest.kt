@@ -50,4 +50,22 @@ class UserDomainStoreTest {
         assertTrue(repository.saveUserDomains("edited.org").isValid)
         assertEquals(listOf("edited.org"), repository.userDomains())
     }
+
+    @Test fun hostsImportMergesDomainsButAnyInvalidAliasPreservesTheEntireFile() {
+        val file = File(temporary.root, "user.txt")
+        val repository = UserDomainRepository(FileUserDomainStore(file))
+        repository.saveUserDomains("saved.org")
+        assertTrue(repository.importUserDomains("\uFEFF176.99.11.77 first.net FIRST.NET second.org # aliases\n" +
+            "2001:4860:4860::8888 ipv6.org\n0.0.0.0 tracker.net\n127.0.0.1 blocked.net localhost").isValid)
+        assertEquals(listOf("saved.org", "first.net", "second.org", "ipv6.org"), repository.userDomains())
+        val previous = file.readBytes()
+        val invalid = repository.importUserDomains("176.99.11.77 new.org\n2001:4860:4860::8888 valid.net https://bad.net")
+        assertFalse(invalid.isValid)
+        assertEquals(2, invalid.errors.single().line)
+        assertArrayEquals(previous, file.readBytes())
+        assertFalse(repository.importUserDomains("<html>not a hosts file</html>").isValid)
+        assertArrayEquals(previous, file.readBytes())
+        assertTrue(repository.importUserDomains("# no domains\n0.0.0.0 blocked.net").isValid)
+        assertArrayEquals(previous, file.readBytes())
+    }
 }

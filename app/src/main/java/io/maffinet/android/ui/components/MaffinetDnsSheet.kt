@@ -1,5 +1,15 @@
 package io.maffinet.android.ui.components
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.widget.Toast
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Spring
@@ -31,6 +41,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -81,6 +93,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Density
+import io.maffinet.android.core.dns.DnsCatalog
+import io.maffinet.android.core.dns.DnsMode
+import io.maffinet.android.core.dns.DnsPreset
+import io.maffinet.android.core.dns.DnsPurpose
 
 private val SheetBackground = Color(0xFF10232D)
 private val ButtonBackground = Color(0xFF262626)
@@ -124,18 +140,103 @@ fun MaffinetDnsSheet(
 
     val transition = updateTransition(targetState = visible, label = "DnsSheetTransition")
     val lazyListState = rememberLazyListState()
+    var purpose by remember { mutableStateOf(DnsPurpose.GEO_ACCESS) }
+    val visibleDnsList = remember(dnsList, purpose) { DnsPresets.forPurpose(dnsList, purpose) }
+    var showCustomEditor by remember { mutableStateOf(false) }
+    var customInput by remember { mutableStateOf("") }
+    var externalPreset by remember { mutableStateOf<DnsPreset?>(null) }
+    val resolvedSelection = DnsCatalog.resolve(selectedDnsPreset)
+    val selectedId = if (resolvedSelection.id.startsWith("custom:")) DnsCatalog.CUSTOM_ID else resolvedSelection.id
+    val displayedSubtitle = if (visibleDnsList.none { it == selectedId })
+        "$subtitle\nВыбрано: ${DnsCatalog.selectionLabel(selectedDnsPreset)}" else subtitle
+    val selectPreset: (String) -> Unit = { presetId ->
+        if (presetId == DnsCatalog.CUSTOM_ID) {
+            customInput = DnsCatalog.customInput(selectedDnsPreset)
+            showCustomEditor = true
+        } else {
+            val preset = DnsCatalog.resolve(presetId)
+            if (preset.mode == DnsMode.PRIVATE_DNS || preset.mode == DnsMode.PROVIDER_SETTINGS) {
+                externalPreset = preset
+            } else {
+                onPresetSelected(preset.id)
+            }
+        }
+    }
 
-    val focusRequesters = remember(dnsList) { List(dnsList.size) { FocusRequester() } }
+    val focusRequesters = remember(visibleDnsList) { List(visibleDnsList.size) { FocusRequester() } }
     val closeFocusRequester = remember { FocusRequester() }
 
-    LaunchedEffect(visible) {
+    LaunchedEffect(visible, purpose, visibleDnsList) {
         if (visible) {
-            delay(150)
             try {
-                val selectedIndex = dnsList.indexOfFirst { it == selectedDnsPreset }.coerceAtLeast(0)
+                val selectedIndex = visibleDnsList.indexOfFirst { it == selectedId }.coerceAtLeast(0)
+                lazyListState.scrollToItem(selectedIndex)
+                delay(150)
                 focusRequesters.getOrNull(selectedIndex)?.requestFocus()
             } catch (_: Exception) {}
+        } else {
+            showCustomEditor = false
+            externalPreset = null
         }
+    }
+
+    if (visible && showCustomEditor) {
+        val customSelection = DnsCatalog.customSelection(customInput)
+        AlertDialog(
+            onDismissRequest = { showCustomEditor = false },
+            title = { Text("Свой IPv4 DNS") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("От 1 до 4 IPv4-адресов через пробел или запятую. DNS применяется к выбранным приложениям в VPN без шифрования.")
+                    MaffinetTextField(customInput, { customInput = it }, label = "DNS-серверы",
+                        placeholder = "1.1.1.1, 1.0.0.1", modifier = Modifier.fillMaxWidth().testTag("custom-dns-input"))
+                    if (customInput.isNotBlank() && customSelection == null) {
+                        Text("Введите корректные IPv4-адреса, например 1.1.1.1. Имена хостов, URL и IPv6 здесь не поддерживаются.",
+                            color = Color(0xFFFFB4AB))
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(enabled = customSelection != null, onClick = {
+                    customSelection?.let(onPresetSelected)
+                    showCustomEditor = false
+                }, modifier = Modifier.testTag("custom-dns-save")) { Text("Применить") }
+            },
+            dismissButton = { TextButton(onClick = { showCustomEditor = false }) { Text("Отмена") } },
+        )
+    }
+    externalPreset?.takeIf { visible }?.let { preset ->
+        val isPrivateDns = preset.mode == DnsMode.PRIVATE_DNS
+        AlertDialog(
+            onDismissRequest = { externalPreset = null },
+            title = { Text(preset.label) },
+            text = {
+                Text(if (isPrivateDns) {
+                    "${preset.description}\n\nИмя хоста: ${preset.privateDnsHostname}\n\n" +
+                        if (Build.VERSION.SDK_INT >= 28) "Имя будет скопировано. В настройках Android выберите имя хоста поставщика Private DNS и вставьте его. Это системная настройка для всего устройства; приложение не включает её автоматически. Выбранный IPv4 DNS для VPN сохранится."
+                        else "Системный Private DNS доступен начиная с Android 9. Используйте IPv4-профиль другого поставщика в VPN."
+                } else "Актуальные DNS-адреса GeoHide зависят от региона. Откройте сайт поставщика и внесите опубликованные IPv4-адреса через «Свой IPv4 DNS» либо настройте Private DNS в Android.")
+            },
+            confirmButton = {
+                TextButton(enabled = !isPrivateDns || Build.VERSION.SDK_INT >= 28, onClick = {
+                    if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+                        if (isPrivateDns) {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("Private DNS", preset.privateDnsHostname))
+                            val opened = runCatching {
+                                context.startActivity(Intent("android.settings.PRIVATE_DNS_SETTINGS"))
+                            }.isSuccess || runCatching { context.startActivity(Intent(Settings.ACTION_WIRELESS_SETTINGS)) }.isSuccess
+                            if (!opened) Toast.makeText(context, "Имя скопировано. Откройте Private DNS в настройках сети Android.", Toast.LENGTH_LONG).show()
+                        } else {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(preset.sourceUrl))) }
+                                .onFailure { Toast.makeText(context, "Откройте ${preset.sourceUrl} в браузере", Toast.LENGTH_LONG).show() }
+                        }
+                    }
+                    externalPreset = null
+                }) { Text(if (isPrivateDns) "Скопировать и открыть" else "Открыть сайт") }
+            },
+            dismissButton = { TextButton(onClick = { externalPreset = null }) { Text("Отмена") } },
+        )
     }
 
     if (transition.currentState || transition.targetState) {
@@ -333,7 +434,7 @@ fun MaffinetDnsSheet(
                             )
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                text = subtitle,
+                                text = displayedSubtitle,
                                 color = TextSecondary,
                                 fontSize = 12.sp,
                                 textAlign = TextAlign.Center,
@@ -349,16 +450,18 @@ fun MaffinetDnsSheet(
                             )
                         }
 
-                        Box(
+                        Column(
                             modifier = Modifier
                                 .weight(1.2f)
                                 .fillMaxHeight()
                                 .graphicsLayer { alpha = dnsListProgress }
                         ) {
+                            DnsPurposeFilters(purpose, onPurposeSelected = { purpose = it })
+                            Spacer(Modifier.height(8.dp))
                             val density = LocalDensity.current
-                            val totalHeight = 60.dp * dnsList.size
+                            val totalHeight = 92.dp * visibleDnsList.size
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().weight(1f),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                             ) {
                                 LazyColumn(
@@ -366,20 +469,20 @@ fun MaffinetDnsSheet(
                                     modifier = Modifier.weight(1f).testTag("dns-preset-list"),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    items(dnsList.size) { index ->
-                                        val preset = dnsList[index]
+                                    items(visibleDnsList.size) { index ->
+                                        val preset = visibleDnsList[index]
                                         DnsOptionButton(
                                             preset = preset,
-                                            selected = preset == selectedDnsPreset,
+                                            selected = preset == selectedId,
                                             focusRequester = focusRequesters[index],
-                                            onSelected = { onPresetSelected(preset) }
+                                            onSelected = { selectPreset(preset) }
                                         )
                                     }
                                 }
                                 DnsCustomScrollbar(
                                     state = lazyListState,
                                     totalEstimatedHeight = with(density) { totalHeight.toPx() },
-                                    itemHeight = with(density) { 52.dp.toPx() },
+                                    itemHeight = with(density) { 84.dp.toPx() },
                                     spacing = with(density) { 8.dp.toPx() },
                                     density = density
                                 )
@@ -453,7 +556,7 @@ fun MaffinetDnsSheet(
                                 )
                                 Spacer(Modifier.height(6.dp))
                                 Text(
-                                    text = subtitle,
+                                    text = displayedSubtitle,
                                     color = TextSecondary,
                                     fontSize = 13.sp,
                                     textAlign = TextAlign.Center,
@@ -462,6 +565,8 @@ fun MaffinetDnsSheet(
                             }
 
                             Spacer(Modifier.height(20.dp))
+                            DnsPurposeFilters(purpose, onPurposeSelected = { purpose = it })
+                            Spacer(Modifier.height(8.dp))
 
                             Box(
                                 modifier = Modifier
@@ -473,7 +578,7 @@ fun MaffinetDnsSheet(
                                     }
                             ) {
                                 val density = LocalDensity.current
-                                val totalHeight = 60.dp * dnsList.size
+                                val totalHeight = 92.dp * visibleDnsList.size
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -483,20 +588,20 @@ fun MaffinetDnsSheet(
                                         modifier = Modifier.weight(1f).testTag("dns-preset-list"),
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
-                                        items(dnsList.size) { index ->
-                                            val preset = dnsList[index]
+                                        items(visibleDnsList.size) { index ->
+                                            val preset = visibleDnsList[index]
                                             DnsOptionButton(
                                                 preset = preset,
-                                                selected = preset == selectedDnsPreset,
+                                                selected = preset == selectedId,
                                                 focusRequester = focusRequesters[index],
-                                                onSelected = { onPresetSelected(preset) }
+                                                onSelected = { selectPreset(preset) }
                                             )
                                         }
                                     }
                                     DnsCustomScrollbar(
                                         state = lazyListState,
                                         totalEstimatedHeight = with(density) { totalHeight.toPx() },
-                                        itemHeight = with(density) { 52.dp.toPx() },
+                                        itemHeight = with(density) { 84.dp.toPx() },
                                         spacing = with(density) { 8.dp.toPx() },
                                         density = density
                                     )
@@ -522,6 +627,26 @@ fun MaffinetDnsSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun DnsPurposeFilters(purpose: DnsPurpose, onPurposeSelected: (DnsPurpose) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        listOf(DnsPurpose.GEO_ACCESS to "Обход геоблокировок", DnsPurpose.GENERAL to "Обычные DNS").forEach { (value, label) ->
+            FilterChip(
+                selected = purpose == value,
+                onClick = { onPurposeSelected(value) },
+                label = { Text(label, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, maxLines = 2) },
+                modifier = Modifier.weight(1f).testTag(if (value == DnsPurpose.GEO_ACCESS) "dns-purpose-geo" else "dns-purpose-general"),
+                colors = FilterChipDefaults.filterChipColors(
+                    containerColor = ButtonBackground,
+                    labelColor = TextSecondary,
+                    selectedContainerColor = Color(0xFF284451),
+                    selectedLabelColor = TextPrimary,
+                ),
+            )
         }
     }
 }
@@ -574,7 +699,9 @@ private fun DnsOptionButton(
     focusRequester: FocusRequester,
     onSelected: () -> Unit
 ) {
-    val cleanLabel = preset.substringBefore(" (")
+    val entry = DnsCatalog.resolve(preset)
+    val label = if (preset == DnsCatalog.CUSTOM_ID) "Свой IPv4 DNS" else entry.label
+    val detail = if (preset == DnsCatalog.CUSTOM_ID) "Ввести от 1 до 4 адресов DNS-серверов" else entry.detail
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     var isFocused by remember { mutableStateOf(false) }
@@ -614,7 +741,7 @@ private fun DnsOptionButton(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(52.dp)
+            .height(84.dp)
             .focusRequester(focusRequester)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
@@ -645,13 +772,13 @@ private fun DnsOptionButton(
             .background(currentBgColor, RoundedCornerShape(11.dp)),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = cleanLabel,
-            color = currentTextColor,
-            fontSize = 14.sp,
-            fontWeight = if (selected || finalActive) FontWeight.Bold else FontWeight.Medium,
-            textAlign = TextAlign.Center
-        )
+        Column(modifier = Modifier.padding(horizontal = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(text = label, color = currentTextColor, fontSize = 13.sp,
+                fontWeight = if (selected || finalActive) FontWeight.Bold else FontWeight.Medium,
+                textAlign = TextAlign.Center, maxLines = 2)
+            Text(text = detail, color = TextSecondary, fontSize = 10.sp, lineHeight = 12.sp,
+                textAlign = TextAlign.Center, maxLines = 3)
+        }
     }
 }
 

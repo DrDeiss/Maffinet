@@ -12,6 +12,7 @@ kotlin {
             kotlin.include(
                 "io/maffinet/android/core/domains/DomainList.kt",
                 "io/maffinet/android/core/domains/DomainParser.kt",
+                "io/maffinet/android/core/domains/DomainSourceDownloader.kt",
                 "io/maffinet/android/core/domains/BuiltInDomainLists.kt",
                 "io/maffinet/android/core/domains/LegacyStrategyAliases.kt",
                 "io/maffinet/android/data/domains/UserDomainStore.kt",
@@ -21,19 +22,40 @@ kotlin {
                 "io/maffinet/android/core/strategy/StrategyEvaluation.kt",
                 "io/maffinet/android/core/strategy/DefaultStrategyCatalog.kt",
                 "io/maffinet/android/core/strategy/ProbeTargets.kt",
+                "io/maffinet/android/core/strategy/HttpProbeBodyValidator.kt",
+                "io/maffinet/android/core/access/HostAccessPolicy.kt",
+                "io/maffinet/android/core/access/RouteHintRegistry.kt",
+                "io/maffinet/android/core/access/HostAccessDecisionCache.kt",
+                "io/maffinet/android/core/access/HostAccessRecovery.kt",
+                "io/maffinet/android/core/access/HostAccessWorkQueue.kt",
+                "io/maffinet/android/core/access/AccessSessionLifecycle.kt",
+                "io/maffinet/android/core/access/AutomaticAccessArguments.kt",
+                "io/maffinet/android/core/access/AutomaticAccessStatus.kt",
+                "io/maffinet/android/core/access/DnsCheckEvidence.kt",
+                "io/maffinet/android/core/access/DnsControlProbe.kt",
+                "io/maffinet/android/core/access/DnsProbeResolver.kt",
+                "io/maffinet/android/core/access/GenericHttpsProbe.kt",
                 "io/maffinet/android/core/connection/ConnectionModes.kt",
+                "io/maffinet/android/core/tgproxy/ProxyLifecycleState.kt",
+                "io/maffinet/android/core/dns/**",
+                "io/maffinet/android/ui/components/DnsPresets.kt",
             )
         }
         test {
             kotlin.srcDir("../app/src/test/java")
             kotlin.include(
                 "io/maffinet/android/core/domains/**",
+                "io/maffinet/android/core/dns/**",
+                "io/maffinet/android/ui/components/DnsPresetsTest.kt",
                 "io/maffinet/android/core/dpibypass/ByeDpiArgumentCompilerTest.kt",
                 "io/maffinet/android/data/domains/UserDomainStoreTest.kt",
                 "io/maffinet/android/core/services/**",
                 "io/maffinet/android/core/strategy/StrategyScorerTest.kt",
                 "io/maffinet/android/core/strategy/ProbeTargetsTest.kt",
+                "io/maffinet/android/core/strategy/HttpProbeBodyValidatorTest.kt",
+                "io/maffinet/android/core/access/**",
                 "io/maffinet/android/core/connection/ConnectionModesTest.kt",
+                "io/maffinet/android/core/tgproxy/ProxyLifecycleStateTest.kt",
                 "io/maffinet/verification/**",
             )
         }

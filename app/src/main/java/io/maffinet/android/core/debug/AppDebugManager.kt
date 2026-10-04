@@ -173,10 +173,27 @@ object AppDebugManager {
             sb.append("Режим Telegram: ${settings.telegramEnabled()}, состояние: ${io.maffinet.android.core.tgproxy.TgProxyController.status.value}\n")
             if (settings.applicationsEnabled()) {
                 val manualMode = prefs.getBoolean("strategy_manual_mode", false)
-                val byedpiArgs = prefs.getString("byedpi_cmd_args", "")
-                sb.append("Стратегия: ${if (manualMode) "Вручную" else "Авто"}\n")
+                sb.append("Стратегия: ${if (settings.automaticAccessEnabled()) "Автоматический доступ" else if (manualMode) "Вручную" else "Подбор ручной стратегии"}\n")
                 sb.append("DNS для VPN: ${prefs.getString("custom_dns_preset", "Стандартный (Отключено)")}\n")
-                sb.append("Аргументы ByeDpi: \"$byedpiArgs\"\n")
+                val commandMode = prefs.getBoolean("byedpi_enable_cmd_settings", false)
+                sb.append("Источник стратегии: ${if (settings.automaticAccessEnabled()) "автоматическая цепочка" else if (commandMode) "команда" else "параметры обхода"}\n")
+                val effectiveArguments = runCatching {
+                    val arguments = when (val configuration = io.maffinet.android.core.dpibypass.ByeDpiProxyPreferences.fromSharedPreferences(prefs, context)) {
+                        is io.maffinet.android.core.dpibypass.ByeDpiProxyCmdPreferences -> configuration.args
+                        is io.maffinet.android.core.dpibypass.ByeDpiProxyUIPreferences -> configuration.uiargs
+                        is io.maffinet.android.core.dpibypass.ByeDpiAutomaticPreferences -> configuration.args
+                    }
+                    arguments.mapIndexed { index, argument ->
+                        // Report the actual strategy without copying private User host lists.
+                        if (index > 0 && arguments[index - 1] == "-H") "<список доменов>" else argument
+                    }.joinToString(" ")
+                }.getOrElse { "Не удалось собрать аргументы: ${it.message}" }
+                sb.append("Аргументы основной стратегии ByeDPI: $effectiveArguments\n")
+                sb.append("Автоматический доступ: ${if (settings.automaticAccessEnabled()) "включён" else "выключен"}\n")
+                if (settings.automaticAccessEnabled()) {
+                    val access = io.maffinet.android.core.access.AutomaticAccessController.status.value
+                    sb.append("Проверка доступа: ${access.phase}, очередь: ${access.queuedHosts}, маршрутов: ${access.appliedRoutes}\n")
+                }
                 val allowedApps = prefs.getStringSet("selected_apps", null)
                 if (allowedApps != null) {
                     sb.append("Выбранные приложения для VPN (${allowedApps.size}): ${allowedApps.joinToString(", ")}\n")

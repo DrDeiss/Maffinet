@@ -126,7 +126,7 @@ class MaffinetUiSmokeTest {
         saveScreenshot("17-hosts-general")
         compose.onNodeWithText("Скрыть General").performScrollTo().performClick()
 
-        navigate("Стратегии", "Auto strategy")
+        navigate("Стратегии", "Автоматический доступ")
         compose.onNodeWithText("Проверить стратегии").performScrollTo().assertIsDisplayed()
         saveScreenshot("05-strategies")
 
@@ -189,6 +189,9 @@ class MaffinetUiSmokeTest {
         compose.onNodeWithText("Готово").performClick()
         compose.onNodeWithText("DNS").performScrollTo().performClick()
         waitForText("DNS для VPN")
+        compose.onNodeWithTag("dns-preset-list").performScrollToNode(hasText("GeoHide: Россия"))
+        compose.onNodeWithText("GeoHide: Россия").assertIsDisplayed()
+        compose.onNodeWithTag("dns-purpose-general").performClick()
         saveScreenshot("14-dns-selection")
         compose.onNodeWithTag("dns-preset-list").performScrollToNode(hasText("Google Public DNS"))
         compose.onNodeWithText("Google Public DNS").performClick()
@@ -196,7 +199,7 @@ class MaffinetUiSmokeTest {
         waitForText("Подключиться")
         compose.onNodeWithText("Google Public DNS").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("DNS применяется к VPN для выбранных приложений.").performScrollTo().assertIsDisplayed()
-        check(preferences.getString("custom_dns_preset", "") == "Google Public DNS")
+        check(preferences.getString("custom_dns_preset", "") == "google")
         check(preferences.getStringSet("selected_apps", emptySet()) == setOf("com.android.settings"))
         saveScreenshot("15-home-dns")
         compose.onNodeWithText("Настройки Telegram").performScrollTo().performClick()
@@ -213,7 +216,7 @@ class MaffinetUiSmokeTest {
         replaceDomains("EXAMPLE.COM\nsub.example.org\nexample.com")
         saveDomains()
         waitForText("Сохранено доменов: 2")
-        compose.onNode(hasSetTextAction()).assertTextContains(SAVED_DOMAINS)
+        compose.onNodeWithTag("domain-editor").assertTextContains(SAVED_DOMAINS)
         saveScreenshot("10-domains-saved")
 
         replaceDomains("https://example.com/path")
@@ -227,7 +230,7 @@ class MaffinetUiSmokeTest {
         waitForText("Подключиться")
         openDomainEditor()
         compose.onNode(isToggleable()).performScrollTo().assertIsOff()
-        compose.onNode(hasSetTextAction()).performScrollTo().assertTextContains(SAVED_DOMAINS)
+        compose.onNodeWithTag("domain-editor").performScrollTo().assertTextContains(SAVED_DOMAINS)
         saveScreenshot("12-domains-restored")
     }
 
@@ -277,8 +280,13 @@ class MaffinetUiSmokeTest {
     }
 
     private fun navigate(label: String, destinationText: String) {
+        compose.waitUntil(timeoutMillis = 20_000) {
+            // The navigation entrance starts after the splash; semantics can exist at alpha zero.
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithContentDescription(label).isDisplayed()
+        }
         compose.onNodeWithContentDescription(label).assertIsDisplayed().performClick()
-        waitForText(destinationText)
+        waitForDisplayedText(destinationText)
         compose.onNodeWithText(destinationText).assertIsDisplayed()
     }
 
@@ -299,11 +307,11 @@ class MaffinetUiSmokeTest {
         navigate("Настройки", "Основные настройки и дополнительные возможности.")
         compose.onNodeWithText("Hosts").performScrollTo().performClick()
         waitForText("User · ваши домены")
-        compose.onNode(hasSetTextAction()).assertExists()
+        compose.onNodeWithTag("domain-editor").assertExists()
     }
 
     private fun replaceDomains(text: String) {
-        compose.onNode(hasSetTextAction()).performScrollTo().performTextReplacement(text)
+        compose.onNodeWithTag("domain-editor").performScrollTo().performTextReplacement(text)
         closeSoftKeyboard()
     }
 

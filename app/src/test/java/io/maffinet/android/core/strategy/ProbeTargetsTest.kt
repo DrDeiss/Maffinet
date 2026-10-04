@@ -53,4 +53,12 @@ class ProbeTargetsTest {
         assertNotEquals(fingerprint(), fingerprint(mode = "whitelist", hosts = "custom.org"))
         assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s2")))
     }
+
+    @Test fun manualCandidateAndDomainOrderChangesPreserveOrInvalidateTheActualProbeInputs() {
+        assertEquals(fingerprint(active = listOf("example.com", "custom.org")),
+            fingerprint(active = listOf("custom.org", "example.com")))
+        // Candidate order determines tie-breaking and each row's stored index.
+        assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s1", "-o1")))
+        assertNotEquals(fingerprint(), fingerprint(hosts = "custom.org", mode = "blacklist"))
+    }
 }

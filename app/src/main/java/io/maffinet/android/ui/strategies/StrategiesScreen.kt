@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import io.maffinet.android.core.dpibypass.StrategyTestManager
@@ -25,6 +26,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     var editTargets by remember { mutableStateOf(false) }
     var targetText by remember { mutableStateOf("") }
     var targetError by remember { mutableStateOf<String?>(null) }
+    var routeError by remember { mutableStateOf<String?>(null) }
     val locked = rememberConfigurationLocked()
     DisposableEffect(preferences) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
@@ -33,7 +35,9 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     }
     LaunchedEffect(revision) { StrategyTestManager.refreshConfiguration(context) }
     val urls = remember(revision) { targets.urls() }
+    val automaticAccess = remember(revision) { settings.automaticAccessEnabled() }
     val applied = settings.getString("byedpi_cmd_args", "")
+        .takeIf { !automaticAccess && settings.getBoolean("byedpi_enable_cmd_settings", false) }
     val current = StrategyTestManager.historyMatchesCurrentConfiguration(context)
     val results = if (current) StrategyTestManager.matrixResults.values.sortedWith(StrategyScorer.comparator) else emptyList()
 
@@ -63,9 +67,28 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
         dismissButton = { TextButton({ editTargets = false }) { Text("Отмена") } },
     )
 
-    ProductScreen("Стратегии", focusRequester, subtitle = "Auto проверяет заданные адреса с текущими Hosts и выбирает лучший результат.") {
+    ProductScreen("Стратегии", focusRequester, subtitle = "Для обычного подключения достаточно выбрать приложения на главном экране. Здесь доступны режим и диагностика.") {
         ProductCard {
-            Text("Auto strategy", style = MaterialTheme.typography.titleLarge)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Автоматический доступ", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Switch(checked = automaticAccess, onCheckedChange = { enabled ->
+                    try {
+                        settings.setAutomaticAccessEnabled(enabled)
+                        routeError = null
+                        StrategyTestManager.refreshConfiguration(context)
+                    } catch (error: Exception) { routeError = error.message ?: "Не удалось сохранить режим" }
+                }, enabled = !locked)
+            }
+            Text("Подбирает обход для соединений выбранных приложений. При сбое проверяет DNS и доступные Smart DNS, сохраняя проверенный маршрут для этой сети.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Неизвестные домены тоже проверяются. Ручные стратегии и Hosts сохраняются для экспертного режима.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (locked) Text("Остановите подключение и проверку стратегий, чтобы изменить режим.", style = MaterialTheme.typography.bodySmall)
+            routeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+        ProductCard {
+            Text("Диагностика ручных стратегий", style = MaterialTheme.typography.titleLarge)
+            if (automaticAccess) Text("Проверка отдельных рецептов не меняет автоматический режим. Выбор результата вручную включает экспертный режим.", style = MaterialTheme.typography.bodySmall)
             Text("Проверочных адресов: ${urls.size}")
             urls.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             OutlinedButton(onClick = {
@@ -81,7 +104,6 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                 OutlinedButton({ StrategyTestManager.cancelTesting() }, Modifier.fillMaxWidth()) { Text("Остановить проверку") }
             } else {
                 Button(onClick = {
-                    settings.setBoolean("strategy_manual_mode", false)
                     StrategyTestManager.startTesting(context)
                 }, Modifier.fillMaxWidth(), enabled = urls.isNotEmpty()) { Text("Проверить стратегии") }
             }
@@ -90,7 +112,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
             }
             Text("Выбор приложений и режима Telegram не меняет проверку. Каждый адрес проверяется через локальный SOCKS/ByeDPI; DNS-пресет относится к VPN.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Это HTTP/TLS-проверки сайтов, а не всех функций приложения. Успех требует HTTP 200–399; защита сайта может давать ложный отрицательный результат.",
+            Text("Успех требует HTTP 200–399 и загрузки первых 64 КиБ тела либо всего меньшего ответа. Ответы без тела и редиректы допустимы. Проверка сайта не подтверждает работу всех API и функций приложения; защита сайта может давать ложный отрицательный результат.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (StrategyTestManager.hasStaleResults || !current) {
@@ -101,6 +123,10 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
             ProductCard {
                 Text(StrategyTestManager.getStrategyName(evaluation.command, context), style = MaterialTheme.typography.titleLarge)
                 Text("${evaluation.passedServices} / ${evaluation.totalServices} адресов прошли последнюю проверку")
+                if (!evaluation.fullyReachable && evaluation.passedServices > 0) {
+                    Text("Частичный результат: доступен для ручного выбора.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 evaluation.averageLatencyMs?.let { Text("Средняя задержка: $it мс", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 evaluation.services.forEach { targetGroup ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -108,8 +134,9 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                         Text(if (targetGroup.passed) "OK · ${targetGroup.latencyMs} мс" else "FAIL",
                             color = if (targetGroup.passed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                     }
-                    if (expandedCommand == evaluation.command) targetGroup.targets.forEach { target ->
-                        Text("${target.url}\n${target.httpStatus?.let { "HTTP $it" } ?: target.error ?: "Ответ не получен"}",
+                    targetGroup.targets.filter { !it.reachable || expandedCommand == evaluation.command }.forEach { target ->
+                        val details = listOfNotNull(target.httpStatus?.let { "HTTP $it" }, target.error).joinToString(" · ")
+                        Text("${target.url}\n${details.ifBlank { "Ответ не получен" }}",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
@@ -118,7 +145,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                     Button({
                         settings.setBoolean("strategy_manual_mode", true)
                         StrategyTestManager.applyStrategy(context, evaluation.candidateIndex + 1, evaluation.command)
-                    }, Modifier.weight(1f), enabled = !StrategyTestManager.isTesting) { Text(if (applied == evaluation.command) "Выбрана" else "Выбрать") }
+                    }, Modifier.weight(1f), enabled = !locked) { Text(if (applied == evaluation.command) "Выбрана" else "Выбрать") }
                 }
             }
         }

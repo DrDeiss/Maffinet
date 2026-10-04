@@ -1,9 +1,13 @@
 package io.maffinet.android
 
 import android.os.Bundle
+import android.os.Build
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.SystemBarStyle
@@ -124,6 +128,19 @@ import androidx.compose.animation.core.spring
 import androidx.compose.ui.graphics.drawscope.Stroke
 
 class MainActivity : ComponentActivity() {
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* Permission denial does not prevent the foreground VPN/proxy services. */ }
+
+    override fun onResume() {
+        super.onResume()
+        // An inexact watchdog alarm/Worker cannot always create an FGS from the
+        // background on Android 12+. A visible Activity can resume saved requests.
+        if (io.maffinet.android.data.settings.MaffinetSettingsRepository(this).anyModeRequested()) {
+            io.maffinet.android.core.connection.ConnectionCoordinator.recover(this)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         io.maffinet.android.core.debug.AppDebugManager.init(this)
         installSplashScreen()
@@ -148,6 +165,15 @@ class MainActivity : ComponentActivity() {
             val isSmartTv = prefs.getBoolean("is_smart_tv", false)
             var setupDone by remember { mutableStateOf(prefs.getBoolean("wizard_is_setup_complete", false)) }
             var selectedTab by remember { mutableIntStateOf(0) }
+
+            LaunchedEffect(onboardingCompleted, mainContentVisible) {
+                if (onboardingCompleted && mainContentVisible && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                    !prefs.getBoolean("notification_permission_requested", false)) {
+                    prefs.edit().putBoolean("notification_permission_requested", true).apply()
+                    notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+            }
 
             androidx.compose.runtime.DisposableEffect(prefs) {
                 val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { sharedPreferences, key ->
@@ -183,10 +209,12 @@ class MainActivity : ComponentActivity() {
             }
             LaunchedEffect(Unit) {
                 val activity = context as? android.app.Activity
-                val showMsg = activity?.intent?.getBooleanExtra("showUpdateInstalledMessage", false) ?: false
+                val showMsg = activity?.intent?.getBooleanExtra("showUpdateInstalledMessage", false) == true ||
+                    prefs.getBoolean("show_update_installed_message", false)
                 if (showMsg) {
                     android.widget.Toast.makeText(context, "Обновление установлено", android.widget.Toast.LENGTH_SHORT).show()
                     activity?.intent?.removeExtra("showUpdateInstalledMessage")
+                    prefs.edit().remove("show_update_installed_message").apply()
                 }
                 io.maffinet.android.core.dpibypass.StrategyTestManager.init(context)
                 if (io.maffinet.android.core.update.UpdateManager.isAutoUpdateEnabled(context)) {
@@ -194,10 +222,6 @@ class MainActivity : ComponentActivity() {
                 }
                 val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                 io.maffinet.android.data.performanceModeGlobal = prefs.getBoolean("performance_mode", false)
-                val settings = io.maffinet.android.data.settings.MaffinetSettingsRepository(context)
-                if (settings.anyModeRequested()) {
-                    io.maffinet.android.core.connection.ConnectionCoordinator.recover(context)
-                }
                 if (prefs.getBoolean("auto_connect_on_start", false)) {
                     io.maffinet.android.core.connection.ConnectionCoordinator.startSelected(context,
                         openTelegram = prefs.getBoolean("open_tg_on_connect", true))
@@ -218,7 +242,8 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         Scaffold(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize()
+                                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)),
                             containerColor = Color(0xFF08141B)
                         ) { innerPadding ->
                             val density = androidx.compose.ui.platform.LocalDensity.current

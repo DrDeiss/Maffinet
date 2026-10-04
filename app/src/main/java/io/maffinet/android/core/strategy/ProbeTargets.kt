@@ -53,7 +53,9 @@ object ProbeConfigurationFingerprint {
             digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8))
             digest.update(bytes)
         }
-        add("maffinet-http-probes-v2")
+        // StrategyTester compiles these manual candidates in either application
+        // mode. Automatic Access has its own independent policy/session cache.
+        add("maffinet-http-probes-v4-manual-body64k")
         urls.forEach(::add)
         add("lists")
         lists.sortedBy { it.id }.forEach { list ->

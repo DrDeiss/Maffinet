@@ -5,9 +5,12 @@ import android.content.ContextWrapper
 import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.strategy.ServiceConnectivityResult
+import io.maffinet.android.core.strategy.DefaultStrategyCatalog
 import io.maffinet.android.core.strategy.StrategyEvaluation
 import io.maffinet.android.core.strategy.TargetConnectivityResult
 import io.maffinet.android.data.domains.DomainListRepository
@@ -35,7 +38,10 @@ class StrategyConfigurationSmokeTest {
     private val settings by lazy { MaffinetSettingsRepository(context) }
     private val probes by lazy { ProbeTargetRepository(context) }
 
-    @Before fun prepare() { assertTrue(directory.mkdirs()) }
+    @Before fun prepare() {
+        assertTrue(directory.mkdirs())
+        settings.setAutomaticAccessEnabled(false) // Existing strategy cases exercise expert/manual arguments.
+    }
 
     @After fun restore() {
         context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE).edit().clear().commit()
@@ -56,6 +62,47 @@ class StrategyConfigurationSmokeTest {
         settings.setString("custom_dns_preset", "cloudflare")
         settings.setTelegramEnabled(false)
         assertEquals("App/profile/DNS/Telegram choices cannot change the SOCKS candidate check", before, probes.snapshot().fingerprint)
+    }
+
+    @Test fun automaticAccessWriteIsRejectedDuringStrategyGateAndAllowedAfterRelease() {
+        val preferences = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        val snapshot = preferences.all.mapValues { (_, value) -> if (value is Set<*>) value.toSet() else value }
+        var session: ServiceManager.StrategyTestSession? = null
+        try {
+            settings.setRequested(false, false)
+            settings.setAutomaticAccessEnabled(false)
+            val heldSession = ServiceManager.beginStrategyTest(context)
+            session = heldSession
+            assertFalse("The write must be blocked even without a desired connection", settings.anyModeRequested())
+            assertTrue(ServiceManager.isStrategyTestInProgress)
+            assertTrue(ConnectionCoordinator.isConfigurationLocked())
+            assertThrows(IllegalStateException::class.java) { settings.setAutomaticAccessEnabled(true) }
+            assertFalse("A rejected write must preserve the saved mode", settings.automaticAccessEnabled())
+
+            ServiceManager.finishStrategyTest(context, heldSession, nativeClean = true)
+            session = null
+            assertFalse(ServiceManager.isStrategyTestInProgress)
+            assertFalse(ConnectionCoordinator.isConfigurationLocked())
+            settings.setAutomaticAccessEnabled(true)
+            assertTrue("The mode can change after the gate releases", settings.automaticAccessEnabled())
+        } finally {
+            try { session?.let { ServiceManager.finishStrategyTest(context, it, nativeClean = true) } }
+            finally {
+                val edit = preferences.edit().clear()
+                snapshot.forEach { (key, value) ->
+                    when (value) {
+                        is Boolean -> edit.putBoolean(key, value)
+                        is Float -> edit.putFloat(key, value)
+                        is Int -> edit.putInt(key, value)
+                        is Long -> edit.putLong(key, value)
+                        is String -> edit.putString(key, value)
+                        is Set<*> -> edit.putStringSet(key, value.filterIsInstance<String>().toSet())
+                        null -> edit.remove(key)
+                    }
+                }
+                assertTrue("Could not restore the route settings snapshot", edit.commit())
+            }
+        }
     }
 
     @Test fun savedMatrixIsHiddenAfterHostsTargetsOrOverrideChange() {
@@ -82,6 +129,56 @@ class StrategyConfigurationSmokeTest {
         val targetFingerprint = probes.snapshot().fingerprint
         settings.setHostFilterOverride(true)
         assertNotEquals(targetFingerprint, probes.snapshot().fingerprint)
+    }
+
+    @Test fun persistedManualMatrixSurvivesAccessModeChangesButNotChangedProbeInputs() {
+        settings.setRequested(false, false)
+        settings.setAutomaticAccessEnabled(true)
+        assertTrue(probes.save("https://example.com").isValid)
+        val fingerprint = probes.snapshot().fingerprint
+        val command = DefaultStrategyCatalog.commands.first()
+        val result = StrategyEvaluation(0, command, listOf(ServiceConnectivityResult("probe_0", "example.com",
+            listOf(TargetConnectivityResult("https://example.com", true, 12, httpStatus = 200)))))
+        val store = StrategyMatrixStore(context)
+        store.save(fingerprint, listOf(result))
+        StrategyTestManager.init(context)
+
+        for (automatic in listOf(false, true)) {
+            settings.setAutomaticAccessEnabled(automatic)
+            assertEquals(fingerprint, probes.snapshot().fingerprint)
+            StrategyTestManager.refreshConfiguration(context)
+            assertEquals(result, StrategyTestManager.matrixResults[command])
+            assertFalse(StrategyTestManager.hasStaleResults)
+            // Process initialization must also retain the same persisted evidence.
+            StrategyTestManager.init(context)
+            assertEquals(result, StrategyTestManager.matrixResults[command])
+            assertEquals(listOf(result), store.load()!!.evaluations)
+        }
+
+        // Applying a checked manual command switches Auto off, and must keep its row.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            StrategyTestManager.applyStrategy(context, 1, command)
+        }
+        assertFalse(settings.automaticAccessEnabled())
+        StrategyTestManager.refreshConfiguration(context)
+        assertEquals(result, StrategyTestManager.matrixResults[command])
+        assertFalse(StrategyTestManager.hasStaleResults)
+
+        assertTrue(DomainListRepository(context).saveUserDomains("changed-probe.example").isValid)
+        val changedHostsFingerprint = probes.snapshot().fingerprint
+        assertNotEquals(fingerprint, changedHostsFingerprint)
+        StrategyTestManager.refreshConfiguration(context)
+        assertTrue(StrategyTestManager.matrixResults.isEmpty())
+        assertTrue(StrategyTestManager.hasStaleResults)
+
+        store.save(changedHostsFingerprint, listOf(result))
+        StrategyTestManager.init(context)
+        assertEquals(result, StrategyTestManager.matrixResults[command])
+        assertTrue(probes.save("https://example.com/changed").isValid)
+        assertNotEquals(changedHostsFingerprint, probes.snapshot().fingerprint)
+        StrategyTestManager.init(context)
+        assertTrue(StrategyTestManager.matrixResults.isEmpty())
+        assertTrue(StrategyTestManager.hasStaleResults)
     }
 
     @Test fun deletedCandidateCannotReappearOrBeAppliedAndPreservesRemainingEvidence() {

@@ -88,6 +88,32 @@ fun YoutubeTab(
     val navOverlayReserve = safeBottomInset + 86.dp
 
     val sharedPrefs = remember(context) { context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE) }
+    val accessSettings = remember(context) { io.maffinet.android.data.settings.MaffinetSettingsRepository(sharedPrefs) }
+    var automaticAccess by remember { mutableStateOf(accessSettings.automaticAccessEnabled()) }
+    var accessError by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(sharedPrefs) {
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            automaticAccess = accessSettings.automaticAccessEnabled()
+        }
+        sharedPrefs.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { sharedPrefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+    if (automaticAccess) {
+        val locked = io.maffinet.android.ui.components.rememberConfigurationLocked()
+        io.maffinet.android.ui.components.ProductScreen("Ручные стратегии", focusRequester, modifier,
+            subtitle = "Сейчас выбран автоматический доступ для приложений.") {
+            Text("Для обычного подключения выберите приложения на главном экране. Мастер ручного перебора доступен в экспертном режиме.")
+            androidx.compose.material3.Button(onClick = {
+                try {
+                    accessSettings.setAutomaticAccessEnabled(false)
+                    accessError = null
+                } catch (error: Exception) { accessError = error.message }
+            }, enabled = !locked, modifier = Modifier.fillMaxWidth()) { Text("Включить ручной режим") }
+            if (locked) Text("Остановите подключение и проверку стратегий, чтобы изменить режим.")
+            accessError?.let { Text(it, color = androidx.compose.material3.MaterialTheme.colorScheme.error) }
+        }
+        return
+    }
     val isSmartTv = remember(context) { sharedPrefs.getBoolean("is_smart_tv", false) }
 
     var currentTestIndex by remember { mutableStateOf(sharedPrefs.getInt("wizard_current_test_index", 0)) }

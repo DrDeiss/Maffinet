@@ -25,6 +25,9 @@ import io.maffinet.android.data.SENDER
 import io.maffinet.android.data.setStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -154,11 +157,18 @@ class ByeDpiProxyService : LifecycleService() {
         val preferences = getByeDpiPreferences()
 
         proxyJob = lifecycleScope.launch(Dispatchers.IO) {
-            val code = proxy.startProxy(preferences)
-
-            delay(500)
-
-            if (code != 0) {
+            val workerContext = currentCoroutineContext()
+            try {
+                val code = proxy.startProxy(preferences) { workerContext.isActive }
+                delay(500)
+                if (code != 0) {
+                    updateStatus(ServiceStatus.Failed)
+                    stopSelf()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(TAG, "Native proxy failed: ${error.message}", error)
                 updateStatus(ServiceStatus.Failed)
                 stopSelf()
             }
@@ -171,8 +181,8 @@ class ByeDpiProxyService : LifecycleService() {
         }
 
         try {
-            proxy.stopProxy()
             proxyJob?.cancel()
+            proxy.stopProxy()
 
             val completed = withTimeoutOrNull(2000) {
                 proxyJob?.join()
@@ -215,6 +225,7 @@ class ByeDpiProxyService : LifecycleService() {
             }
         )
         intent.putExtra(SENDER, Sender.Proxy.ordinal)
+        intent.setPackage(packageName)
         sendBroadcast(intent)
     }
 

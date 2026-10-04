@@ -22,3 +22,6 @@
 
 # HEV resolves this class and its methods by name from JNI_OnLoad.
 -keep class io.maffinet.android.core.dpibypass.TProxyService { *; }
+-keep class io.maffinet.android.core.access.AutomaticAccessController {
+    public static void onNativeHostObserved(long, java.lang.String, java.lang.String, int);
+}

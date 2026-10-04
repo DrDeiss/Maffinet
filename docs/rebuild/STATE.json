@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-10-04",
+  "project": "Maffinet Android",
+  "workspace": "E:\\maffinet android",
+  "phase": "preparation_complete",
+  "currentStage": null,
+  "nextStage": "P00",
+  "baseline": {
+    "localHead": "0d1cf68054120f2248f038fbbb3af9fe448589a0",
+    "existingDirtyEntriesBeforePreparation": 84,
+    "workingTreeVersion": "0.3.2-alpha",
+    "recordedApkSourceCommit": "33a144bfeac63a5eeaa22924b3b523751203f400",
+    "recordedApkSourceCommitAvailableLocally": false,
+    "mobileReferenceCommit": "19cb13c19f87a1fe6339acb65e35da2ab4d14a43",
+    "windowsReferenceCommit": "f53d458dc85d329a5f4cf25d3222e3fc48686e66",
+    "snapshotCreated": false
+  },
+  "stages": {
+    "P00": "pending",
+    "P01": "pending",
+    "P02": "pending",
+    "P03": "pending",
+    "P04": "pending",
+    "P05": "pending",
+    "P06": "pending",
+    "P07": "pending",
+    "P08": "pending",
+    "P09": "pending"
+  },
+  "lastSessionReport": "sessions/PREP.md",
+  "lastCheckpointCommit": null,
+  "blockingIssues": [],
+  "openRisks": [
+    "Existing uncommitted work must be preserved before cleanup",
+    "Recorded APK and CI evidence do not certify the current dirty tree",
+    "Custom inherited HEV source is unavailable; source-built replacement needs a prototype",
+    "Actual LinkedIn Auto access failed recorded physical acceptance",
+    "DNS recovery before TLS, QUIC recovery and IPv6-only recovery are not implemented",
+    "Exact per-app and DNS attribution require tested original tuple hooks and capability limits",
+    "Inherited application code and required attribution need a documented replacement audit"
+  ],
+  "scope": {
+    "localFirst": true,
+    "ownExternalServer": false,
+    "rootRequired": false,
+    "explicitSelectedApplicationsOnly": true,
+    "independentApplicationLayer": true,
+    "automaticPublication": false
+  }
+}

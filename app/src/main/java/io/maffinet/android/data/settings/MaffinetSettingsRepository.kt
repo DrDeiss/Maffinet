@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.connection.ConnectionModes
+import io.maffinet.android.core.connection.ConnectionCoordinator
 
 /** New settings keys and future migrations belong here, not in UI composables. */
 class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
@@ -78,6 +79,14 @@ class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
         preferences.edit().putBoolean(HOST_FILTER_OVERRIDE, enabled).apply()
     }
 
+    fun automaticAccessEnabled(): Boolean = preferences.getBoolean(AUTOMATIC_ACCESS, true)
+    fun setAutomaticAccessEnabled(enabled: Boolean) = synchronized(preferences) {
+        check(!anyModeRequested() && !ConnectionCoordinator.isConfigurationLocked()) {
+            "Остановите подключение и проверку стратегий перед изменением режима доступа"
+        }
+        preferences.edit().putBoolean(AUTOMATIC_ACCESS, enabled).apply()
+    }
+
     // Compatibility access for existing expert controls. New product settings use typed APIs above.
     fun getString(key: String, default: String): String {
         requireAdvancedKey(key)
@@ -108,6 +117,7 @@ class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
         private const val ENABLED_SERVICES = "maffinet_enabled_services"
         private const val USER_DOMAINS_ENABLED = "maffinet_user_domains_enabled"
         private const val HOST_FILTER_OVERRIDE = "maffinet_advanced_hosts_override"
+        const val AUTOMATIC_ACCESS = "maffinet_automatic_access"
         private const val MANUAL_APPLICATIONS = "selected_apps"
         const val APPLICATIONS_ENABLED = "maffinet_applications_enabled"
         const val TELEGRAM_ENABLED = "maffinet_telegram_enabled"

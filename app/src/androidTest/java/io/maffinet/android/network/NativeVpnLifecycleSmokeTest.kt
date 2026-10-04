@@ -1,5 +1,6 @@
 package io.maffinet.android.network
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.app.Notification
 import android.app.NotificationManager
@@ -7,15 +8,20 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.VpnService
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.ParcelFileDescriptor
+import android.os.Build
 import android.os.SystemClock
 import android.system.Os
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.maffinet.android.MainActivity
 import io.maffinet.android.core.dpibypass.ByeDpiVpnService
 import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTester
@@ -52,6 +58,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.runners.model.MultipleFailureException
 
 /** Real JNI + TUN smoke checks. No remote service availability is required to pass. */
 @RunWith(AndroidJUnit4::class)
@@ -66,6 +73,7 @@ class NativeVpnLifecycleSmokeTest {
     private var savedUserFile: ByteArray? = null
     private var originalConsentMode: String? = null
     private var receiverRegistered = false
+    private var foregroundActivity: ActivityScenario<MainActivity>? = null
     private var originalTunCount = 0
     private var originalConfigs = emptySet<String>()
     private var proxyPort = 0
@@ -89,6 +97,7 @@ class NativeVpnLifecycleSmokeTest {
             InstrumentationRegistry.getArguments().getString(CONSENT_ARGUMENT) == "true")
         assertTrue("Refusing simulated VPN consent outside a qemu emulator",
             shell("getprop ro.kernel.qemu").trim() == "1" || shell("getprop ro.boot.qemu").trim() == "1")
+        assertEquals("The installed APK must target the current Android release", 36, context.applicationInfo.targetSdkVersion)
         assertFalse("A VPN was already running before this isolated smoke test", ByeDpiVpnService.isVpnActive)
         assertFalse("Native resources were already present", ByeDpiVpnService.hasProxyResources)
         assertFalse("Telegram resources were already present", TgProxyController.hasResources)
@@ -113,6 +122,10 @@ class NativeVpnLifecycleSmokeTest {
             .putBoolean("autostart", false)
             .putBoolean("auto_connect_on_start", false)
             .putBoolean("auto_update_enabled", false)
+            .putBoolean("onboarding_completed", true)
+            .putBoolean("maffinet_fork_notice_seen", true)
+            .putBoolean("notification_permission_requested", true)
+            .putBoolean("maffinet_hev_lifecycle_diagnostics", true)
             .putBoolean("telegram_proxy_enabled_by_user", false)
             .putBoolean("byedpi_enable_cmd_settings", true)
             .putString("byedpi_mode", "vpn")
@@ -132,6 +145,7 @@ class NativeVpnLifecycleSmokeTest {
         settings.setApplicationsEnabled(true)
         settings.setTelegramEnabled(false)
         settings.setRequested(false, false)
+        settings.setAutomaticAccessEnabled(false) // Invalid raw args/General cases must still exercise manual mode.
         val tgPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         TgProxyController.setPort(context, tgPort)
         TgProxyController.setCfEnabled(context, false)
@@ -152,20 +166,31 @@ class NativeVpnLifecycleSmokeTest {
             ?: if (operation.contains("No operations")) "default" else error("Cannot snapshot VPN app-op: $operation")
         shell("appops set ${context.packageName} ACTIVATE_VPN allow")
         assertNull("Emulator app-op did not authorize VpnService.prepare", VpnService.prepare(context))
+        // Android 14+ can defer registered broadcasts while the app is cached.
+        // Exercise user-driven lifecycle with a resumed Activity, including the denied-
+        // notification invocation. The saved flags above prevent automatic dialogs/start.
+        foregroundActivity = ActivityScenario.launch(MainActivity::class.java)
+        assertEquals(Lifecycle.State.RESUMED, foregroundActivity?.state)
         stopAndAwaitCleanup() // Observe a completed STOP before any test START is queued.
     }
 
     @After
     fun stopAndRestoreIsolatedState() {
         if (savedPreferences == null) return // Assumption skipped before any mutation.
+        val cleanupFailures = mutableListOf<Throwable>()
         try {
             if (receiverRegistered) {
-                stopAndAwaitCleanup()
-                stopTelegramAndAwaitCleanup()
+                // A failed VPN assertion must not leave Telegram running for the next test.
+                runCatching { stopAndAwaitCleanup() }.exceptionOrNull()?.let(cleanupFailures::add)
+                runCatching { stopTelegramAndAwaitCleanup() }.exceptionOrNull()?.let(cleanupFailures::add)
             } else ConnectionCoordinator.stopAll(context)
         } finally {
             try {
-                originalConsentMode?.let { shell("appops set ${context.packageName} ACTIVATE_VPN $it") }
+                try { foregroundActivity?.close() }
+                finally {
+                    foregroundActivity = null
+                    originalConsentMode?.let { shell("appops set ${context.packageName} ACTIVATE_VPN $it") }
+                }
             } finally {
                 try {
                     if (receiverRegistered) context.unregisterReceiver(statusReceiver)
@@ -178,6 +203,22 @@ class NativeVpnLifecycleSmokeTest {
                 }
             }
         }
+        MultipleFailureException.assertEmpty(cleanupFailures)
+    }
+
+    @Test(timeout = 30_000)
+    fun automaticDefaultStartsAndStopsWithoutRequiringExternalProbeSuccess() {
+        assertTrue(preferences.edit().remove(MaffinetSettingsRepository.AUTOMATIC_ACCESS)
+            .putBoolean("byedpi_enable_cmd_settings", true)
+            .putString("byedpi_cmd_args", "--not-a-valid-manual-argument")
+            .commit())
+        assertTrue("Fresh settings use Automatic Access", settings.automaticAccessEnabled())
+        startAndAwaitNativeTunnel()
+        assertSocks5Ready(proxyPort)
+        assertTrue("Automatic startup must preserve the requested connection", settings.applicationsRequested())
+        stopAndAwaitCleanup()
+        assertFalse(settings.applicationsRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
     }
 
     @Test(timeout = 30_000)
@@ -191,6 +232,41 @@ class NativeVpnLifecycleSmokeTest {
             stopAndAwaitCleanup()
             assertFalse("User STOP must persist", preferences.getBoolean("service_enabled", true))
         }
+    }
+
+    @Test(timeout = 40_000)
+    fun modernForegroundServicesWorkWithDeniedOrGrantedNotifications() {
+        assumeTrue("Runtime notification permission exists on Android 13+", Build.VERSION.SDK_INT >= 33)
+        val expected = InstrumentationRegistry.getArguments().getString("maffinet.expectedNotificationPermission")
+        assumeTrue("The emulator harness must choose the notification permission state", expected == "granted" || expected == "denied")
+        val granted = expected == "granted"
+        assertEquals("The harness must apply notification permission outside the instrumented UID", granted,
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        preferences.edit().putBoolean("notification_permission_requested", true).commit()
+        settings.setTelegramEnabled(true)
+        val started = ConnectionCoordinator.startSelected(context)
+        assertTrue(started.errors.toString(), started.errors.isEmpty())
+        eventually("VPN and Telegram FGS must run even after the user denies notifications") {
+            ByeDpiVpnService.isVpnActive && ByeDpiVpnService.hasProxyResources &&
+                TgProxyController.status.value == ModeConnectionState.Running && TgProxyController.hasResources
+        }
+        assertTrue("Modern FGS startup must establish the real TUN", tunDescriptorCount() > originalTunCount)
+        assertSocks5Ready(proxyPort)
+        val notifications = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        assertEquals(granted, notifications.areNotificationsEnabled())
+        if (granted) {
+            eventually("Granted permission must expose the Telegram foreground notification") {
+                notifications.activeNotifications.any { it.id == 100 &&
+                    (it.notification.flags and Notification.FLAG_FOREGROUND_SERVICE) != 0 }
+            }
+        }
+        ConnectionCoordinator.stopAll(context)
+        eventually("Modern user STOP must release both foreground services") {
+            !ByeDpiVpnService.isVpnActive && !ByeDpiVpnService.hasProxyResources && !TgProxyController.hasResources &&
+                TgProxyController.status.value == ModeConnectionState.Stopped
+        }
+        assertFalse(settings.anyModeRequested())
+        awaitCleanResources()
     }
 
     @Test(timeout = 30_000)
@@ -531,7 +607,13 @@ class NativeVpnLifecycleSmokeTest {
     private fun eventually(message: String, timeoutMs: Long = 8_000, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (!condition() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50)
-        assertTrue(message, condition())
+        if (!condition()) {
+            assertTrue("$message; VPN=${ByeDpiVpnService.currentStatus.value}, " +
+                "VPN resources=${ByeDpiVpnService.hasProxyResources}, " +
+                "Telegram=${TgProxyController.status.value}, Telegram resources=${TgProxyController.hasResources}, " +
+                "Telegram listener=${isListening(TgProxyController.getPort(context))}, STOP acknowledgements=${stopped.get()}",
+                false)
+        }
     }
 
     private fun shell(command: String): String =

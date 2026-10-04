@@ -16,12 +16,19 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.maffinet.android.BuildConfig
 import io.maffinet.android.R
+import io.maffinet.android.core.access.AutomaticAccessController
+import io.maffinet.android.core.access.AutomaticAccessPhase
+import io.maffinet.android.core.access.DnsConfigurationMonitor
+import io.maffinet.android.core.access.DnsControlProbe
+import io.maffinet.android.core.dns.DnsConfiguration
 import io.maffinet.android.core.connection.ModeConnectionState
+import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.ui.components.*
 import io.maffinet.android.ui.formatTimer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -41,6 +48,16 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
     val telegramEnabled = remember(revision) { settings.telegramEnabled() }
     val selectedApps = remember(revision) { settings.manualApplications() }
     val dns = remember(revision) { settings.getString("custom_dns_preset", DnsPresets.DEFAULT) }
+    val automaticAccess = remember(revision) { settings.automaticAccessEnabled() }
+    val accessStatus by AutomaticAccessController.status.collectAsState()
+    var dnsConfiguration by remember { mutableStateOf<DnsConfiguration?>(null) }
+    var showDnsDetails by remember { mutableStateOf(false) }
+    LaunchedEffect(context) {
+        while (true) {
+            dnsConfiguration = withContext(Dispatchers.IO) { runCatching { DnsConfigurationMonitor.read(context) }.getOrNull() }
+            delay(500)
+        }
+    }
     val locked = rememberConfigurationLocked()
     val active = vpnState in ACTIVE_STATES || telegramState in ACTIVE_STATES || settings.anyModeRequested()
     val connected = (!applicationsEnabled || vpnState == ModeConnectionState.Running) &&
@@ -76,6 +93,20 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
         ProductCard {
             ModeRow("Приложения", applicationsEnabled, locked, "applications-mode") { settings.setApplicationsEnabled(it) }
             Text("VPN / ByeDPI: ${stateLabel(vpnState)}", Modifier.testTag("vpn-status"))
+            if (automaticAccess && vpnState == ModeConnectionState.Running) {
+                val evidenceCurrent = accessStatus.dnsConfiguration == dnsConfiguration && dnsConfiguration != null
+                Text(if (!evidenceCurrent) "Автоматический доступ: обновляет состояние сети" else when (accessStatus.phase) {
+                    AutomaticAccessPhase.IDLE -> "Автоматический доступ запускается"
+                    AutomaticAccessPhase.OBSERVING -> "Автоматический доступ: ожидает подключения приложений"
+                    AutomaticAccessPhase.CHECKING -> "Автоматический доступ: проверяет соединение"
+                    AutomaticAccessPhase.ROUTE_APPLIED -> "Автоматический доступ: найден рабочий маршрут"
+                    AutomaticAccessPhase.UNRESOLVED -> "Для одного из доменов рабочий маршрут пока не найден"
+                }, Modifier.testTag("automatic-access-status"), style = MaterialTheme.typography.bodySmall,
+                    color = if (accessStatus.phase == AutomaticAccessPhase.UNRESOLVED)
+                        MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (evidenceCurrent && accessStatus.appliedRoutes > 0) Text("Проверенных маршрутов: ${accessStatus.appliedRoutes}",
+                    style = MaterialTheme.typography.bodySmall)
+            }
             ProductSettingLink("Выбрать приложения", "Выбрано: ${selectedApps.size}", { showApps = true }, !locked)
             ModeRow("Telegram", telegramEnabled, locked, "telegram-mode") { settings.setTelegramEnabled(it) }
             Text("Telegram-прокси: ${stateLabel(telegramState)}", Modifier.testTag("telegram-status"))
@@ -83,11 +114,31 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
             if (locked) Text("Остановите подключение или проверку, чтобы изменить настройки.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        ProductSettingLink("DNS", dns, { showDns = true }, !locked)
+        ProductSettingLink("DNS", DnsCatalog.selectionLabel(dns), { showDns = true }, !locked)
         Text("DNS применяется к VPN для выбранных приложений.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ProductSettingLink("Стратегия", StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
-        ProductSettingLink("Hosts", "Встроенный список и ваши домены", { onNavigate(9) })
+        val currentDnsChecks = if (accessStatus.dnsConfiguration == dnsConfiguration) accessStatus.dnsChecks else emptyList()
+        if (dnsConfiguration?.hasSelectionAssignmentMismatch == true) Text(
+            "Выбор DNS изменён, но действующий VPN использует прежнее назначение. Переподключитесь для применения.",
+            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        if (accessStatus.checkingDns && accessStatus.dnsConfiguration == dnsConfiguration) Text(
+            "Проверяем DNS и HTTPS контрольного домена…", style = MaterialTheme.typography.bodySmall)
+        currentDnsChecks.firstOrNull { it.hasProblem }?.let { check ->
+            Text(check.summary(), Modifier.testTag("dns-check-problem"),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        TextButton({ showDnsDetails = !showDnsDetails }, Modifier.testTag("dns-details-toggle")) {
+            Text(if (showDnsDetails) "Скрыть состояние DNS" else "Состояние и проверка DNS")
+        }
+        if (showDnsDetails) ProductCard {
+            dnsConfiguration?.summaryLines()?.forEach { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
+            Text("Пробы: обычный DNS по UDP, TCP при усечённом ответе. DoT/DoH не проверяются. " +
+                "Контроль ${DnsControlProbe.HOST} не подтверждает доступ ко всем приложениям.", style = MaterialTheme.typography.bodySmall)
+            if (currentDnsChecks.isEmpty()) Text("Для текущей конфигурации результатов пока нет.", style = MaterialTheme.typography.bodySmall)
+            currentDnsChecks.forEach { Text(it.summary(), style = MaterialTheme.typography.bodySmall) }
+        }
+        ProductSettingLink("Режим доступа", if (automaticAccess) "Автоматически" else StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
+        ProductSettingLink("Hosts", if (automaticAccess) "Домены для ручного режима и импорта" else "Встроенный список и ваши домены", { onNavigate(9) })
         TextButton(onBackground, Modifier.fillMaxWidth(), enabled = !StrategyTestManager.isTesting) { Text("Работать в фоне и выйти") }
     }
     MaffinetAppsSheet(showApps, { showApps = false }, R.drawable.ic_settings, "Выбрать приложения",
@@ -97,7 +148,7 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
                 settings.setManualApplications(if (pkg in selectedApps) selectedApps - pkg else selectedApps + pkg)
         })
     MaffinetDnsSheet(showDns, { showDns = false }, R.drawable.ic_settings, "DNS для VPN",
-        "Пресет для выбранных Android-приложений", DnsPresets.values, dns, onPresetSelected = {
+        "IPv4 в VPN без шифрования. Private DNS настраивается в Android.", DnsPresets.values, dns, onPresetSelected = {
             if (!io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) settings.setString("custom_dns_preset", it)
             showDns = false
         })

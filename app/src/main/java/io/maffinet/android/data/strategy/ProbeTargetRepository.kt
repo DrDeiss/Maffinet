@@ -36,7 +36,8 @@ class ProbeTargetRepository(private val context: Context) {
         val lists = domains.getLists()
         // General is the merged active list; do not reread the file between snapshot fields.
         val active = lists.first { it.id == "general" }.domains
-        val override = MaffinetSettingsRepository(context).hostFilterOverride()
+        val settings = MaffinetSettingsRepository(context)
+        val override = settings.hostFilterOverride()
         val urls = urls()
         val mode = preferences.getString("byedpi_hosts_mode", "disable") ?: "disable"
         val hosts = when (mode) {

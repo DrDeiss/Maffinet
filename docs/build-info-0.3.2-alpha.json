@@ -1,0 +1,130 @@
+{
+  "applicationId": "io.maffinet.android",
+  "version": "0.3.2-alpha",
+  "versionCode": 5,
+  "variant": "debug",
+  "minSdk": 26,
+  "targetSdk": 36,
+  "compileSdk": 36,
+  "sourceCommit": "33a144bfeac63a5eeaa22924b3b523751203f400",
+  "sourceTree": "5d56cf0bedaa6310bb5e49b318907a0f20fe720a",
+  "sourceUrl": "https://github.com/DrDeiss/Maffinet/commit/33a144bfeac63a5eeaa22924b3b523751203f400",
+  "ciRun": "https://github.com/DrDeiss/Maffinet/actions/runs/37206767773",
+  "file": "Maffinet-0.3.2-alpha-debug.apk",
+  "bytes": 30744743,
+  "sha256": "91cd7d21de4abe9015a072f08f4928cc00039887e551ef99fcc8f6bc8dfa4559",
+  "signature": {
+    "scheme": "v2",
+    "verified": true,
+    "certificateSha256": "4674e6c303c1a766b57216096d29395b65b2330fb5aac9e0dfecfff4199601f2",
+    "nonSignaturePayloadMatchesCi": true
+  },
+  "nativeAbis": [
+    "arm64-v8a",
+    "armeabi-v7a",
+    "x86",
+    "x86_64"
+  ],
+  "nativeZipAlignmentBytes": 16384,
+  "validation": {
+    "standaloneJvmNativeParser": {
+      "tests": 161,
+      "failures": 0,
+      "skipped": 0
+    },
+    "androidJvm": {
+      "tests": 159,
+      "failures": 0,
+      "skipped": 0
+    },
+    "automaticNativeSocketCases": 21,
+    "streamingNativeCases": 12,
+    "nativeInvalidValueChecks": 4,
+    "pooledBufferSanitizers": {
+      "address": true,
+      "undefinedBehavior": true,
+      "leakDetection": true,
+      "passed": true
+    },
+    "api29Instrumentation": {
+      "tests": 26,
+      "passed": 25,
+      "failures": 0,
+      "skipped": 1,
+      "skipReason": "Notification permission requires Android 13+"
+    },
+    "api36Instrumentation": {
+      "tests": 26,
+      "passed": 26,
+      "failures": 0,
+      "skipped": 0
+    },
+    "api36NotificationsDenied": {
+      "tests": 1,
+      "passed": 1,
+      "failures": 0,
+      "skipped": 0
+    },
+    "lintErrors": 0,
+    "lintWarnings": 140,
+    "lintHints": 5
+  },
+  "physicalDevice": {
+    "model": "OnePlus CPH2747",
+    "android": 16,
+    "installed": true,
+    "control": {
+      "host": "www.iana.org",
+      "resolvers": [
+        "193.233.112.67",
+        "193.233.112.68"
+      ],
+      "dnsTransport": "UDP",
+      "bothHttpsPassed": true,
+      "httpStatus": 200,
+      "certificateVerified": true,
+      "bodyChecked": true
+    },
+    "anonymousAutoProbe": {
+      "host": "www.linkedin.com",
+      "originalDestination": "104.18.41.41",
+      "routeDestination": "130.211.32.14",
+      "tls": "TLSv1.3",
+      "certificateVerified": true,
+      "httpStatus": 200,
+      "completeBodyBytes": 140059,
+      "durationMs": 547
+    },
+    "linkedinAuto": "Failed feed load after cold restart and learned route; ECH extensions observed with www.linkedin.com outer SNI; exact-host routing excluded; ECH/GREASE distinction and other causes unresolved",
+    "manualComparison": "Saved manual strategy loaded feed in same device session on 0.3.1",
+    "preserved": [
+      "GeoHide DNS",
+      "Private DNS xbox-dns.ru",
+      "LinkedIn and Chrome selection",
+      "saved manual command"
+    ],
+    "cleanup": {
+      "automaticAccess": true,
+      "vpnRequested": false,
+      "telegramRequested": false,
+      "stayOnWhilePluggedIn": 0,
+      "adbForwards": [],
+      "temporaryUiXmlRemoved": true,
+      "oldChromeTestTab": "Not uniquely identified; user tabs untouched"
+    }
+  },
+  "scope": {
+    "controlFix": "Shared policy-valid www.iana.org control; bounded HTTPS failure reason shown",
+    "echDiagnostic": "Metadata-only Android log; ECH routing policy unchanged",
+    "dnsProbe": "Direct plaintext IPv4 A queries; TCP only after truncated UDP; not DoH/DoT or an observation of app DNS",
+    "externalServer": false
+  },
+  "limitations": [
+    "Actual LinkedIn automatic access has not passed physical acceptance",
+    "ECH including GREASE excluded from exact-host route learning and application",
+    "DNS recovery before TLS and application-owned encrypted DNS handling not implemented",
+    "QUIC forwarded unchanged; IPv6-only recovery unsupported",
+    "Application requests never replayed; routes affect subsequent connections",
+    "Full 16 KiB-page runtime compatibility remains unverified"
+  ]
+}

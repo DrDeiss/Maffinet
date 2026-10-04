@@ -28,6 +28,9 @@ data class StrategyEvaluation(
     init { require(services.map { it.serviceId }.distinct().size == services.size) }
     val passedServices: Int get() = services.count { it.passed }
     val totalServices: Int get() = services.size
+    val fullyReachable: Boolean get() = services.isNotEmpty() && services.all { it.passed }
+    val failedTargets: List<TargetConnectivityResult> get() = services.flatMap { it.targets }
+        .filterNot { it.reachable }
     val averageLatencyMs: Long? get() = services.mapNotNull { it.latencyMs }
         .takeIf { it.isNotEmpty() }?.average()?.toLong()
 }
@@ -41,4 +44,17 @@ object StrategyScorer {
 
     fun best(evaluations: Iterable<StrategyEvaluation>): StrategyEvaluation? =
         evaluations.filter { it.passedServices > 0 }.minWithOrNull(comparator)
+
+    /** Auto may replace the active strategy only when every configured URL was checked and passed. */
+    fun bestComplete(
+        evaluations: Iterable<StrategyEvaluation>,
+        requiredUrls: Collection<String>,
+    ): StrategyEvaluation? {
+        val required = requiredUrls.toSet()
+        if (required.isEmpty()) return null
+        return evaluations.filter { evaluation ->
+            val checked = evaluation.services.flatMap { it.targets }.map { it.url }
+            evaluation.fullyReachable && checked.size == required.size && checked.toSet() == required
+        }.minWithOrNull(comparator)
+    }
 }

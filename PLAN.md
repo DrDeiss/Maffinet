@@ -1,5 +1,162 @@
 # Maffinet — audit and implementation plan
 
+## Physical follow-up — 0.3.2-alpha, 2026-10-04
+
+Installed 0.3.1 and 0.3.2 on the OnePlus with the existing signer. Fixed a real
+control-probe defect: example.com was rejected before TLS by the hostname policy.
+The shared www.iana.org control and bounded HTTPS errors have regression coverage.
+Both GeoHide resolvers now pass DNS/UDP plus certificate/body verification on the
+phone. Added metadata-only native ECH diagnostics; routing policy is unchanged.
+
+The saved manual strategy loaded LinkedIn's feed. Auto learned a route and an
+ordinary-SNI anonymous request loaded all 140059 bytes (547 ms on 0.3.2), but the
+application's ECH-bearing connections skip exact-host routing. A cold restart
+after route learning still showed a feed error. ECH versus GREASE and additional
+causes are unresolved. This is not successful app acceptance.
+
+Source: 33a144bfeac63a5eeaa22924b3b523751203f400; tree:
+5d56cf0bedaa6310bb5e49b318907a0f20fe720a. CI 37206767773 passed: 161 standalone
+JVM/native-parser tests, 159 Android JVM tests, native 21 automatic + 12 stream +
+4 invalid-value cases, ASan/UBSan/leak detection, API29 25 passed/1 skipped,
+API36 26 passed plus notification-denied case, Lint 0 errors/140 warnings/5 hints.
+APK and signer metadata: docs/build-info-0.3.2-alpha.json.
+
+Auto=true restored; VPN/Telegram stopped; GeoHide, Private DNS and manual command
+preserved. Stay-awake=0, no ADB forwards, test UI XML removed. The old Chrome tab
+has no recorded unique ID and could not be safely identified for closing.
+DNS interception, ECH-safe recovery, QUIC and IPv6 remain open work.
+
+## DNS configuration follow-up — 0.3.1-alpha sources, 2026-10-04
+
+Implemented separate saved/VPN-assigned/physical/Private DNS snapshots, explicit
+unknown app DoH/DoT, plain UDP/TCP DNS outcomes, bounded control-domain DNS/HTTPS
+checks and Home diagnostics. Network handle, interface addresses, routes and all
+DNS assignments scope evidence; stale UI evidence is hidden even when two networks
+have identical resolver lists. A preference/assignment mismatch requests reconnect
+and never silently changes the saved resolver. See docs/AUTOMATIC_ACCESS.md.
+
+Local standalone verification: 158 cases, 151 passed, zero failures, seven
+Linux-native fixture cases skipped. After explicit upload confirmation, the source
+commit `f596fe954c5fbafea40f270ec3bc4251f6a4847a` was pushed to the authorized
+branch. [CI run 37205002273](https://github.com/DrDeiss/Maffinet/actions/runs/37205002273)
+passed: 158 standalone JVM/native-parser and 156 Android JVM tests; 21 automatic
+native socket cases, 12 stream cases and four invalid-value checks; focused
+ASan/UBSan/leak detection; debug/release/test APK assembly; zero Lint errors,
+140 warnings and five hints. API29 passed 25 instrumentation cases with one
+Android13+ case skipped; API36 passed all 26 and a separate notification-denied
+invocation. Signed APK: `build/apk/Maffinet-0.3.1-alpha-debug.apk`, versionCode4,
+same certificate as previous builds. Hash and scope: docs/build-info-0.3.1-alpha.json.
+The inherited archive filename in CI was still 0.3.0; the manifest and delivered
+filename are 0.3.1. A subsequent packaging-only correction updates archivesName.
+Local snapshot tree in `.toolchain/apk-build.git`: `abe84685372f9377a21e121ffcbcc4abebf84bb1`.
+Main checkout/index and all prior uncommitted changes remain intact.
+
+OnePlus wireless ADB briefly returned: installed version was 0.2.0-alpha,
+Android16 and Private DNS xbox-dns.ru. Set stay_on_while_plugged_in to 0 and
+removed /data/local/tmp/maffinet-ui.xml; forward list was empty. Connection then
+disappeared before APK installation. Later wireless ADB returned and 0.3.1-alpha
+was installed successfully with `adb install -r`; versionCode4/target36 confirmed.
+Selected LinkedIn/Chrome, GeoHide, manual strategy and system Private DNS survived.
+The phone then showed system UI and Maffinet's exit history recorded REMOVE TASK,
+not a crash. The later physical findings are recorded above; Auto/LinkedIn did
+not pass acceptance. The old Chrome test tab has not been identified/
+closed and should not be confused with user tabs.
+
+DNS interception before TLS, ECH/GREASE, QUIC and IPv6 recovery remain unimplemented;
+concrete code/protocol research is in docs/NETWORK_RECOVERY_RESEARCH.md.
+
+## Current requirement — automatic access, 2026-10-04
+
+The user clarified that LinkedIn is a diagnostic example, and the product must
+serve new unavailable applications without adding a service toggle each time.
+The main interaction is application selection and one connection button.
+Only local DPI bypass and public Smart DNS are authorized; a private external
+proxy/VPN exit is outside the requested architecture.
+
+Automatic Access supersedes the proposed LinkedIn product switch. Current work:
+a short TLS fallback chain for selected applications including unknown hosts;
+bounded native observation, network-scoped decisions, direct DNS/body probes,
+generic data-based route hints and host-route updates for new connections without
+restarting VPN. Plain HTTP application payloads must not be automatically replayed.
+Manual settings and General/User remain available in expert mode.
+Version 0.3.0-alpha implements this general mechanism. Source
+`8266a409f085a6e1050a5d54400ff199cb1de207` passed
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071):
+141 standalone JVM/native-parser tests, 139 Android JVM tests, 21 automatic socket
+cases, focused ASan/UBSan/leak checks, APK assembly and API29/API36 runtime checks.
+API29 passed 25 instrumentation cases with one Android 13+ notification case
+skipped; API36 passed all 26 and a separate denied-notification invocation.
+Lint reports zero errors, 140 warnings and five hints. The signed local APK and
+its exact hash are in `build/apk/build-info.json`. Physical acceptance of the new
+automatic mode remains open after losing ADB connectivity. The earlier manual
+LinkedIn success is evidence for one candidate, not proof of the new automatic
+mode on that device. See [Automatic Access](docs/AUTOMATIC_ACCESS.md).
+
+## Earlier update — Android compatibility and LinkedIn, 2026-10-04
+
+Physical feedback on 0.1.0-alpha reported Android's old-target warning and failed
+LinkedIn access in both its application and browser, while other services worked.
+The old targetSdk26 is confirmed and changed to36 (minimum26), version0.2.0-alpha.
+Modern notification permission, Tile PendingIntent launch, deferred foreground
+recovery and background update handling are implemented. JNA is upgraded from
+5.14.0 to the verified official5.19.1 AAR, including its Android16KB fixes.
+Auto now preserves the active strategy unless every configured URL passes;
+partial results remain visible for manual selection, with failed URLs reported.
+The onboarding text now directs users to the actual application picker and
+diagnostic reports show the effective native arguments with host contents omitted.
+
+LinkedIn's root domains and their subdomains already match General. On the connected
+Android16 phone, both usual Cloudflare endpoints return HTTP200 but stall after
+13,781 body bytes. LinkedIn's alternative `gcp-lb.www.linkedin.com` endpoint completes
+a certificate-verified response of140,059 bytes and loads the native app and Chrome
+feed; a VPN restart and cold app launch also passed. The proposed optional
+default-off LinkedIn route was superseded by the generic Automatic Access
+controller above; the endpoint remains an initial data hint. These phone results
+used a temporary manual diagnostic command.
+
+HTTP probes now require64KiB of body or the complete smaller response, preventing
+this observed header-only false success. A paced native TLS buffer was also observed
+being transformed twice after an early server response; a bounded patch and native
+regressions are being verified. Telegram state ownership/publication is atomic, and
+internal status broadcasts explicitly target the app package for modern Android.
+At this earlier stage, local verification passed84 JVM tests; six Linux native
+checks remained CI-only.
+The revised CI builds one app/test APK pair and tests it on API29 andAPI36,
+including notification denial onAPI36. Final CI/runtime results are recorded above.
+See [investigation notes](docs/ANDROID36_AND_LINKEDIN.md).
+
+## Current update — Hosts and DNS, 2026-10-04
+
+The user requested comparison with NetFix Windows and broader Hosts/DNS support.
+The follow-up clarifies DNS scope: prioritize Smart DNS for geo-access. The picker
+opens that category, offers real GeoHide RU/EU/US resolver profiles and includes
+Bezmezhau, DNS-AI and ASTRACAT alongside Xbox, COMSS, malw and Null's Proxy. General
+public/family DNS profiles are kept behind their separate category.
+The previous eight-domain base constraint is superseded by a curated 130-domain
+General in eight categories. Explicit Android app selection, independent Telegram,
+User enable state, legacy placeholders and selective TCP semantics remain intact.
+
+Source changes add validated hosts/domain import from documents and HTTPS, manual
+malw/GeoHide source buttons, a centralized provider-verified DNS catalog, compatible
+legacy DNS values, custom IPv4 DNS and explicit system Private DNS actions.
+[Comparison](docs/NETFIX_COMPARISON.md) and [source/usage policy](docs/HOSTS_AND_DNS.md)
+record the implementation and remaining desktop differences. IP hosts mappings,
+built-in DoH and automatic source updates remain outside this implementation.
+
+Local validation: 60 production-model/catalog JVM tests passed; six Linux native-fixture
+tests skipped. The full malw/GeoHide source snapshots parse without errors. Kotlin
+PSI parsed 84 main/instrumentation files without syntax errors. Android assembly
+remains unavailable on the local host because its SDK is missing. The exact source
+`9efbce486c50c34a3b2a6eed335aa6f7be7f0018` passed
+[CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931):
+debug/unsigned release/test APK assembly, 66 JVM/native, 65 Android JVM and 22
+API29 instrumentation tests, without failures/skips. Lint reports zero errors,
+136 warnings and five hints. The installable debug APK is saved locally at
+`build/apk/Maffinet-smartdns-debug.apk`; its verified v2 signature, source, hashes
+and exact validation are recorded in `build/apk/build-info.json`.
+CI retains the APK as `maffinet-debug-apk` for seven days. Physical Smart DNS
+reachability and device acceptance still require the user's device.
+
 ## Current goal — independent Applications, Telegram and Hosts
 
 The user's clarification on 2026-10-03 supersedes the service-catalog product

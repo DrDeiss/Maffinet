@@ -58,7 +58,7 @@ fun AdvancedScreen(focusRequester: FocusRequester, onBack: () -> Unit, onNavigat
     val switches = remember { mutableStateMapOf<String, Boolean>().apply { expertSwitches.forEach { put(it.first, settings.getBoolean(it.first, it.third)) } } }
     var message by remember { mutableStateOf<String?>(null) }
     ProductScreen("Advanced · ByeDPI", focusRequester, onBack = onBack,
-        subtitle = "Изменения применяются при следующем подключении. Для сохранения остановите VPN и проверку стратегий.") {
+        subtitle = "Сохранение включает ручной режим для следующего подключения. Остановите VPN и проверку стратегий.") {
         ProductCard {
             Text("Команда стратегии", style = MaterialTheme.typography.titleLarge)
             ExpertSwitch("Использовать команду вместо UI-настроек", commandMode, !locked) { commandMode = it }
@@ -104,16 +104,19 @@ fun AdvancedScreen(focusRequester: FocusRequester, onBack: () -> Unit, onNavigat
                     override && !commandMode && hostsMode != "disable" && !hosts.isValid -> hosts.errors.joinToString("\n") { "${it.line}: ${it.message}" }
                     override && !commandMode && hostsMode != "disable" && hosts.domains.isEmpty() -> "Добавьте домены для выбранного UI host filter"
                     else -> {
-                        settings.setBoolean("byedpi_enable_cmd_settings", commandMode)
-                        settings.setString("byedpi_cmd_args", command)
-                        settings.setHostFilterOverride(override)
-                        settings.setString("byedpi_hosts_mode", hostsMode)
-                        settings.setString("byedpi_hosts_whitelist", if (hostsMode == "whitelist") hosts.domains.joinToString("\n") else whitelist)
-                        settings.setString("byedpi_hosts_blacklist", if (hostsMode == "blacklist") hosts.domains.joinToString("\n") else blacklist)
-                        settings.setString("byedpi_desync_method", method)
-                        strings.forEach { (key, value) -> settings.setString(key, value) }
-                        switches.forEach { (key, value) -> settings.setBoolean(key, value) }
-                        "Настройки сохранены"
+                        try {
+                            settings.setAutomaticAccessEnabled(false)
+                            settings.setBoolean("byedpi_enable_cmd_settings", commandMode)
+                            settings.setString("byedpi_cmd_args", command)
+                            settings.setHostFilterOverride(override)
+                            settings.setString("byedpi_hosts_mode", hostsMode)
+                            settings.setString("byedpi_hosts_whitelist", if (hostsMode == "whitelist") hosts.domains.joinToString("\n") else whitelist)
+                            settings.setString("byedpi_hosts_blacklist", if (hostsMode == "blacklist") hosts.domains.joinToString("\n") else blacklist)
+                            settings.setString("byedpi_desync_method", method)
+                            strings.forEach { (key, value) -> settings.setString(key, value) }
+                            switches.forEach { (key, value) -> settings.setBoolean(key, value) }
+                            "Настройки сохранены · ручной режим включён"
+                        } catch (error: Exception) { error.message ?: "Не удалось сохранить ручной режим" }
                     }
                 }
             }

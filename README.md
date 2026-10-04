@@ -10,24 +10,64 @@ NOTICE and source provenance remain in the repository in both cases.
 
 ## Status and requirements
 
-Development version: **0.1.0-alpha**. [PLAN.md](PLAN.md) records implementation
+Development version: **0.3.2-alpha**. [PLAN.md](PLAN.md) records implementation
 phases and actual checks; [known limitations](docs/KNOWN_LIMITATIONS.md) documents
 release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
 installation alongside NetFix Mobile.
 
+The 0.3.1 increment separates saved, VPN-assigned, physical-network and active
+Private DNS configuration. Home exposes bounded plain-DNS and hostname-verified
+HTTPS control checks, with explicit unknown app-owned DoH/DoT. Configuration or
+network changes invalidate old evidence even when resolver addresses match.
+These checks do not yet intercept application DNS or recover NXDOMAIN before TLS.
+Version 0.3.2 fixes the control host rejected by the HTTPS policy and exposes the
+HTTPS failure reason. Both configured GeoHide resolvers passed the corrected
+control on the OnePlus. Native diagnostics confirmed ECH extensions in LinkedIn
+connections: the automatic route works for an ordinary SNI probe, but LinkedIn
+itself still fails in Auto. The saved manual strategy loaded its feed.
+Build and device evidence: [0.3.2 APK metadata](docs/build-info-0.3.2-alpha.json).
+The 0.3.0 validation records below remain the preceding baseline.
+
+The app now targets Android 16/API36 while retaining Android 8/API26 as its
+minimum. This fixes the inherited old-target configuration; notification
+permission, quick-settings launch and background recovery are adapted for modern
+Android. Manual strategy comparison requires every configured checking address
+to pass before automatically replacing the manual strategy. HTTP success also requires the first
+64KiB of a successful body, or its complete body when smaller. See
+[Android compatibility and LinkedIn investigation](docs/ANDROID36_AND_LINKEDIN.md).
+
+The current work introduces **Automatic Access** as the default connection mode:
+select applications on Home and connect. It combines a short TLS fallback chain,
+observed-host diagnostics, direct checks of selected/public Smart DNS and verified
+host routes. Unknown hostnames are eligible too; General/User remain manual-mode
+filters. LinkedIn is an initial route hint, rather than a separate product toggle.
+The integrated implementation passed
+[CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071)
+on Android 10/API29 and Android 16/API36; physical-device acceptance of this new
+automatic mode remains open. See
+[Automatic Access](docs/AUTOMATIC_ACCESS.md) for its exact scope and limitations.
+
 ## Interface
 
 Home retains Maffinet's large connection button and exposes Applications,
-installed-app selection, Telegram, DNS, Strategy and Hosts. The main navigation
+installed-app selection, Telegram, DNS, access mode and Hosts. The main navigation
 contains Home, Strategies and Settings; the former Services destination is retired.
-[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
-passed debug/release assembly, 43 JVM/native tests, 42 Android JVM tests and 22
-instrumentation tests without failures/skips. Lint has zero errors, 135 warnings
-and five hints. Nineteen new emulator captures document this model.
+The current source `8266a409f085a6e1050a5d54400ff199cb1de207` passed debug/unsigned
+release assembly, 141 standalone JVM/native-parser tests, 139 Android JVM tests,
+21 automatic native socket cases and the focused ASan/UBSan/leak check. API29
+passed 25 instrumentation cases and skipped the Android 13+ notification case;
+API36 passed all 26 and a separate denied-notification invocation. Lint has zero
+errors, 140 warnings and five hints.
+The signed debug APK and its build metadata are saved locally in `build/apk/`;
+CI also retains `maffinet-debug-apk` for seven days. See
+[APK metadata](docs/build-info-0.3.0-alpha.json) for the current local APK hash and
+[Hosts/DNS validation](docs/HOSTS_AND_DNS.md) for the preceding catalog snapshot.
 
-[Additional screen captures](docs/screenshots/README.md) and
-[recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the actual tested scope.
+[Additional screen captures](docs/screenshots/README.md) include the current
+automatic-mode interface and the preceding independent-mode baseline.
+[Recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the earlier scope.
+Physical-device automatic Smart DNS acceptance remains open.
 
 ## Features
 
@@ -39,28 +79,29 @@ choices off leaves an explanation to enable a mode before connecting.
 Only installed packages explicitly saved in `selected_apps` enter VPN routing.
 Updates preserve that selection. Old service-profile flags neither insert packages
 nor change hosts; Maffinet excludes its own package and rejects an empty installed
-allowlist. DNS is the existing VPN setting and does not configure the standalone
+allowlist. VPN DNS does not configure the standalone
 Telegram proxy.
 
 No accounts, remote VPN servers, backend, telemetry or ML selector are added.
 Connectivity probes establish HTTP/TLS reachability rather than guaranteeing every
-feature of an application. Auto ranks successful configured target coverage before
-latency using deterministic rules.
+feature of an application. Manual diagnostics rank configured target coverage
+before latency; the default automatic mode learns from observed traffic without
+scanning the diagnostic address list.
 
 1. Enable **Applications** and use **Choose applications** on Home to select the
    installed Android apps to route through VPN/ByeDPI. Enable **Telegram** for
    its independent MTProto proxy, with direct access to the existing settings.
-2. Open **Hosts** to inspect the built-in General base, edit and save User domains,
-   or merge/import and export them with Android's document picker. User can be
-   enabled or disabled without discarding its saved domains.
-3. Choose the existing **DNS** preset for VPN and a **Strategy**, or run the strategy
-   comparison against separately configured HTTP/TLS checking addresses. Results
-   are invalidated when hosts, checking addresses or relevant filters change.
-4. Use the common button on **Home**, granting VPN consent when Applications is
-   enabled. Settings remain locked while engines are requested/running or testing;
-   strategy tests coordinate stopping and restoring an active VPN.
+2. Use the common button on **Home**, granting VPN consent when Applications is
+   enabled. Automatic Access is enabled by default. It tries local DPI strategies
+   and checks public Smart DNS alternatives when an observed HTTPS host fails.
+3. Optionally choose a **DNS** preset or custom IPv4 resolvers. Settings remain
+   locked while engines are requested/running or testing.
+4. For manual operation, open **Strategies** or Advanced. **Hosts** supports
+   General/User inspection, editing, file/URL import and export. Manual comparison
+   uses separately configured HTTP/TLS targets; changing targets or filters
+   invalidates its results. Changing the access mode preserves the manual matrix.
 
-General is a fixed base of eight existing curated domains plus the enabled User
+General is a curated base of 130 domains in eight categories plus the enabled User
 extension. App selection and legacy service flags never affect that union.
 The base is defined in `core/domains/BuiltInDomainLists.kt`. Legacy named lists
 remain read-only aliases solely for old `{list:youtube/instagram/linkedin}` commands.
@@ -69,6 +110,19 @@ import/export. `{domains}` and `{list:general}` reference active lists; legacy
 `{sni}` remains compatible with the original fake-SNI value. Raw host filtering
 requires an explicit Advanced override. [Architecture](docs/ARCHITECTURE.md)
 describes the independent modes, hosts and strategy snapshots.
+
+Hosts accepts domain lists and extracts public destination hostnames from standard
+IP/hostname files, excluding blocking/local-address entries. Import from a file or
+an HTTPS URL merges validated domains into User. The source buttons offer the
+dns.malw.link and GeoHide hosts bases used by NetFix Windows; their IP mappings
+are not applied. Sources are refreshed manually. See [Hosts and DNS](docs/HOSTS_AND_DNS.md)
+and the [NetFix Windows comparison](docs/NETFIX_COMPARISON.md).
+The DNS picker defaults to geo-access services: GeoHide RU/EU/US, Xbox/Supercell,
+COMSS, malw and Bezmezhau, with separate Android Private DNS actions for
+Null's Proxy, malw Gateway, DNS-AI and ASTRACAT. General public resolvers have
+their own filter. The catalog includes 27 plain IPv4 profiles, custom resolvers
+and four Private DNS setup actions. Provider instructions and current addresses
+are recorded in the catalog; selecting VPN DNS does not enable DoH/DoT.
 
 ## Networking
 
@@ -81,20 +135,23 @@ Android VpnService → TUN → HEV tun2socks → local SOCKS → ByeDPI → Inte
 Traffic is processed locally. Android VPN consent creates the local tunnel; this
 does not hide the public IP address. Routing packages through that tunnel and
 matching hostnames in ByeDPI are separate responsibilities. Default selective
-mode filters every TCP desync group by observable HTTP/TLS hostnames and forwards
-unselected traffic without desync. This native revision ignores host filters for
+manual mode filters every TCP desync group by observable HTTP/TLS hostnames and forwards
+unselected traffic without desync. Automatic Access discovers visible HTTPS hosts
+of the selected applications without a General allowlist. This native revision ignores host filters for
 UDP, so selective mode forwards UDP unchanged. Advanced host override retains
 unrestricted legacy behavior. IP-only and encrypted-hostname traffic may not match.
 
 ## Build and tests
 
-Required: JDK17+, SDK Platform36, Build Tools36.0.0, NDK30.0.14904198 (r30 beta1),
+Required: JDK17+, SDK Platform36, Build Tools36.0.0, NDK29.0.14206865,
 CMake3.22.1. The checksum-pinned Gradle9.1.0 wrapper is included.
+The commands below use the stable NDK validated in CI; the inherited build default
+is30.0.14904198, so the version override is explicit.
 
 ```sh
 git submodule update --init app/src/main/cpp/byedpi
-sdkmanager --channel=3 "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198" "cmake;3.22.1"
-./gradlew :app:assembleDebug :app:testDebugUnitTest
+sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1"
+./gradlew :app:assembleDebug :app:testDebugUnitTest -Pmaffinet.ndkVersion=29.0.14206865
 ```
 
 Set JAVA_HOME and ANDROID_HOME, or sdk.dir in ignored local.properties. Review

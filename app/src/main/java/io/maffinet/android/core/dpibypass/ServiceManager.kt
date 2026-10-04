@@ -87,6 +87,7 @@ object ServiceManager {
     }
 
     @Synchronized fun onUserStop(context: Context) {
+        io.maffinet.android.core.access.AutomaticAccessController.stop()
         desiredGeneration++
         resumeAfterTesting = false
         startRequested = false
@@ -97,6 +98,7 @@ object ServiceManager {
     }
 
     @Synchronized fun onVpnPaused() {
+        io.maffinet.android.core.access.AutomaticAccessController.stop()
         desiredGeneration++
         paused = true
         resumeAfterTesting = false

@@ -1,0 +1,368 @@
+--- a/conev.h
++++ b/conev.h
+@@ -54,10 +54,17 @@
+ #define FLAG_CONN 4
+ #define FLAG_HTTP 8
+ 
++struct proto_info {
++    char init, type;
++    int host_len, host_pos;
++};
++
+ struct buffer {
+     size_t size;
+     unsigned int offset;
+     ssize_t lock;
++    bool desync_initialized;
++    struct proto_info desync_info;
+     struct buffer *next;
+     char data[];
+ };
+@@ -84,6 +91,7 @@
+     ssize_t recv_count;
+     ssize_t round_sent;
+     unsigned int round_count;
++    bool round_end_pending;
+     
+     struct desync_params *dp;
+     uint64_t dp_mask;
+--- a/conev.c
++++ b/conev.c
+@@ -372,6 +372,8 @@
+     }
+     buff->lock = 0;
+     buff->offset = 0;
++    buff->desync_initialized = false;
++    memset(&buff->desync_info, 0, sizeof(buff->desync_info));
+     buff->next = pool->root_buff;
+     
+     pool->root_buff = buff;
+--- a/desync.h
++++ b/desync.h
+@@ -25,11 +25,6 @@
+ 
+ int post_desync(int sfd, struct desync_params *dp);
+ 
+-struct proto_info {
+-    char init, type;
+-    int host_len, host_pos;
+-};
+-
+ static long gen_offset(long pos, int flag,
+         const char *buffer, size_t n, long lp, struct proto_info *info);
+ #endif
+--- a/desync.c
++++ b/desync.c
+@@ -521,7 +521,9 @@
+         struct eval *val, struct buffer *buff, ssize_t *np, bool *wait)
+ {
+     struct desync_params dp = *val->pair->dp;
+-    struct proto_info info = { 0 };
++    struct proto_info *info = &buff->desync_info;
++    int await_int = dp.group_pacing ? dp.group_pacing : params.await_int;
++    bool wait_send = dp.group_pacing || params.wait_send;
+     
+     int sfd = val->fd;
+     
+@@ -532,19 +534,22 @@
+     ssize_t skip = val->pair->round_sent;
+     unsigned int part_skip = val->pair->part_sent;
+     
+-    if (!skip && LOG_ENABLED) {
+-        init_proto_info(buffer, *np, &info);
+-        
+-        if (info.host_pos) {
++    /* A server response may end the round while this buffer is still pending.
++     * Retrying a transformed buffer must never insert TLS headers again. */
++    if (!buff->desync_initialized && !skip && LOG_ENABLED) {
++        init_proto_info(buffer, *np, info);
++
++        if (info->host_pos) {
+             LOG(LOG_S, "host: %.*s (%d)\n",
+-                info.host_len, buffer + info.host_pos, info.host_pos);
++                info->host_len, buffer + info->host_pos, info->host_pos);
+         } else {
+             INIT_HEX_STR(buffer, (*np > 16 ? 16 : *np));
+             LOG(LOG_S, "bytes: %s (%zd)\n", HEX_STR, *np);
+         }
+     }
+-    if (!skip) {
+-        tamp(buffer, bfsize, np, &dp, &info);
++    if (!buff->desync_initialized) {
++        if (!skip) tamp(buffer, bfsize, np, &dp, info);
++        buff->desync_initialized = true;
+     }
+     ssize_t n = *np;
+     
+@@ -555,13 +560,14 @@
+     unsigned int curr_part = 0;
+     
+     for (; r > 0 || i < dp.parts_n; r--) {
++        if (lp == n) break;
+         if (r <= 0) {
+             part = dp.parts[i];
+             r = part.r; i++;
+         }
+         curr_part++;
+         
+-        long pos = gen_offset(part.pos, part.flag, buffer, n, lp, &info);
++        long pos = gen_offset(part.pos, part.flag, buffer, n, lp, info);
+         pos += (long )part.s * (part.r - r);
+         
+         if (((skip && pos < skip) 
+@@ -578,6 +584,10 @@
+         if (pos > n) {
+             LOG(LOG_E, "pos reduced: %ld -> %ld\n", pos, n);
+             pos = n;
++        }
++        if (pos == lp && curr_part != part_skip) {
++            val->pair->part_sent = curr_part;
++            continue;
+         }
+         ssize_t s = 0;
+         
+@@ -588,7 +598,7 @@
+         switch (part.m) {
+             #ifdef FAKE_SUPPORT
+             case DESYNC_FAKE:;
+-                struct packet pkt = get_tcp_fake(buffer, n, &info, &dp);
++                struct packet pkt = get_tcp_fake(buffer, n, info, &dp);
+                 if (!pkt.data) {
+                     return -1;
+                 }
+@@ -632,10 +642,8 @@
+         }
+         LOG(LOG_S, "split: pos=%ld-%ld (%zd), m: %s\n", lp, pos, s, demode_str[part.m]);
+         }
+-        val->pair->part_sent = curr_part;
+-
+         if (s == ERR_WAIT) {
+-            set_timer(pool, val, params.await_int);
++            set_timer(pool, val, await_int);
+             *wait = true;
+             return lp - offset;
+         }
+@@ -650,11 +658,13 @@
+             return lp + s - offset;
+         }
+         
+-        if (sock_has_notsent(sfd) 
+-                || (params.wait_send 
+-                    && curr_part > part_skip)) {
++        /* Only a fully sent part can be skipped on the next retry. */
++        val->pair->part_sent = curr_part;
++        if (pos < n && (sock_has_notsent(sfd)
++                || (wait_send
++                    && curr_part > part_skip))) {
+             LOG(LOG_S, "sock_has_notsent\n");
+-            set_timer(pool, val, params.await_int);
++            set_timer(pool, val, await_int);
+             *wait = true;
+             return pos - offset;
+         }
+@@ -665,14 +675,17 @@
+     // send all/rest
+     if (lp < n) {
+         LOG((lp ? LOG_S : LOG_L), "send: pos=%ld-%zd\n", lp, n);
+-        if (send(sfd, buffer + lp, n - lp, 0) < 0) {
++        ssize_t sent = send(sfd, buffer + lp, n - lp, 0);
++        if (sent < 0) {
+             if (get_e() == EAGAIN) {
+                 return lp - offset;
+             }
+             uniperror("send");
+             return -1;
+         }
+-    }
++        return lp + sent - offset;
++    }
++    restore_state(val);
+     return n - offset;
+ }
+ 
+--- a/extend.c
++++ b/extend.c
+@@ -208,7 +208,10 @@
+         memcpy(client->buff->data, client->sq_buff->data, client->buff->lock);
+         
+         client->buff->offset = 0;
+-    }
++        client->buff->desync_initialized = false;
++        memset(&client->buff->desync_info, 0, sizeof(client->buff->desync_info));
++    }
++    client->round_end_pending = false;
+     client->round_sent = 0;
+     client->part_sent = 0;
+     
+@@ -612,7 +615,8 @@
+     }
+     val->dp = dp;
+     
+-    if ((dp->hosts || dp->proto) && !val->buff && params.delay_conn) {
++    if ((dp->hosts || dp->proto) && !val->buff
++            && (params.delay_conn || dp->out_type)) {
+         if (resp_error(val->fd, 0, val->flag) < 0) {
+             uniperror("send");
+             return -1;
+@@ -691,7 +695,7 @@
+     if (!skip) {
+         struct eval *client = remote->pair;
+     
+-        if (client->recv_count == *n 
++        if (!buff->desync_initialized && client->recv_count == *n
+                 && setup_conn(client, buff->data, *n) < 0) {
+             return -1;
+         }
+@@ -714,7 +718,13 @@
+         uniperror("send");
+         return handle_err(pool, remote, get_e());
+     }
+-    remote->pair->round_sent += sn;
++    struct eval *sender = remote->pair;
++    sender->round_sent += sn;
++    if (sender->round_end_pending && !*wait && off + sn >= (size_t)*n) {
++        sender->round_end_pending = false;
++        sender->round_sent = 0;
++        sender->part_sent = 0;
++    }
+     return sn;
+ }
+ 
+@@ -734,12 +744,20 @@
+         return handle_err(pool, val, get_e());
+     }
+     val->recv_count += n;
++    val->part_sent = 0;
++    buff->desync_initialized = false;
++    memset(&buff->desync_info, 0, sizeof(buff->desync_info));
+     
+     if (val->round_sent == 0) {
+         val->round_count++;
+         if (val->pair) {
+-            val->pair->round_sent = 0;
+-            val->pair->part_sent = 0;
++            /* Keep pending-buffer progress until its final byte is sent.
++             * The next client read then starts the next exchange round. */
++            if (val->pair->buff) val->pair->round_end_pending = true;
++            else {
++                val->pair->round_sent = 0;
++                val->pair->part_sent = 0;
++            }
+         }
+     }
+     if (val->flag == FLAG_CONN && !val->round_sent) {
+--- a/params.h
++++ b/params.h
+@@ -112,6 +112,7 @@
+     struct part *tlsrec;
+     uint8_t tlsminor;
+     bool tlsminor_set;
++    int group_pacing; /* 0: inherit global -Z/-W; >0: enable pacing for this group */
+     
+     int proto;
+     short detect;
+--- a/main.c
++++ b/main.c
+@@ -96,6 +96,8 @@
+     "    -j, --ipset <file|:str>   IP whitelist\n"
+     "    -V, --pf <port[-portr]>   Ports range whitelist\n"
+     "    -R, --round <num[-numr]>  Number of request to which desync will be applied\n"
++    "        --group-pacing <ms>   Pace TCP parts for this group only (1..60000 ms)\n"
++    "        --group-redirect <uri> Connect through a destination for this group only\n"
+     "    -s, --split <pos_t>       Position format: offset[:repeats:skip][+flag1[flag2]]\n"
+     "                              Flags: +s - SNI offset, +h - HTTP host offset, +n - null\n"
+     "                              Additional flags: +e - end, +m - middle\n"
+@@ -124,6 +126,8 @@
+     #endif
+ };
+ 
++
++enum { OPT_GROUP_PACING = 256, OPT_GROUP_REDIRECT };
+ 
+ const struct option options[] = {
+     #ifdef DAEMON
+@@ -183,12 +187,14 @@
+     {"def-ttl",       1, 0, 'g'},
+     {"wait-send",     0, 0, 'Z'}, //
+     {"await-int",     1, 0, 'W'}, //
++    {"group-pacing",  1, 0, OPT_GROUP_PACING},
+     #ifdef __linux__
+     {"drop-sack",     0, 0, 'Y'},
+     {"protect-path",  1, 0, 'P'}, //
+     #endif
+     {"ipset",         1, 0, 'j'},
+     {"connect-to",    1, 0, 'C'}, //
++    {"group-redirect",1, 0, OPT_GROUP_REDIRECT},
+     {"comment",       1, 0, '#'}, //
+     {"cache-merge",   1, 0, '/'},
+     {0}
+@@ -688,18 +694,20 @@
+ 
+ int parse_args(int argc, char **argv) 
+ {
+-    int optc = sizeof(options)/sizeof(*options);
+-    for (int i = 0, e = optc; i < e; i++)
+-        optc += options[i].has_arg;
++    int optc = 0;
++    for (int i = 0; options[i].name; i++) {
++        if (options[i].val > 0 && options[i].val <= UCHAR_MAX)
++            optc += 1 + options[i].has_arg;
++    }
+         
+     char opt[optc + 1];
+     opt[optc] = 0;
+     
+-    for (int i = 0, o = 0; o < optc; i++, o++) {
+-        opt[o] = options[i].val;
++    for (int i = 0, o = 0; options[i].name; i++) {
++        if (options[i].val <= 0 || options[i].val > UCHAR_MAX) continue;
++        opt[o++] = options[i].val;
+         for (int c = options[i].has_arg; c; c--) {
+-            o++;
+-            opt[o] = ':';
++            opt[o++] = ':';
+         }
+     }
+     //
+@@ -1238,7 +1246,16 @@
+         case 'W':
+             params.await_int = atoi(optarg);
+             break;
+-            
++
++        case OPT_GROUP_PACING:
++            val = strtol(optarg, &end, 10);
++            if (val < 1 || val > 60000 || *end)
++                invalid = 1;
++            else
++                dp->group_pacing = val;
++            break;
++
++        case OPT_GROUP_REDIRECT:
+         case 'C':
+             dp->out_type = get_addr_scheme(optarg, &dp->out_addr);
+             if ((dp->out_type & OUT_SUPPORT) != dp->out_type
+@@ -1246,7 +1263,7 @@
+                 invalid = 1;
+             }
+             if (!dp->out_type) dp->out_type = MODE_SOCKS5;
+-            params.delay_conn = 1;
++            if (rez == 'C') params.delay_conn = 1;
+             break;
+         
+         #ifdef __linux__
+--- a/proxy.c
++++ b/proxy.c
+@@ -684,6 +684,12 @@
+         }
+         if (sn < n || wait) {
+             val->buff->offset += sn;
++            /* A short write enables POLLOUT; pacing on its retry must disable
++             * it again, otherwise readiness callbacks bypass the timer. */
++            if (mod_etype(pool, pair, wait ? 0 : POLLOUT)) {
++                uniperror("mod_etype");
++                return -1;
++            }
+             return 0;
+         }
+         buff_push(pool, val->buff);

@@ -50,11 +50,6 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v4
-      - name: Install emulator runtime library
-        timeout-minutes: 5
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y libpulse0
       - name: Verify runner SDK license provisioning
         shell: bash
         run: |
@@ -76,22 +71,96 @@ jobs:
           fi
           echo "Using installed SDK manager: $SDK_MANAGER"
           "$SDK_MANAGER" --version
-          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --channel=0 "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "platform-tools" "emulator" "system-images;android-29;default;x86_64" </dev/null
+          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --channel=0 "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1" "platform-tools" </dev/null
       - name: Build debug and release APKs, run JVM tests and Android Lint
         timeout-minutes: 12
         run: bash ./gradlew :app:assembleDebug :app:assembleRelease :app:assembleDebugAndroidTest :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain
-      - name: Run instrumentation smoke on AOSP API 29
-        timeout-minutes: 20
-        run: bash tools/run-emulator-smoke.sh
+      - name: Save installable debug APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: maffinet-debug-apk
+          path: app/build/outputs/apk/debug/
+          retention-days: 7
+          if-no-files-found: warn
+      - name: Save the exact app and test APKs for both emulator runs
+        uses: actions/upload-artifact@v4
+        with:
+          name: maffinet-instrumentation-apks
+          path: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/androidTest/debug/*.apk
+          retention-days: 7
+          if-no-files-found: error
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-validation
+          name: android-build-validation
           path: |
             app/build/reports/tests/
-            app/build/reports/androidTests/
-            app/build/outputs/androidTest-results/
-            app/build/reports/emulator-smoke/
             app/build/reports/lint-results-debug.*
           if-no-files-found: ignore
+  emulator-smoke:
+    name: Android API ${{ matrix.api }} smoke
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - api: 29
+            image_tag: default
+            port: 5580
+          # Official Google SDK repository lists this stable x86_64 API 36 image
+          # under android-sdk-license; no new license is accepted here.
+          # https://dl.google.com/android/repository/sys-img/google_apis/sys-img2-3.xml
+          - api: 36
+            image_tag: google_apis
+            port: 5582
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/download-artifact@v4
+        with:
+          name: maffinet-instrumentation-apks
+          path: app/build/outputs/apk/
+      - name: Install emulator runtime library
+        timeout-minutes: 5
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y libpulse0
+      - name: Install the selected image using runner agreements
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          test -s "$ANDROID_HOME/licenses/android-sdk-license"
+          SDK_MANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDK_MANAGER" ]]; then
+            mapfile -t SDK_MANAGERS < <(find "$ANDROID_HOME/cmdline-tools" -mindepth 3 -maxdepth 3 -type f -name sdkmanager -path '*/bin/sdkmanager' | sort -V)
+            (( ${#SDK_MANAGERS[@]} > 0 )) || { echo 'No installed SDK manager was found.'; exit 1; }
+            SDK_MANAGER="${SDK_MANAGERS[-1]}"
+          fi
+          "$SDK_MANAGER" --sdk_root="$ANDROID_HOME" --channel=0 "platform-tools" "emulator" "system-images;android-${{ matrix.api }};${{ matrix.image_tag }};x86_64" </dev/null
+      - name: Run the same prebuilt APK on the selected Android version
+        timeout-minutes: 20
+        env:
+          MAFFINET_SMOKE_API_LEVEL: ${{ matrix.api }}
+          MAFFINET_SMOKE_IMAGE_TAG: ${{ matrix.image_tag }}
+          MAFFINET_SMOKE_EMULATOR_PORT: ${{ matrix.port }}
+          MAFFINET_SMOKE_PREBUILT: 'true'
+        run: bash tools/run-emulator-smoke.sh
+      - name: Upload Android ${{ matrix.api }} runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-validation-api${{ matrix.api }}
+          path: app/build/reports/emulator-smoke/
+          retention-days: 7
+          if-no-files-found: warn

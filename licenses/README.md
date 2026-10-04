@@ -12,7 +12,7 @@ additional-term declaration is retained in `docs/UPSTREAM_LICENSE_NOTES.md`.
 | ByeDPIAndroid-GPL-3.0.txt | https://raw.githubusercontent.com/dovecoteescapee/ByeDPIAndroid/master/LICENSE |
 | tg-ws-proxy-android-GPL-3.0.txt | https://raw.githubusercontent.com/amurcanov/tg-ws-proxy-android/main/LICENSE |
 | Flowseal-tg-ws-proxy-MIT.txt | https://raw.githubusercontent.com/Flowseal/tg-ws-proxy/main/LICENSE |
-| JNA-5.14.0-LICENSE.txt | https://raw.githubusercontent.com/java-native-access/jna/5.14.0/LICENSE |
+| JNA-5.19.1-LICENSE.txt | https://raw.githubusercontent.com/java-native-access/jna/5.19.1/LICENSE |
 | Apache-2.0.txt | https://www.apache.org/licenses/LICENSE-2.0.txt |
 
 The standard root GPLv3 text comes from https://www.gnu.org/licenses/gpl-3.0.txt.

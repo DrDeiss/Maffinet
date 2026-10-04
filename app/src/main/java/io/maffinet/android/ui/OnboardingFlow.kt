@@ -32,7 +32,10 @@ import androidx.compose.ui.unit.sp
 import io.maffinet.android.R
 import io.maffinet.android.BuildConfig
 import io.maffinet.android.core.dpibypass.StrategyTestManager
+import io.maffinet.android.core.strategy.StrategyEvaluation
+import io.maffinet.android.core.strategy.StrategyScorer
 import io.maffinet.android.data.OnboardingStep
+import io.maffinet.android.data.strategy.ProbeTargetRepository
 import androidx.compose.material3.Icon
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Computer
@@ -610,7 +613,7 @@ private fun YoutubeBypassStep(
                     text = if (isSmartTv) {
                         "Разблокировать YouTube?"
                     } else {
-                        "Включить VPN для сервисов?"
+                        "Включить VPN для приложений?"
                     },
                     fontSize = 32.sp,
                     lineHeight = 38.sp,
@@ -625,7 +628,7 @@ private fun YoutubeBypassStep(
                     text = if (isSmartTv) {
                         "Для YouTube на Android TV доступна настройка SmartTube. Выберите вариант подключения."
                     } else {
-                        "VPN направляет выбранные приложения через Maffinet. YouTube включён по умолчанию; Instagram, LinkedIn и другие сервисы можно выбрать на экране «Сервисы»."
+                        "VPN направляет выбранные приложения через Maffinet. После настройки выберите нужные приложения на главном экране. Чтобы проверять сайты в браузере, добавьте и браузер."
                     },
                     fontSize = 16.sp,
                     lineHeight = 22.sp,
@@ -768,6 +771,9 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
     }
 
     val strategyName = StrategyTestManager.getActiveStrategyName(context)
+    val results = onboardingStrategyResults(context)
+    val complete = StrategyScorer.bestComplete(results, ProbeTargetRepository(context).urls())
+    val best = results.firstOrNull()
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -780,7 +786,7 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Параметры уже подобраны",
+                    text = "Есть сохранённые результаты",
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color(0xFFEAF5F0),
@@ -790,7 +796,11 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "Мы нашли рабочий способ обхода для вашего интернета во время прошлой проверки:",
+                    text = when {
+                        complete != null -> "В прошлой проверке все заданные адреса прошли проверку. Текущая стратегия:"
+                        best != null && best.passedServices > 0 -> "Лучший прошлый результат: ${best.passedServices}/${best.totalServices} адресов. Полного результата нет. Текущая стратегия:"
+                        else -> "Для текущих адресов нет подтверждённого полного результата. Текущая стратегия:"
+                    },
                     fontSize = 14.sp,
                     color = Color(0xFF93AEB7),
                     textAlign = TextAlign.Center
@@ -816,7 +826,7 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painter = painterResource(id = R.drawable.ic_check),
+                            painter = painterResource(id = if (complete != null) R.drawable.ic_check else R.drawable.ic_bolt),
                             contentDescription = null,
                             tint = Color(0xFF8DE5C0),
                             modifier = Modifier.size(20.dp)
@@ -834,7 +844,7 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Text(
-                    text = "Использовать этот результат или провести новое тестирование сети?",
+                    text = "Сохранить текущую стратегию или повторить проверку?",
                     fontSize = 14.sp,
                     color = Color(0xFF93AEB7),
                     lineHeight = 20.sp,
@@ -866,6 +876,11 @@ private fun StrategyTestingExistingStep(onNavigate: (OnboardingStep) -> Unit) {
         }
     }
 }
+
+private fun onboardingStrategyResults(context: android.content.Context): List<StrategyEvaluation> =
+    if (StrategyTestManager.historyMatchesCurrentConfiguration(context)) {
+        StrategyTestManager.matrixResults.values.sortedWith(StrategyScorer.comparator)
+    } else emptyList()
 
 @Composable
 private fun StrategyTestingRunningStep(
@@ -1108,6 +1123,7 @@ private fun StrategyTestingRunningStep(
 
 @Composable
 private fun StrategyTestingResultStep(onNavigate: (OnboardingStep) -> Unit) {
+    val context = LocalContext.current
     var showContent by remember { mutableStateOf(false) }
     var showButton by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
@@ -1127,6 +1143,12 @@ private fun StrategyTestingResultStep(onNavigate: (OnboardingStep) -> Unit) {
     }
 
     val isError = StrategyTestManager.hasConnectionError
+    val results = onboardingStrategyResults(context)
+    val complete = StrategyScorer.bestComplete(results, ProbeTargetRepository(context).urls())
+    val best = results.firstOrNull()
+    val fullApplied = complete != null && complete.command == StrategyTestManager.bestStrategyResult &&
+        complete.command == StrategyTestManager.appliedStrategy
+    val needsRetry = isError || !fullApplied
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1138,62 +1160,56 @@ private fun StrategyTestingResultStep(onNavigate: (OnboardingStep) -> Unit) {
             exit = fadeOut(tween(200))
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (isError) {
-                    Text(
-                        text = "Нет подключения к интернету",
-                        fontSize = 32.sp,
-                        lineHeight = 38.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEF4444),
-                        textAlign = TextAlign.Center
+                Text(
+                    text = when {
+                        isError -> "Проверка завершилась с ошибкой"
+                        complete != null -> "Все адреса прошли проверку"
+                        best != null && best.passedServices > 0 -> "Частичный результат"
+                        else -> "Полного результата нет"
+                    },
+                    fontSize = 32.sp,
+                    lineHeight = 38.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isError) Color(0xFFEF4444) else Color(0xFFEAF5F0),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                results.take(2).forEach { result ->
+                    ResultCard(
+                        strategy = result.command,
+                        status = "${result.passedServices}/${result.totalServices} адресов" +
+                            (result.averageLatencyMs?.let { " · $it мс" } ?: ""),
+                        fullyReachable = StrategyScorer.bestComplete(listOf(result), ProbeTargetRepository(context).urls()) != null
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
+                Text(
+                    text = when {
+                        isError -> StrategyTestManager.currentProgress.ifBlank { "Не удалось завершить проверку." } +
+                            if (fullApplied) "\nСтратегия, прошедшая полную проверку, применена." else "\nПрежняя стратегия сохранена."
+                        fullApplied -> "Стратегия применена: все заданные адреса прошли HTTP/TLS-проверку. Это не подтверждает работу всех функций приложений."
+                        complete != null -> "Все адреса прошли проверку, но автоматический выбор не был завершён. Прежняя стратегия сохранена."
+                        best != null && best.passedServices > 0 -> "Лучший результат: ${best.passedServices}/${best.totalServices} адресов. Прежняя стратегия сохранена. Повторить проверку или выбрать вариант вручную можно в разделе «Стратегии»."
+                        best != null -> "Ни один из ${best.totalServices} адресов не прошёл проверку. Прежняя стратегия сохранена."
+                        else -> "Нет завершённых результатов проверки. Прежняя стратегия сохранена."
+                    },
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    color = Color(0xFF93AEB7),
+                    textAlign = TextAlign.Center
+                )
+                best?.failedTargets?.map { it.url }?.distinct()?.takeIf { it.isNotEmpty() }?.let { failedUrls ->
+                    Spacer(modifier = Modifier.height(12.dp))
                     Text(
-                        text = "Не удалось выполнить автоматическое тестирование сети, так как на вашем устройстве отсутствует интернет-соединение или серверы проверки недоступны.\n\nПожалуйста, проверьте подключение к интернету, отключите другие VPN-приложения и повторите попытку.",
-                        fontSize = 16.sp,
-                        lineHeight = 22.sp,
+                        text = "Не прошли проверку:\n${failedUrls.joinToString("\n")}",
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
                         color = Color(0xFF93AEB7),
                         textAlign = TextAlign.Center
                     )
-                } else {
-                    Text(
-                        text = "Способ обхода найден",
-                        fontSize = 32.sp,
-                        lineHeight = 38.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFEAF5F0),
-                        textAlign = TextAlign.Center
-                    )
-
-                    Spacer(modifier = Modifier.height(24.dp))
-
-                    val results = StrategyTestManager.testResults
-                    val topResults = results.take(2)
-
-                    topResults.forEach { result ->
-                        ResultCard(index = result.first, strategy = result.second, status = result.third)
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    if (topResults.isEmpty()) {
-                        Text(
-                            text = "Не удалось измерить скорость, применили стандартный профиль.",
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp,
-                            color = Color(0xFF93AEB7),
-                            textAlign = TextAlign.Center
-                        )
-                    } else {
-                        Text(
-                            text = "Подобрали оптимальный профиль для вашей сети. Изменить можно в настройках.",
-                            fontSize = 16.sp,
-                            lineHeight = 22.sp,
-                            color = Color(0xFF93AEB7),
-                            textAlign = TextAlign.Center
-                        )
-                    }
                 }
             }
         }
@@ -1204,9 +1220,9 @@ private fun StrategyTestingResultStep(onNavigate: (OnboardingStep) -> Unit) {
         val isLandscape = configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
         ButtonSlot(
             visible = showButton,
-            minHeight = if (isError) (if (isLandscape) 100.dp else 116.dp) else (if (isLandscape) 44.dp else 52.dp)
+            minHeight = if (needsRetry) (if (isLandscape) 100.dp else 116.dp) else (if (isLandscape) 44.dp else 52.dp)
         ) {
-            if (isError) {
+            if (needsRetry) {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -1217,7 +1233,7 @@ private fun StrategyTestingResultStep(onNavigate: (OnboardingStep) -> Unit) {
                         onClick = { onNavigate(OnboardingStep.StrategyTestingRunning) }
                     )
                     SecondaryButton(
-                        text = "Продолжить без настройки",
+                        text = "Продолжить с текущей стратегией",
                         onClick = { onNavigate(OnboardingStep.AboutAndSupport) }
                     )
                 }
@@ -1348,7 +1364,7 @@ private fun SummaryStep(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    text = "Всё готово!",
+                    text = "Настройка завершена",
                     fontSize = 32.sp,
                     lineHeight = 38.sp,
                     fontWeight = FontWeight.Bold,
@@ -1379,11 +1395,20 @@ private fun SummaryStep(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 val strategyName = if (wantsYoutubeBypass == true) StrategyTestManager.getActiveStrategyName(context) else null
+                val results = onboardingStrategyResults(context)
+                val activeResult = results.firstOrNull { it.command == StrategyTestManager.appliedStrategy }
+                val activePassed = activeResult != null && StrategyScorer.bestComplete(
+                    listOf(activeResult), ProbeTargetRepository(context).urls()
+                ) != null
 
                 SummaryCard(
                     iconRes = R.drawable.ic_youtube,
-                    text = if (strategyName != null) "VPN, стратегия «$strategyName» выбрана автоматически" else "VPN для сервисов не используется",
-                    isActive = wantsYoutubeBypass == true
+                    text = when {
+                        strategyName == null -> "VPN для сервисов не используется"
+                        activePassed -> "Стратегия «$strategyName» прошла проверку всех заданных адресов."
+                        else -> "Полного результата нет. Сохранена текущая стратегия «$strategyName»."
+                    },
+                    isActive = wantsYoutubeBypass == true && activePassed
                 )
             }
         }
@@ -1395,7 +1420,6 @@ private fun SummaryStep(
                 text = "Начать пользоваться",
                 modifier = Modifier.focusRequester(focusRequester),
                 onClick = {
-                    val prefs = context.getSharedPreferences(context.packageName + "_preferences", android.content.Context.MODE_PRIVATE)
                     io.maffinet.android.data.settings.MaffinetSettingsRepository(context).setTelegramEnabled(wantsTelegramProxy ?: true)
                     onNavigate(OnboardingStep.FinalGreeting)
                 }
@@ -1718,9 +1742,9 @@ private fun SummaryCard(
 
 @Composable
 private fun ResultCard(
-    index: Int,
     strategy: String,
-    status: String
+    status: String,
+    fullyReachable: Boolean
 ) {
     Row(
         modifier = Modifier
@@ -1763,7 +1787,7 @@ private fun ResultCard(
         Spacer(modifier = Modifier.width(16.dp))
         Text(
             text = status,
-            color = if (status.contains("мс")) Color(0xFF8DE5C0) else Color(0xFFEF4444),
+            color = if (fullyReachable) Color(0xFF8DE5C0) else Color(0xFF93AEB7),
             fontWeight = FontWeight.Bold,
             fontSize = 14.sp
         )

@@ -1,0 +1,618 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-04",
+  "head": "0d1cf68054120f2248f038fbbb3af9fe448589a0",
+  "branch": "codex/rebuild-p00",
+  "statusEntriesIncludingNewEvidence": 123,
+  "preservedFiles": 121,
+  "rawSnapshot": ".toolchain/rebuild-p00/baseline.zip",
+  "rawSnapshotSha256": "89dc8f867d60a435eebbcc57f18009582ed02575dc7bbddba6ede900b7968e5a",
+  "secretPatternHits": [],
+  "entries": [
+    {
+      "path": ".github/workflows/android.yml",
+      "bytes": 6602,
+      "sha256": "510c09e11c57b5d074f395a8c0a5fa83966992b12c7abd3d8b19753c4683c6ab"
+    },
+    {
+      "path": "PLAN.md",
+      "bytes": 31645,
+      "sha256": "8d585723155da1e9853d36208538c3798aa0b4b931e0dde3f4013cb05d0b77ec"
+    },
+    {
+      "path": "README.md",
+      "bytes": 13161,
+      "sha256": "3c56c41bf18de3ef245a6c30407807c64a71c8e48e9270c955c9c4272dfd5f5a"
+    },
+    {
+      "path": "app/build.gradle.kts",
+      "bytes": 6016,
+      "sha256": "acf9bbc3a1924dc7b9c6716d02fa5ba117bf59acba6c99ff1623e86ac93d63be"
+    },
+    {
+      "path": "app/proguard-rules.pro",
+      "bytes": 1073,
+      "sha256": "9db01a9c2c11577cc03c5288458b84a021c71157345098d6bddea24c021c5515"
+    },
+    {
+      "path": "app/src/androidTest/java/io/maffinet/android/MaffinetUiSmokeTest.kt",
+      "bytes": 19646,
+      "sha256": "99a05de20228f5eef761471f8eb40cd24f7c5a135f583608816c52d1177b9bf6"
+    },
+    {
+      "path": "app/src/androidTest/java/io/maffinet/android/network/NativeVpnLifecycleSmokeTest.kt",
+      "bytes": 34971,
+      "sha256": "48d911b9efd712d78ccb47d5c56de4984f86e2875b3264398574adb48223adab"
+    },
+    {
+      "path": "app/src/androidTest/java/io/maffinet/android/strategy/StrategyConfigurationSmokeTest.kt",
+      "bytes": 12708,
+      "sha256": "13db959fd04f3a8a7a1bea6afd8fb0ed70fbad41b3fa5b815281acdd55f9f85c"
+    },
+    {
+      "path": "app/src/main/AndroidManifest.xml",
+      "bytes": 4987,
+      "sha256": "dc352ccb99218ae660ac98f9044c2ae62a0a795d65b3357e8e4afc5da7eb0733"
+    },
+    {
+      "path": "app/src/main/cpp/CMakeLists.txt",
+      "bytes": 1296,
+      "sha256": "c192ec4778f8f2c2e78300f194975a3633bd0f8c1dd70cd8777f71b405d07348"
+    },
+    {
+      "path": "app/src/main/cpp/native-lib.c",
+      "bytes": 5427,
+      "sha256": "3b6d0a7c2b98729c01cf1b18b58a1469ff502994c23fe66eb7750fcda5356ed6"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/MainActivity.kt",
+      "bytes": 32647,
+      "sha256": "64476862a062d3a772f97ba5f41b2f35a1a2b66ed322a37363f75c78a66aab5f"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/debug/AppDebugManager.kt",
+      "bytes": 11736,
+      "sha256": "4af78fde70eb43732d1c66fe0b82d783a0687e78c1dd53e6ce8ed46c540b1edc"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/domains/BuiltInDomainLists.kt",
+      "bytes": 4826,
+      "sha256": "3a7aa7cd67484570da28f958cf6d19d9ec8544d4409b7a79c21852d1e28ffa1b"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/domains/DomainParser.kt",
+      "bytes": 4925,
+      "sha256": "929d00c8555e4bac6d147ff325d23b0933d05b13d817100f3b24517d05e8eaf3"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/ByeDpiProxy.kt",
+      "bytes": 1344,
+      "sha256": "f9f1e9cbfc20392b2b602d396ae321cde9aa7b09ddfc49f73d30598861a2d9c2"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/ByeDpiProxyPreferences.kt",
+      "bytes": 7236,
+      "sha256": "5577f18ccd6d24c7a29fba02ffecda4099a9ae6a4b16427ecd8eb48ec1b5abb8"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/ByeDpiProxyService.kt",
+      "bytes": 7976,
+      "sha256": "4f7818836336d4cc043f443e8c9ea34967d1f037a5523faf95e83f1405d0f935"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/ByeDpiVpnService.kt",
+      "bytes": 27086,
+      "sha256": "e830d5c4a4dff9beca6fc6462c0bc11dc7e7bad706b82c49aa84b105cfcf2888"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/ServiceManager.kt",
+      "bytes": 9319,
+      "sha256": "b0badd14b0b6e3d50faf135839bba87738b72a4fc08418e489cb7c582a2f559c"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/StrategyTestManager.kt",
+      "bytes": 26805,
+      "sha256": "e64bee5778a1e84a8022579093102185393c1500a95b746bbf67f4f1207ef066"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dpibypass/StrategyTester.kt",
+      "bytes": 9087,
+      "sha256": "94cb40b6074922e7bf3ecfc7f90e692b8486b6898367c6cf85116f63d64c15aa"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/strategy/ProbeTargets.kt",
+      "bytes": 3659,
+      "sha256": "89588f0a3f256fb10f993dc439950c28ad48c57e04513e77c18314fc58f876a1"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/strategy/StrategyEvaluation.kt",
+      "bytes": 2496,
+      "sha256": "feddd20ef2fb9674ddf2653811489bf399f9986c04d15822dc73878449b8ee65"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/tgproxy/TgProxyController.kt",
+      "bytes": 8661,
+      "sha256": "0902590cd2dc9a9074d3f95b87d280e5790cd4e2342328bd5ed0a292af7a69ab"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/tgproxy/TgProxyService.kt",
+      "bytes": 15326,
+      "sha256": "af05bf80227c98f43c6a4c45b8c45a2237a133bfae14ad2f72bf2a57da25a0e6"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/data/domains/UserDomainStore.kt",
+      "bytes": 3020,
+      "sha256": "95e0272dc17980dabb856bcd879794ca5268771e9de470cbdc66396e92e9c079"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/data/settings/MaffinetSettingsRepository.kt",
+      "bytes": 6945,
+      "sha256": "39fb6e9d2a3da41c193a8fa2fbeafdfc4a3ef9d60e1b1cdfc74b5ff1deefe4c1"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/data/strategy/ProbeTargetRepository.kt",
+      "bytes": 2547,
+      "sha256": "e85fb817affd07b7274547008783cc5a04f4e6d24da5c0d22830828df73b52cc"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/service/BootReceiver.kt",
+      "bytes": 1228,
+      "sha256": "f941fe458474dedf5849fa55e391e1cda864a5b0e530a0b7aae8d5393f17466d"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/service/MaffinetTileService.kt",
+      "bytes": 2455,
+      "sha256": "79598546bc71f973b75b0070016efcf8efbed45ac793daf9936c5eb56f757363"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/service/UpdateStatusReceiver.kt",
+      "bytes": 938,
+      "sha256": "af8649efcd6c1020c8c361f7dca430c92f9d50101b821a20a230fea83053780b"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/service/WatchdogReceiver.kt",
+      "bytes": 3954,
+      "sha256": "aef59c299ddf9c4ff336f7290e25d020e40978df16275aa9dc013abc7b8b9aa3"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/OnboardingFlow.kt",
+      "bytes": 77047,
+      "sha256": "62fb11af04a5bc2ef9d103d1aa3df7fc7e9371047f3513c3a0ec7b87c4e6b34a"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/SettingsTab.kt",
+      "bytes": 65460,
+      "sha256": "be945fe6a52a6bce3d1f8577634f4ee5526882bc6021b4ad24bb419397fcbb97"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/YoutubeTab.kt",
+      "bytes": 144728,
+      "sha256": "2e2ff5d2b6d06cff94ddb8c9140a152bed6bddef1301d61973e0cfbdf9bcd2ee"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/components/DnsPresets.kt",
+      "bytes": 722,
+      "sha256": "7aa63dd5a532f1c63e36f26fb1ad10de80c9f87bd1d5871158be2c8560b7680f"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/components/MaffinetDnsSheet.kt",
+      "bytes": 41424,
+      "sha256": "34a441d4c0ce7987fdd19c8eec7b9e0aacb28f00beb9dabb01b3e1c198373618"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/home/HomeScreen.kt",
+      "bytes": 13222,
+      "sha256": "f14e89977a1f51e1f2e061dbd47e0bf1f409fc1827e88560c5c330936f7df240"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/settings/AdvancedScreen.kt",
+      "bytes": 11136,
+      "sha256": "abf154f59e07e20b7eba0f0acee65385e98912be2d74063405e49f5594c9402f"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/settings/DomainListsScreen.kt",
+      "bytes": 12312,
+      "sha256": "59bf5d8b3265a464aae363d0934d06e18e14fb1a65d41f6ba35ccf0d0eb99da5"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/ui/strategies/StrategiesScreen.kt",
+      "bytes": 12319,
+      "sha256": "37974ab09ea18f3ccfb003c340041e459d863cf82c6eb667b58466a77ea5387d"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/domains/BuiltInDomainListsTest.kt",
+      "bytes": 3190,
+      "sha256": "a10eb6e7e354ae31d77bdbc4a56994f98e55341d98c0b898033e2d56549df0b6"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/domains/DomainParserTest.kt",
+      "bytes": 3425,
+      "sha256": "d2bce739d53fbf4e7d9801950792491aa2de601ef893c1b1e56ec22468c3e11b"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/strategy/ProbeTargetsTest.kt",
+      "bytes": 3607,
+      "sha256": "ba654d1a4df02c14fe81562c8e24bfcf4f788f633f37c6c6e6f4c5d818183204"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/strategy/StrategyScorerTest.kt",
+      "bytes": 4440,
+      "sha256": "bd7246391afcc178412cad96bc2983c6829571a14980e83294ffa60357d295e8"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/data/domains/UserDomainStoreTest.kt",
+      "bytes": 3961,
+      "sha256": "52a2bbb92837cdc4c7e149a43f4c43c8e9a82463cd9218f9685a2936237c6489"
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "bytes": 6773,
+      "sha256": "5f8caa61eaaae83869461ae0c657c439a0ea9bca6b3dfc70527041a5b8195666"
+    },
+    {
+      "path": "docs/KNOWN_LIMITATIONS.md",
+      "bytes": 7488,
+      "sha256": "be6e0cf2a14a582397c30215f8c1dd9c71369a0eac2a0ed470bebe081180733c"
+    },
+    {
+      "path": "docs/NATIVE_PROVENANCE.md",
+      "bytes": 11474,
+      "sha256": "71a56edc822354f3efc6ddaf863ec186b4313f91c7efb5407345ce4e02cf0ddc"
+    },
+    {
+      "path": "docs/screenshots/README.md",
+      "bytes": 4035,
+      "sha256": "fdd77c9a6237c4c17fd47eae64c62b7cda2508463102aaec478bc161d574e0fd"
+    },
+    {
+      "path": "licenses/README.md",
+      "bytes": 1607,
+      "sha256": "3bea5a8d2ec8baf2535128b76b191ba5547e4f7f8799d392ee09dbd55aa29c6a"
+    },
+    {
+      "path": "tools/build-native-contract.py",
+      "bytes": 5902,
+      "sha256": "fba7dbb64e358c39ea67db09e0a4db42dde8d49e7facd93de69e31c06e6c557b"
+    },
+    {
+      "path": "tools/run-emulator-smoke.sh",
+      "bytes": 15791,
+      "sha256": "31e07e46f1d9f55ccdde1e159ca329ac93bc1fedd8f95083ca41a83d73ba7ce9"
+    },
+    {
+      "path": "verification/build.gradle.kts",
+      "bytes": 3918,
+      "sha256": "293976c434ba795fd6fa5ef229b3c03fe3acef4b9fb16d60bcb880a0bd407b7a"
+    },
+    {
+      "path": "verification/native/native_contract.c",
+      "bytes": 2808,
+      "sha256": "85821747cdf85702b4cf58f9112b65509f68656c785deae3ba6f3fc0ef027371"
+    },
+    {
+      "path": "verification/src/test/kotlin/io/maffinet/verification/NativeParserContractTest.kt",
+      "bytes": 4147,
+      "sha256": "55c5e8658024a9871add4b329f6aed580f2df4f6b197220db82a4744457cc078"
+    },
+    {
+      "path": "app/src/main/cpp/automatic_access.c",
+      "bytes": 12274,
+      "sha256": "a78aaa3472f422f6b0fb591779926c1c323ccf4e629ff6ac16b3f86e1b1e2498"
+    },
+    {
+      "path": "app/src/main/cpp/automatic_access.h",
+      "bytes": 1322,
+      "sha256": "00ee55f75f196045569b95218e0a91396ddd673fe3b46eb18503bf41ea48a198"
+    },
+    {
+      "path": "app/src/main/cpp/patches/paced-tls-buffer.patch",
+      "bytes": 11460,
+      "sha256": "029e542784d1e96122e81e9f795e254219eab7ecf87f2474e989210a991fc65e"
+    },
+    {
+      "path": "app/src/main/cpp/patches/runtime-auto-access.patch",
+      "bytes": 12270,
+      "sha256": "cd6e164e153a428937ac4430e9958061ff3fee5f9233e733902582e8007128d0"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/AccessSessionLifecycle.kt",
+      "bytes": 1148,
+      "sha256": "280c9387bf6e16fd3afb119ded86f92e47fabd89250f9d7cbece8b6c4d70c89c"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/AutomaticAccessArguments.kt",
+      "bytes": 1087,
+      "sha256": "2a75456904c8e9265795dc477afa8c10d2aa0d560fbc40ab985cd1c5eab3a6ed"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/AutomaticAccessController.kt",
+      "bytes": 22595,
+      "sha256": "9613ac83e6b6015d55fa5dc0857cbfe420a349be5b46ee0c22f84322016e94a4"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/AutomaticAccessStatus.kt",
+      "bytes": 616,
+      "sha256": "83e99f4c42e3c70926546c7d006e2dedf47a8333d59f13b02d7a0fe621823710"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/DnsCheckEvidence.kt",
+      "bytes": 2502,
+      "sha256": "245d2fee5eae96c4a078e7267fec3d94d1dd5a53f3a4fa8341512c908d6c50cf"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/DnsConfigurationMonitor.kt",
+      "bytes": 2437,
+      "sha256": "134ea4d391e0fc0cd984d334a24a282c1d78ebea73e4f89b49bab32499f27eb3"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/DnsControlProbe.kt",
+      "bytes": 185,
+      "sha256": "e8edff778afcd0d43d485ef239b9cef9773765b9cf1b5acb5c364c0c0170cb7f"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/DnsProbeResolver.kt",
+      "bytes": 15010,
+      "sha256": "8a228f3309131f3f2f20e7d5241bb195bca2c6f00c16b2b5f4bc817e5ebbf1e7"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/GenericHttpsProbe.kt",
+      "bytes": 11622,
+      "sha256": "9d8fe00ac857cdd24ff34044bd42181c4c2c78e2a85d1289d677eb2978323b74"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/HostAccessDecisionCache.kt",
+      "bytes": 3391,
+      "sha256": "dc04baf5ca33dcae271a4ed31a8114e5fa201128de0c43df8bf21b7adafdae20"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/HostAccessPolicy.kt",
+      "bytes": 3544,
+      "sha256": "8e4219f000454fcc6d0c0bc0f0cbc2d599765d1268c9219f19e9bbd02f41cfc9"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/HostAccessRecovery.kt",
+      "bytes": 4715,
+      "sha256": "b292b70c2b2846bf084ae6500220de17daccc179b109165ea5df3be92c98ebfd"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/HostAccessWorkQueue.kt",
+      "bytes": 989,
+      "sha256": "8a11e010b9205ff9edbd50175d6b8a857da5c94565c67ab8b0fa0daa060c3928"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/access/RouteHintRegistry.kt",
+      "bytes": 616,
+      "sha256": "f3b342936a80aa380635585e6d5d0cf1334abc60760fd1c0a3fac969ff863422"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dns/DnsCatalog.kt",
+      "bytes": 11681,
+      "sha256": "f22b1424f8c371624d34d6903b67e3cb28413d858926fdbd47e647bd4e08c2b2"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/dns/DnsConfiguration.kt",
+      "bytes": 3665,
+      "sha256": "174de25c7a349461888cf959c534304f8f8bee52fa43a56d2b68e9c1a57309c4"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/domains/DomainSourceDownloader.kt",
+      "bytes": 4241,
+      "sha256": "becee0f31c8e415a977b46aaff7e1ffe17915184a83eb3e08453f58e0b7378cf"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/strategy/HttpProbeBodyValidator.kt",
+      "bytes": 2235,
+      "sha256": "f9cdca70fe61a81a4077703d4b46ad8fea8ef0a366530291771ee026f0b8610c"
+    },
+    {
+      "path": "app/src/main/java/io/maffinet/android/core/tgproxy/ProxyLifecycleState.kt",
+      "bytes": 1586,
+      "sha256": "3495ffea226e97da700bededfd6b6890ac8fbf6627ace34d4dabcd43d4d82f7f"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/AccessSessionLifecycleTest.kt",
+      "bytes": 2596,
+      "sha256": "5fdbd25acb56e7574cc94dd66b3268223328044deb98fe3b7a6ca5fdd71a7376"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/AutomaticAccessArgumentsTest.kt",
+      "bytes": 1502,
+      "sha256": "930c5d1a1cfb358a903e58da1dabff6818415d94f2a14a56b7ab78bf12e7e864"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/DnsCheckEvidenceTest.kt",
+      "bytes": 3594,
+      "sha256": "3d9dc8ed0306020c0a31d4d14ba2a3dec26a011edf7c0e19324dabc0ca37ea29"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/DnsControlProbeTest.kt",
+      "bytes": 1045,
+      "sha256": "139c5d40c2a82974476ad0ac1da8f179256dec5df0726cad91608ce4e7e61621"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/DnsProbeResolverTest.kt",
+      "bytes": 18062,
+      "sha256": "cff3fe322e0717ce94076b1203574596104c9e90a6ccbdf24d72cf3029825c50"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/GenericHttpsProbeTest.kt",
+      "bytes": 12016,
+      "sha256": "06cd59cfb02078ca6e63bce35199e97887102f4a9061146eb255253c6e86b483"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/HostAccessDecisionCacheTest.kt",
+      "bytes": 4654,
+      "sha256": "7d6396714603106bc5b42974be51f9c149fab11d3172fce72e7f619f7d2951fb"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/HostAccessPolicyTest.kt",
+      "bytes": 1969,
+      "sha256": "94c869ea99bdead71a94e780109a8fd948c51d448f59ae9ea98516815017bf8b"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/HostAccessRecoveryTest.kt",
+      "bytes": 6144,
+      "sha256": "721b82e9f096fc25b3f3604af358c3d7b66f241e9b450c56057da3952490ef9d"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/HostAccessWorkQueueTest.kt",
+      "bytes": 1300,
+      "sha256": "0734194176b5dcc6d78cacb47516572b8f68544280dbf5b1a3e60a0d19bdaebf"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/access/RouteHintRegistryTest.kt",
+      "bytes": 851,
+      "sha256": "a2ef3f4899e95b9f03d69f2cf0aa9b3c52cb4fe796f28d94e5f728208add8a19"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/dns/DnsCatalogTest.kt",
+      "bytes": 6869,
+      "sha256": "75c134764118611ed6812af6e8fe5c2417fb0ab29983c3b20ea4703c5076af7a"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/dns/DnsConfigurationTest.kt",
+      "bytes": 4160,
+      "sha256": "0125c6e5dc1a301dd11b8ae5311bb822c5613dc420a0b01e13c141f55db670b3"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt",
+      "bytes": 5854,
+      "sha256": "13e978b6c6c78dd04cc06afa2de339b55c30f159e887229c1e104b8fd29c3874"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/strategy/HttpProbeBodyValidatorTest.kt",
+      "bytes": 5326,
+      "sha256": "4bcc66adf8eb298495be8b6aab3d3355f69dcbab553208882c11d1f8157c56a4"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/core/tgproxy/ProxyLifecycleStateTest.kt",
+      "bytes": 5790,
+      "sha256": "2bd9b3c465d5483f5407801626b5c94e2751d98f946b5746e3544e43f26a7dee"
+    },
+    {
+      "path": "app/src/test/java/io/maffinet/android/ui/components/DnsPresetsTest.kt",
+      "bytes": 1607,
+      "sha256": "6d2ab901a2e95b8b52f02b530dcbe93df4980eb6e531e51ceb0cf33dcfb0258f"
+    },
+    {
+      "path": "docs/ANDROID36_AND_LINKEDIN.md",
+      "bytes": 18890,
+      "sha256": "f5a2b5883966e59f7c599e944c687eb280c7b40f72db083658ec94fecc0728a2"
+    },
+    {
+      "path": "docs/AUTOMATIC_ACCESS.md",
+      "bytes": 16197,
+      "sha256": "f2b3ac6629c2ae4b807625973ce3dfeec809024b96baf107b662088f02d88031"
+    },
+    {
+      "path": "docs/HOSTS_AND_DNS.md",
+      "bytes": 13981,
+      "sha256": "1c889a4f789c7fa2516707a18c782af372e7e4871a8b9fd535b8f7f6b6848e80"
+    },
+    {
+      "path": "docs/NETFIX_COMPARISON.md",
+      "bytes": 16149,
+      "sha256": "3f805fefa7d7b7fa107162c524216c7475f7d62ca2ce5ef95ce909f1003ea6b2"
+    },
+    {
+      "path": "docs/NETWORK_RECOVERY_RESEARCH.md",
+      "bytes": 13359,
+      "sha256": "4c6efe8d080113b615af3240e9deb2507c8a3819836908c2058a63a9b64f4b80"
+    },
+    {
+      "path": "docs/build-info-0.3.0-alpha.json",
+      "bytes": 2817,
+      "sha256": "ed43f3df14481348b088d064896478d2626d7de1ef8e8f54a9f769ba5d524314"
+    },
+    {
+      "path": "docs/build-info-0.3.1-alpha.json",
+      "bytes": 3630,
+      "sha256": "38fb8b8adc2aa695c20585eb01fe2d38400a824ae4ee30d4c87b7636a943d06c"
+    },
+    {
+      "path": "docs/build-info-0.3.2-alpha.json",
+      "bytes": 4130,
+      "sha256": "5e6f44ae97caad73b9d3efa4a8ac4f1df858203d649fe0c19cb5f65964b91bbd"
+    },
+    {
+      "path": "docs/rebuild/ARCHITECTURE.md",
+      "bytes": 25034,
+      "sha256": "4dee3a775cc0c89c3c31cddccb8e23604ea427d281c86bb068febd2683a289ca"
+    },
+    {
+      "path": "docs/rebuild/AUDIT.md",
+      "bytes": 17167,
+      "sha256": "27fd89f0d9575ee58d20576e98ac00be73c9082cc08e975934786539403e0b9b"
+    },
+    {
+      "path": "docs/rebuild/CLEANUP.md",
+      "bytes": 7247,
+      "sha256": "57e71929dbc8ebe7b7cdf2fe80310a49ca03ada2877ded486e3cb106165340a8"
+    },
+    {
+      "path": "docs/rebuild/NEXT_SESSION_PROMPT.md",
+      "bytes": 24376,
+      "sha256": "e09c2dda6d14201b47cc3a763a8a07f55c0d6c6cede339d4a50d67739816a491"
+    },
+    {
+      "path": "docs/rebuild/ROADMAP.md",
+      "bytes": 10408,
+      "sha256": "069ea28da2522c115f9ca5658b4bb0e1587755c8f860f7344ff0c8c98da1a080"
+    },
+    {
+      "path": "docs/rebuild/SOURCES.md",
+      "bytes": 12435,
+      "sha256": "f2de1cdeee2640814d99224785b6961ff17274da5ce0906e61d6d4fe2b712c7b"
+    },
+    {
+      "path": "docs/rebuild/START_HERE.md",
+      "bytes": 3786,
+      "sha256": "8624298a4f4c878e57c92534f0335fecede7ff712964e4224cbba36eaa4859da"
+    },
+    {
+      "path": "docs/rebuild/STATE.json",
+      "bytes": 1853,
+      "sha256": "e3e4a7d546384138fe66157957874f6f044db67d1b3612df424b4282f872401b"
+    },
+    {
+      "path": "docs/rebuild/sessions/PREP.md",
+      "bytes": 4243,
+      "sha256": "f44572f11a404c5212d46e571a322d7f1d0cc7baf733d78600df46f4ebe361ed"
+    },
+    {
+      "path": "docs/screenshots/automatic-access-api36/03-home.png",
+      "bytes": 128236,
+      "sha256": "1ade1fd336250e16abe15164e91b3dba11f202ee7d21bfc97e6b6d3cebe26b06"
+    },
+    {
+      "path": "docs/screenshots/automatic-access-api36/05-strategies.png",
+      "bytes": 210334,
+      "sha256": "7247b74cd36fbb4f77df93906fe2c03d5a32f3cdd0c6647c501a347ba979f977"
+    },
+    {
+      "path": "docs/screenshots/automatic-access-api36/SHA256SUMS",
+      "bytes": 164,
+      "sha256": "c414a1208699b3b9311149877c80dfe294da487428e807ee9c41c2eb837ad7fd"
+    },
+    {
+      "path": "licenses/JNA-5.19.1-LICENSE.txt",
+      "bytes": 797,
+      "sha256": "07c938b23950ab7d47a24ef35f9f5da3a05ae164278dc959ad6994135ed59ff1"
+    },
+    {
+      "path": "tools/prepare-byedpi.py",
+      "bytes": 2108,
+      "sha256": "151253202123f3586bb7c1e397c70fcdf3993c55393c5a330491c45722e42ece"
+    },
+    {
+      "path": "verification/native/native_access_contract.c",
+      "bytes": 19517,
+      "sha256": "a83dacb2fa80282096c82c835852d9e4f9a7b50b7469a5488519d0a459da883a"
+    },
+    {
+      "path": "verification/native/native_stream_contract.c",
+      "bytes": 13493,
+      "sha256": "88ed1d8d7df96e343454bc440613e8c4cd8baaeca9c54d996eada81dfb283a1f"
+    }
+  ]
+}

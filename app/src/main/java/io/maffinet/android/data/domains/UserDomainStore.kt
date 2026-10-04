@@ -23,7 +23,7 @@ class UserDomainRepository(private val store: UserDomainStore) {
     }
 
     @Synchronized fun importUserDomains(text: String): DomainParseResult {
-        val parsed = DomainParser.parse(text)
+        val parsed = DomainParser.parseImport(text)
         if (!parsed.isValid) return parsed
         val merged = (userDomains() + parsed.domains).distinct()
         store.write(merged)
