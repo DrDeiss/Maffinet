@@ -18,6 +18,8 @@ import io.maffinet.android.BuildConfig
 import io.maffinet.android.R
 import io.maffinet.android.core.access.AutomaticAccessController
 import io.maffinet.android.core.access.AutomaticAccessPhase
+import io.maffinet.android.core.access.DnsConfigurationMonitor
+import io.maffinet.android.core.dns.DnsConfiguration
 import io.maffinet.android.core.connection.ModeConnectionState
 import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.core.dpibypass.StrategyTestManager
@@ -25,6 +27,7 @@ import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import io.maffinet.android.ui.components.*
 import io.maffinet.android.ui.formatTimer
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 @Composable
@@ -46,6 +49,14 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
     val dns = remember(revision) { settings.getString("custom_dns_preset", DnsPresets.DEFAULT) }
     val automaticAccess = remember(revision) { settings.automaticAccessEnabled() }
     val accessStatus by AutomaticAccessController.status.collectAsState()
+    var dnsConfiguration by remember { mutableStateOf<DnsConfiguration?>(null) }
+    var showDnsDetails by remember { mutableStateOf(false) }
+    LaunchedEffect(context) {
+        while (true) {
+            dnsConfiguration = withContext(Dispatchers.IO) { runCatching { DnsConfigurationMonitor.read(context) }.getOrNull() }
+            delay(500)
+        }
+    }
     val locked = rememberConfigurationLocked()
     val active = vpnState in ACTIVE_STATES || telegramState in ACTIVE_STATES || settings.anyModeRequested()
     val connected = (!applicationsEnabled || vpnState == ModeConnectionState.Running) &&
@@ -82,7 +93,8 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
             ModeRow("Приложения", applicationsEnabled, locked, "applications-mode") { settings.setApplicationsEnabled(it) }
             Text("VPN / ByeDPI: ${stateLabel(vpnState)}", Modifier.testTag("vpn-status"))
             if (automaticAccess && vpnState == ModeConnectionState.Running) {
-                Text(when (accessStatus.phase) {
+                val evidenceCurrent = accessStatus.dnsConfiguration == dnsConfiguration && dnsConfiguration != null
+                Text(if (!evidenceCurrent) "Автоматический доступ: обновляет состояние сети" else when (accessStatus.phase) {
                     AutomaticAccessPhase.IDLE -> "Автоматический доступ запускается"
                     AutomaticAccessPhase.OBSERVING -> "Автоматический доступ: ожидает подключения приложений"
                     AutomaticAccessPhase.CHECKING -> "Автоматический доступ: проверяет соединение"
@@ -91,7 +103,7 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
                 }, Modifier.testTag("automatic-access-status"), style = MaterialTheme.typography.bodySmall,
                     color = if (accessStatus.phase == AutomaticAccessPhase.UNRESOLVED)
                         MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
-                if (accessStatus.appliedRoutes > 0) Text("Проверенных маршрутов: ${accessStatus.appliedRoutes}",
+                if (evidenceCurrent && accessStatus.appliedRoutes > 0) Text("Проверенных маршрутов: ${accessStatus.appliedRoutes}",
                     style = MaterialTheme.typography.bodySmall)
             }
             ProductSettingLink("Выбрать приложения", "Выбрано: ${selectedApps.size}", { showApps = true }, !locked)
@@ -104,6 +116,26 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
         ProductSettingLink("DNS", DnsCatalog.selectionLabel(dns), { showDns = true }, !locked)
         Text("DNS применяется к VPN для выбранных приложений.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val currentDnsChecks = if (accessStatus.dnsConfiguration == dnsConfiguration) accessStatus.dnsChecks else emptyList()
+        if (dnsConfiguration?.hasSelectionAssignmentMismatch == true) Text(
+            "Выбор DNS изменён, но действующий VPN использует прежнее назначение. Переподключитесь для применения.",
+            color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        if (accessStatus.checkingDns && accessStatus.dnsConfiguration == dnsConfiguration) Text(
+            "Проверяем DNS и HTTPS контрольного домена…", style = MaterialTheme.typography.bodySmall)
+        currentDnsChecks.firstOrNull { it.hasProblem }?.let { check ->
+            Text(check.summary(), Modifier.testTag("dns-check-problem"),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        }
+        TextButton({ showDnsDetails = !showDnsDetails }, Modifier.testTag("dns-details-toggle")) {
+            Text(if (showDnsDetails) "Скрыть состояние DNS" else "Состояние и проверка DNS")
+        }
+        if (showDnsDetails) ProductCard {
+            dnsConfiguration?.summaryLines()?.forEach { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
+            Text("Пробы: обычный DNS по UDP, TCP при усечённом ответе. DoT/DoH не проверяются. " +
+                "Контроль example.com не подтверждает доступ ко всем приложениям.", style = MaterialTheme.typography.bodySmall)
+            if (currentDnsChecks.isEmpty()) Text("Для текущей конфигурации результатов пока нет.", style = MaterialTheme.typography.bodySmall)
+            currentDnsChecks.forEach { Text(it.summary(), style = MaterialTheme.typography.bodySmall) }
+        }
         ProductSettingLink("Режим доступа", if (automaticAccess) "Автоматически" else StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
         ProductSettingLink("Hosts", if (automaticAccess) "Домены для ручного режима и импорта" else "Встроенный список и ваши домены", { onNavigate(9) })
         TextButton(onBackground, Modifier.fillMaxWidth(), enabled = !StrategyTestManager.isTesting) { Text("Работать в фоне и выйти") }

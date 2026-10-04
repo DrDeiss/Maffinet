@@ -527,6 +527,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             ?: throw IllegalStateException("VPN connection failed")
 
         this.tunFd = fd
+        io.maffinet.android.core.access.DnsConfigurationMonitor.vpnEstablished(dnsIps)
         tunnelActive = true
 
         TProxyService.TProxyStartService(configPath.absolutePath, fd.fd, isSmartTv)
@@ -556,6 +557,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             Log.e(TAG, "Failed to close tunFd", e)
         } finally {
             tunFd = null
+            io.maffinet.android.core.access.DnsConfigurationMonitor.vpnStopped()
             tunnelActive = false
         }
 

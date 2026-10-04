@@ -20,6 +20,75 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DnsProbeResolverTest {
+    @Test fun diagnosticRetainsRejectedAnswersWithoutCallingThemNoData() {
+        LocalDnsServer({ query -> response(query, listOf(record(pointer(), 1, ipv4("10.0.0.1")))) }).use { server ->
+            val result = resolver(server).diagnose(HOST, RESOLVER)
+            assertEquals(DnsProbeResolver.Outcome.ANSWER, result.outcome)
+            assertTrue(result.addresses.isEmpty())
+            assertEquals(listOf("10.0.0.1"), result.rejectedAddresses)
+            assertEquals(DnsProbeResolver.Transport.UDP, result.transport)
+        }
+    }
+
+    @Test fun diagnosticDistinguishesNxDomainNoDataAndResolverErrors() {
+        listOf(0 to DnsProbeResolver.Outcome.NODATA, 3 to DnsProbeResolver.Outcome.NXDOMAIN,
+            2 to DnsProbeResolver.Outcome.RCODE_ERROR, 5 to DnsProbeResolver.Outcome.RCODE_ERROR).forEach { (rcode, outcome) ->
+            LocalDnsServer({ query -> response(query, emptyList(), flags = 0x8180 or rcode) }).use { server ->
+                val result = resolver(server).diagnose(HOST, RESOLVER)
+                assertEquals(outcome, result.outcome)
+                assertEquals(rcode, result.rcode)
+                assertTrue(result.addresses.isEmpty())
+            }
+        }
+    }
+
+    @Test fun diagnosticErrorReplyCannotSupplyRoutesAndMixedAnswersRetainEvidence() {
+        LocalDnsServer({ query -> response(query, listOf(record(pointer(), 1, ipv4("1.1.1.1"))), flags = 0x8182) }).use { server ->
+            val result = resolver(server).diagnose(HOST, RESOLVER)
+            assertEquals(DnsProbeResolver.Outcome.RCODE_ERROR, result.outcome)
+            assertTrue(result.addresses.isEmpty())
+        }
+        LocalDnsServer({ query -> response(query, listOf("1.1.1.1", "10.0.0.1", "10.0.0.1").map {
+            record(pointer(), 1, ipv4(it))
+        }) }).use { server ->
+            val result = resolver(server).diagnose(HOST, RESOLVER)
+            assertEquals(DnsProbeResolver.Outcome.ANSWER, result.outcome)
+            assertEquals(listOf("1.1.1.1"), result.addresses)
+            assertEquals(listOf("10.0.0.1"), result.rejectedAddresses)
+        }
+    }
+
+    @Test fun diagnosticDistinguishesMalformedTimeoutAndTransportFailure() {
+        LocalDnsServer({ query -> response(query, emptyList()).copyOf(10) }).use { server ->
+            assertEquals(DnsProbeResolver.Outcome.MALFORMED, resolver(server).diagnose(HOST, RESOLVER).outcome)
+        }
+        LocalDnsServer({ null }).use { server ->
+            assertEquals(DnsProbeResolver.Outcome.TIMEOUT, resolver(server).diagnose(HOST, RESOLVER, 100).outcome)
+        }
+        LocalDnsServer({ null }).use { server ->
+            val client = DnsProbeResolver(server.address, bindUdp = { throw IOException("Network unavailable") })
+            assertEquals(DnsProbeResolver.Outcome.TRANSPORT_ERROR, client.diagnose(HOST, RESOLVER).outcome)
+        }
+    }
+
+    @Test fun diagnosticPreservesTcpOutcomeAndCancellation() {
+        LocalDnsServer({ query -> response(query, emptyList(), flags = 0x8380) }, { query, socket ->
+            writeTcp(socket, response(query, emptyList(), flags = 0x8183))
+        }).use { server ->
+            val result = resolver(server).diagnose(HOST, RESOLVER)
+            assertEquals(DnsProbeResolver.Outcome.NXDOMAIN, result.outcome)
+            assertEquals(DnsProbeResolver.Transport.TCP, result.transport)
+        }
+        val checks = AtomicInteger()
+        LocalDnsServer({ null }).use { server ->
+            assertThrows(CancellationException::class.java) {
+                resolver(server).diagnose(HOST, RESOLVER, checkCancelled = {
+                    if (checks.incrementAndGet() > 8) throw CancellationException("Cancelled")
+                })
+            }
+        }
+    }
+
     @Test fun compressedAnswersFilterPrivateAddressesAndDuplicates() {
         LocalDnsServer({ query -> response(query, listOf("1.1.1.1", "10.0.0.1", "127.0.0.1", "224.0.0.1", "1.1.1.1")
             .map { record(pointer(), 1, ipv4(it)) }) }).use { server ->

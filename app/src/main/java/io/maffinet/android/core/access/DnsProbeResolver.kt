@@ -2,7 +2,6 @@ package io.maffinet.android.core.access
 
 import io.maffinet.android.core.dns.DnsCatalog
 import java.io.Closeable
-import java.io.EOFException
 import java.io.IOException
 import java.io.InputStream
 import java.net.DatagramPacket
@@ -36,12 +35,59 @@ class DnsProbeResolver private constructor(
         require(!resolverSocketAddress.isUnresolved)
     }
 
+    enum class Outcome { ANSWER, NXDOMAIN, NODATA, RCODE_ERROR, MALFORMED, TIMEOUT, TRANSPORT_ERROR }
+    enum class Transport { UDP, TCP }
+
+    /** Plain DNS evidence only; rejected addresses do not establish blocking. */
+    data class DiagnosticResult(
+        val outcome: Outcome,
+        val addresses: List<String> = emptyList(),
+        val rejectedAddresses: List<String> = emptyList(),
+        val rcode: Int? = null,
+        val transport: Transport = Transport.UDP,
+        val detail: String? = null,
+    )
+
+    fun diagnose(
+        host: String,
+        resolverIpv4: String,
+        timeoutMs: Long = 2_000L,
+        checkCancelled: () -> Unit = {},
+    ): DiagnosticResult {
+        var transport = Transport.UDP
+        return try {
+            val response = lookupResponse(host, resolverIpv4, timeoutMs, checkCancelled) { transport = it }
+            DiagnosticResult(response.outcome, response.addresses, response.rejectedAddresses, response.rcode, transport)
+        } catch (error: SocketTimeoutException) {
+            checkCancelled()
+            DiagnosticResult(Outcome.TIMEOUT, transport = transport, detail = error.message)
+        } catch (error: MalformedResponseException) {
+            checkCancelled()
+            DiagnosticResult(Outcome.MALFORMED, transport = transport, detail = error.message)
+        } catch (error: IOException) {
+            checkCancelled()
+            DiagnosticResult(Outcome.TRANSPORT_ERROR, transport = transport, detail = error.message)
+        }
+    }
+
     fun lookup(
         host: String,
         resolverIpv4: String,
         timeoutMs: Long = 2_000L,
         checkCancelled: () -> Unit = {},
     ): List<String> {
+        val response = lookupResponse(host, resolverIpv4, timeoutMs, checkCancelled) {}
+        if (response.rcode != 0) throw IOException("DNS response code ${response.rcode}")
+        return response.addresses
+    }
+
+    private fun lookupResponse(
+        host: String,
+        resolverIpv4: String,
+        timeoutMs: Long,
+        checkCancelled: () -> Unit,
+        onTransport: (Transport) -> Unit,
+    ): Response {
         require(timeoutMs > 0) { "DNS timeout must be positive" }
         val deadline = Deadline(timeoutMs.coerceAtMost(2_000L), checkCancelled)
         deadline.check()
@@ -73,7 +119,8 @@ class DnsProbeResolver private constructor(
             @Suppress("UNREACHABLE_CODE")
             error("Unreachable DNS receive loop")
         }
-        if (!udp.truncated) return udp.addresses
+        if (!udp.truncated) return udp
+        onTransport(Transport.TCP)
         return guarded(Socket(), deadline) { socket ->
             bindTcp(socket)
             deadline.check()
@@ -87,10 +134,10 @@ class DnsProbeResolver private constructor(
             val input = socket.getInputStream()
             val prefix = readFully(input, socket, 2, deadline)
             val length = u16(prefix, 0)
-            if (length < 12) throw IOException("Invalid DNS TCP message length")
+            if (length < 12) throw MalformedResponseException("Invalid DNS TCP message length")
             val response = parse(readFully(input, socket, length, deadline), name, id, deadline)
-            if (response.truncated) throw IOException("Truncated DNS TCP response")
-            response.addresses
+            if (response.truncated) throw MalformedResponseException("Truncated DNS TCP response")
+            response
         }
     }
 
@@ -111,11 +158,18 @@ class DnsProbeResolver private constructor(
         return bytes.toByteArray()
     }
 
-    private data class Response(val truncated: Boolean, val addresses: List<String> = emptyList())
+    private class MalformedResponseException(message: String) : IOException(message)
+    private data class Response(
+        val truncated: Boolean,
+        val addresses: List<String> = emptyList(),
+        val rejectedAddresses: List<String> = emptyList(),
+        val rcode: Int = 0,
+        val outcome: Outcome = Outcome.NODATA,
+    )
     private data class Name(val value: String, val end: Int)
 
     private fun parse(bytes: ByteArray, host: String, id: Int, deadline: Deadline): Response {
-        fun invalid(): Nothing = throw IOException("Malformed or mismatched DNS response")
+        fun invalid(): Nothing = throw MalformedResponseException("Malformed or mismatched DNS response")
         fun need(offset: Int, length: Int) { if (offset < 0 || length < 0 || offset > bytes.size - length) invalid() }
         fun word(offset: Int): Int { need(offset, 2); return u16(bytes, offset) }
         fun name(start: Int, encodedLimit: Int = bytes.size): Name {
@@ -157,11 +211,12 @@ class DnsProbeResolver private constructor(
 
         need(0, 12)
         val flags = word(2)
-        if (word(0) != id || flags and 0x8000 == 0 || flags and 0x7800 != 0 || flags and 0x004f != 0 || word(4) != 1) invalid()
+        if (word(0) != id || flags and 0x8000 == 0 || flags and 0x7800 != 0 || flags and 0x0040 != 0 || word(4) != 1) invalid()
         val question = name(12)
         if (question.value != host || word(question.end) != 1 || word(question.end + 2) != 1) invalid()
         var offset = question.end + 4
         if (flags and 0x0200 != 0) return Response(truncated = true)
+        val rcode = flags and 0x000f
         val answerCount = word(6)
         val recordCount = answerCount + word(8) + word(10)
         if (recordCount > (bytes.size - offset) / 11) invalid()
@@ -204,8 +259,17 @@ class DnsProbeResolver private constructor(
             if (addresses.containsKey(terminal)) invalid()
             terminal = target
         }
-        return Response(false, addresses[terminal].orEmpty().filter(HostAccessPolicy::isPublicIpv4)
-            .distinct().take(HostAccessPolicy.MAX_CANDIDATE_IPS))
+        val terminalAddresses = addresses[terminal].orEmpty().distinct()
+        val publicAddresses = terminalAddresses.filter(HostAccessPolicy::isPublicIpv4)
+            .take(HostAccessPolicy.MAX_CANDIDATE_IPS)
+        val rejectedAddresses = terminalAddresses.filterNot(HostAccessPolicy::isPublicIpv4)
+        val outcome = when {
+            rcode == 3 -> Outcome.NXDOMAIN
+            rcode != 0 -> Outcome.RCODE_ERROR
+            terminalAddresses.isEmpty() -> Outcome.NODATA
+            else -> Outcome.ANSWER
+        }
+        return Response(false, if (rcode == 0) publicAddresses else emptyList(), rejectedAddresses, rcode, outcome)
     }
 
     private fun readFully(input: InputStream, socket: Socket, length: Int, deadline: Deadline): ByteArray {
@@ -215,7 +279,7 @@ class DnsProbeResolver private constructor(
             socket.soTimeout = deadline.readTimeout()
             try {
                 val read = input.read(bytes, offset, length - offset)
-                if (read < 0) throw EOFException("Incomplete DNS TCP response")
+                if (read < 0) throw MalformedResponseException("Incomplete DNS TCP response")
                 offset += read
             } catch (_: SocketTimeoutException) {
                 deadline.check()

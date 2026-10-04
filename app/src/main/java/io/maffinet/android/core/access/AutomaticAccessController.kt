@@ -5,10 +5,10 @@ import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.os.Build
 import android.os.SystemClock
 import io.maffinet.android.core.debug.AppDebugManager as Log
 import io.maffinet.android.core.dns.DnsCatalog
+import io.maffinet.android.core.dns.DnsConfiguration
 import io.maffinet.android.core.dpibypass.ByeDpiProxy
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import kotlinx.coroutines.CancellationException
@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.IOException
 import java.net.Inet4Address
 import java.security.MessageDigest
 import java.util.concurrent.Executors
@@ -57,6 +56,7 @@ object AutomaticAccessController {
         val identity: AccessNetworkIdentity,
         val systemResolvers: List<String>,
         val resolvers: List<String>,
+        val dns: DnsConfiguration,
     )
 
     /** Lives until proxy STOP. Losing a physical network only replaces its Session. */
@@ -82,6 +82,8 @@ object AutomaticAccessController {
             bindTcp = { snapshot.network.bindSocket(it) },
         )
         var nextNetworkCheckMs = 0L // Only the single recovery worker accesses this.
+        var dnsChecks: List<DnsCheckEvidence> = emptyList()
+        var checkingDns = false
     }
 
     /** Reserve before JNI startup. Old workers/monitors cannot own this proxy epoch. */
@@ -188,6 +190,7 @@ object AutomaticAccessController {
 
     private suspend fun runWorker(session: Session) {
         try {
+            checkConfiguredDns(session)
             for (ignored in session.signal) {
                 while (true) {
                     val observation = session.queue.poll() ?: break
@@ -215,6 +218,42 @@ object AutomaticAccessController {
         } catch (error: Exception) {
             Log.w(TAG, "Automatic worker stopped", error)
             invalidateSession(session)
+        }
+    }
+
+    /** A small control check also runs without TLS observations, after every configuration change.
+     * It never installs a route and does not prove that a selected application uses this DNS. */
+    private fun checkConfiguredDns(session: Session) {
+        val configured = session.snapshot.dns.savedAddresses
+        val assigned = session.snapshot.dns.vpnAssignedAddresses.orEmpty()
+        val resolvers = (configured + assigned).distinct().ifEmpty { session.snapshot.systemResolvers.take(2) }
+        synchronized(lock) {
+            if (!isSessionActive(session)) return
+            session.checkingDns = true
+            publishLocked(session, AutomaticAccessPhase.OBSERVING)
+        }
+        for (resolver in resolvers.take(4)) {
+            checkCurrent(session)
+            val dns = session.resolver.diagnose("example.com", resolver,
+                checkCancelled = { checkSessionActive(session) })
+            checkCurrent(session)
+            val https = dns.addresses.firstOrNull()?.let { ip ->
+                session.run.probe.probe("example.com", 443, ip,
+                    localSocksPort = session.run.listenerPort, timeoutMs = 3_000,
+                    checkCancelled = { checkSessionActive(session) }, localSocksIp = session.run.listenerIp)
+            }
+            checkCurrent(session)
+            synchronized(lock) {
+                if (!isSessionActive(session)) return
+                session.dnsChecks = session.dnsChecks + DnsCheckEvidence(resolver, "example.com", dns, https)
+                publishLocked(session, AutomaticAccessPhase.OBSERVING)
+            }
+        }
+        synchronized(lock) {
+            if (isSessionActive(session)) {
+                session.checkingDns = false
+                publishLocked(session, AutomaticAccessPhase.OBSERVING)
+            }
         }
     }
 
@@ -255,9 +294,19 @@ object AutomaticAccessController {
                     checkCurrent(session)
                     val available = deadline - monotonicMs()
                     if (available <= 0) break
-                    try {
-                        answers += session.resolver.lookup(host, dns, timeoutMs = available, checkCancelled = { checkSessionActive(session) })
-                    } catch (_: IOException) { /* A timeout/bad DNS reply is a failed candidate. */ }
+                    val evidence = session.resolver.diagnose(host, dns, timeoutMs = available,
+                        checkCancelled = { checkSessionActive(session) })
+                    checkCurrent(session)
+                    answers += evidence.addresses
+                    if (dns in session.snapshot.dns.savedAddresses || dns in session.snapshot.dns.vpnAssignedAddresses.orEmpty()) {
+                        synchronized(lock) {
+                            if (isSessionActive(session)) {
+                                session.dnsChecks = (session.dnsChecks.filterNot { it.resolver == dns } +
+                                    DnsCheckEvidence(dns, host, evidence)).takeLast(4)
+                                publishLocked(session, AutomaticAccessPhase.CHECKING, observation.host)
+                            }
+                        }
+                    }
                     if (answers.isNotEmpty()) break
                 }
                 answers.toList()
@@ -266,6 +315,15 @@ object AutomaticAccessController {
                 val evidence = session.run.probe.probe(host, port, ip,
                     localSocksPort = session.run.listenerPort, timeoutMs = remaining.coerceAtMost(5_000),
                     checkCancelled = { checkSessionActive(session) }, localSocksIp = session.run.listenerIp)
+                checkCurrent(session)
+                synchronized(lock) {
+                    if (isSessionActive(session)) {
+                        session.dnsChecks = session.dnsChecks.map { check ->
+                            if (check.host == host && ip in check.dns.addresses) check.copy(https = evidence) else check
+                        }
+                        publishLocked(session, AutomaticAccessPhase.CHECKING, host)
+                    }
+                }
                 AccessProbeEvidence(evidence.statusCode, evidence.bodyComplete)
             },
             isCurrent = { isCurrent(session) },
@@ -345,29 +403,28 @@ object AutomaticAccessController {
         val properties = connectivity.getLinkProperties(network) ?: return null
         val systemResolvers = properties.dnsServers.filterIsInstance<Inet4Address>().mapNotNull { it.hostAddress }
             .filter(DnsCatalog::isUnicastIpv4)
-        val selected = DnsCatalog.resolve(preferences.getString("custom_dns_preset", DnsCatalog.SYSTEM_ID))
+        val dns = DnsConfigurationMonitor.capture(preferences, properties, network)
         val smartResolvers = listOf("geohide", "xbox", "comss").mapNotNull { id ->
             DnsCatalog.presets.firstOrNull { it.id == id }?.ipv4?.firstOrNull()
         }
         // Try a distinct provider before a selected provider's second address.
-        val resolvers = (selected.ipv4.take(1) + smartResolvers + selected.ipv4.drop(1).take(1)).distinct().take(5)
+        val resolvers = (dns.savedAddresses.take(1) + smartResolvers + dns.savedAddresses.drop(1).take(1)).distinct().take(5)
         val policy = listOf(HostAccessPolicy.VERSION, RouteHintRegistry.VERSION,
-            AutomaticAccessArguments.POLICY_VERSION, selected.id, selected.ipv4.joinToString(","),
-            systemResolvers.joinToString(","), properties.interfaceName.orEmpty(),
-            properties.linkAddresses.joinToString(","),
-            if (Build.VERSION.SDK_INT >= 28) "${properties.isPrivateDnsActive}:${properties.privateDnsServerName}" else "")
+            AutomaticAccessArguments.POLICY_VERSION, properties.interfaceName.orEmpty(),
+            properties.linkAddresses.joinToString(","), properties.routes.joinToString(",")) + dns.fingerprint
         val digest = MessageDigest.getInstance("SHA-256")
         policy.forEach { value ->
             val bytes = value.toByteArray(Charsets.UTF_8)
             digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8)); digest.update(bytes)
         }
         val identity = AccessNetworkIdentity(network.networkHandle, digest.digest().joinToString("") { "%02x".format(it) })
-        return NetworkSnapshot(network, identity, systemResolvers, resolvers)
+        return NetworkSnapshot(network, identity, systemResolvers, resolvers, dns)
     }
 
     private fun publishLocked(session: Session, phase: AutomaticAccessPhase, host: String? = null) {
         mutableStatus.value = AutomaticAccessStatus(phase, host, session.queue.size(),
-            cache.positives(session.snapshot.identity).count { it.second.ipv4 != null })
+            cache.positives(session.snapshot.identity).count { it.second.ipv4 != null },
+            session.snapshot.dns, session.dnsChecks, session.checkingDns)
     }
 
     private fun cancelSessionLocked() {
