@@ -145,3 +145,32 @@ host fault seams; Android protect/bind и native STOP не испытывает.
 reject paths, а не TUN evidence. Seven native parser cases остаются skipped.
 Четыре ABI/helper APKs, real Android T01/T02, starts30/native stops100,
 FD/RSS/latency/source-artifact evidence pending. P01 не отмечать done.
+
+## Продолжение P01, 4 октября 2026 года
+
+`py -3.11 tools/test-transport-lab-java.py` компилирует actual
+`LabStartTickets`/`ProbeValidation` Java11 и выполняет admission queue
+START1/START2→STOP→explicit START, active cancellation/revoke/destroy,
+numeric literals и HTTP/DNS fixtures. Passed, 55 malformed/invalid inputs
+rejected. Android service, foreground ordering, JNI/native worker, TUN и TLS
+trust этим не проверяются. Выполнить эти race cases на device при T02.
+
+`py -3.11 tools/test-transport-lab-tools.py`: 18 synthetic tests passed,
+включая missing A/AAAA coverage, obsolete schema, incomplete HTTP/TLS metadata,
+stale capture, invalid timing/family/ports и reject paths под `python -O`.
+Source verifier также остаётся enabled под `-O`; текущий pinned export549/files,
+one patch/seven licenses проверен. Изменённых native sources/patches нет.
+
+Новый capture contract: helper schemaVersion2; HTTP `/p01` требует Content-Length
+и полного 21-byte fixture body; raw DNS требует single compressed A/AAAA fixture
+answer. Это намеренно narrow helper, не новый general HTTP/DNS implementation.
+Для selected/control требуется UDP/TCP DNS qtype1 **и** qtype28 в IPv4 **и**
+IPv6 endpoint families. Snapshot с generation/time должен покрывать завершение
+всех probes. Native event loss/control exclusion/source/APK/SLO/device gates
+остаются отдельными, synthetic fixture не предъявляется как real lab evidence.
+
+Повторные production baseline и opt-in lab build/unit/lint attempts exit1,
+`SDK location not found`, до compilation (24s и31s соответственно).
+Linux fixture exit1 requires Linux/C compiler. JVM suite154/7 и relay100 —
+результаты предыдущего checkpoint, здесь не rerun. P01 остаётся in_progress,
+без APK/four ABI/Android/native/TUN/latency/physical acceptance.

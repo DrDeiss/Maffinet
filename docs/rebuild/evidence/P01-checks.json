@@ -142,5 +142,176 @@
   "realTun": "not_executed",
   "nativeLifecycle": "not_executed",
   "transportAdoption": "candidate_only",
-  "physicalAcceptance": "not_executed"
+  "physicalAcceptance": "not_executed",
+  "continuations": [
+    {
+      "date": "2026-10-04",
+      "id": "p01-admission-evidence-continuation",
+      "status": "in_progress",
+      "sourceCheckpoint": "56da2f39f8efbfd33686f4b91ceab4c8241739e0",
+      "checkpointCommitSubject": "fix(lab): fence P01 starts and validate helper evidence",
+      "checks": [
+        {
+          "id": "android-baseline",
+          "command": "gradlew.bat -Pmaffinet.ndkVersion=29.0.14206865 :app:assembleDebug :app:testDebugUnitTest :app:lintDebug --offline --no-daemon --console=plain",
+          "exitCode": 1,
+          "result": "SDK location not found configuring :app before compilation; no Android artifact/task acceptance",
+          "privateLog": ".toolchain/rebuild-p01/continuation-android-baseline.log",
+          "logSha256": "790b706f8260a9787a736206cd7acd16b5b9cbb64f9cc050ef963c9da62de099",
+          "gradleReportedSeconds": 24
+        },
+        {
+          "id": "android-lab",
+          "command": "gradlew.bat -Pmaffinet.ndkVersion=29.0.14206865 -Pmaffinet.transportLab=true -Pmaffinet.transportSource=.toolchain/transport-source-p01-ready -Pmaffinet.python=<provisioned Python> :transport-lab:assembleDebug :traffic-helper:assembleSelectedDebug :traffic-helper:assembleControlDebug :transport-lab:lintDebug :traffic-helper:lintSelectedDebug :traffic-helper:lintControlDebug --offline --no-daemon --console=plain",
+          "exitCode": 1,
+          "result": "SDK location not found configuring :app before compilation; no Android artifact/task acceptance",
+          "privateLog": ".toolchain/rebuild-p01/continuation-android-lab.log",
+          "logSha256": "ae0caf9c41c288bb8d1b3f700e49cc2d7b44a747ef62f8c0b6773f5f08bcedb3",
+          "gradleReportedSeconds": 31
+        },
+        {
+          "id": "java-host-contracts",
+          "command": "py -3.11 tools/test-transport-lab-java.py",
+          "exitCode": 0,
+          "result": [
+            {
+              "status": "passed",
+              "queuedStartStopRestart": true,
+              "revokeAndDestroy": true,
+              "scope": "host-admission-only",
+              "nativeTun": "not-tested"
+            },
+            {
+              "status": "passed",
+              "numericFamilies": 2,
+              "invalidInputsRejected": 55,
+              "httpFixtureComplete": true,
+              "scope": "actual-helper-validation-host-only",
+              "androidTls": "not-tested"
+            }
+          ],
+          "privateLog": ".toolchain/rebuild-p01/continuation-java-contracts.log",
+          "logSha256": "4df39311e7c1bf799e9138b6733a3fb549405fe6dc763807995a1e949c331a16"
+        },
+        {
+          "id": "python-host-contracts",
+          "command": "py -3.11 tools/test-transport-lab-tools.py",
+          "exitCode": 0,
+          "result": "18 synthetic tests passed, including optimized checker/source-verifier rejection; no lab TUN evidence",
+          "privateLog": ".toolchain/rebuild-p01/continuation-tool-contracts.log",
+          "logSha256": "759a8654a9a077704e225b8d4e8a772883c1ccf9ed7d616a9eb51bf4eb7ff6a3"
+        },
+        {
+          "id": "source-integrity",
+          "command": "py -3.11 tools/verify-transport-source.py .toolchain/transport-source-p01-ready",
+          "exitCode": 0,
+          "result": {
+            "status": "passed",
+            "files": 549,
+            "patches": 1,
+            "licenseAssets": 7,
+            "manifestSha256": "4f6c4d25b4bd075a691c453609183db85260ca9714d2c803d5b9d80d6576cc9b",
+            "androidBuild": "not-proven"
+          },
+          "privateLog": ".toolchain/rebuild-p01/continuation-source-verify.log",
+          "logSha256": "4713d1e69694f7fdac5002bbb6519eb6d7aeeb3578a8d05d4f3718e32065e845"
+        },
+        {
+          "id": "native-fixture",
+          "command": "py -3.11 tools/build-native-contract.py",
+          "exitCode": 1,
+          "result": "Linux/C compiler required before compilation; native/sanitizer runtime not executed",
+          "privateLog": ".toolchain/rebuild-p01/continuation-native-fixture.log",
+          "logSha256": "b42a7e58049c9c355f713444eb7ed01b1512b56e38c16a1e786128da703ee676"
+        },
+        {
+          "id": "environment",
+          "command": "Read configured/standard SDK paths, command inventory and wsl --list --quiet",
+          "exitCode": 0,
+          "result": "SDK/adb/host C tools absent in checked locations/PATH; WSL not installed; SDK agreements not accepted; no device operation",
+          "privateLog": ".toolchain/rebuild-p01/continuation-environment.json",
+          "logSha256": "4a98ca7c53e40136cbb07c4f9cc0e879cd5c3d63b389fd3242514043314bc02e"
+        },
+        {
+          "id": "initial-java-fixture-attempt",
+          "command": "py -3.11 tools/test-transport-lab-java.py",
+          "exitCode": 1,
+          "result": "New host test fixture declared Content-Length20 instead of actual21; corrected test fixture, final contracts passed. Initial console output not persisted; no Android/network outcome."
+        },
+        {
+          "id": "docs-links-json",
+          "command": "py -3.11 tools/verify-rebuild-docs.py",
+          "exitCode": 0,
+          "result": {
+            "schemaVersion": 1,
+            "status": "passed",
+            "markdownFiles": 24,
+            "localLinks": 118,
+            "archiveHistoricalContentVerified": true,
+            "archiveOriginalRawHashMatch": true,
+            "checkpointObjectVerified": true,
+            "jvmXmlAvailable": true,
+            "jvmXmlTotals": {
+              "tests": 161,
+              "failures": 0,
+              "errors": 0,
+              "skipped": 7
+            },
+            "deviceAcceptance": "not_verified_by_this_tool"
+          },
+          "privateLog": ".toolchain/rebuild-p01/continuation-docs-check.log",
+          "logSha256": "0237a943c48801b716657cbf8f98ab36ee16f96787d8eb8589d504807c70cd7e"
+        },
+        {
+          "id": "working-diff",
+          "command": "git -c core.safecrlf=false diff --check",
+          "exitCode": 0,
+          "result": "exit0; no authored whitespace errors",
+          "privateLog": ".toolchain/rebuild-p01/continuation-working-diff.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "id": "staged-paths-blobs",
+          "command": "Compare git cached paths with explicit reviewed22 manifest; UTF8/credential-marker audit",
+          "exitCode": 0,
+          "result": {
+            "status": "passed",
+            "stagedPaths": 22,
+            "explicitManifestMatched": true,
+            "stagedUtf8AndCredentialMarkersChecked": true,
+            "productionOrBinaryOrToolchainOrPrivatePaths": false,
+            "stagedDiffCheckExit": 0
+          },
+          "privateLog": ".toolchain/rebuild-p01/continuation-staged-audit.json",
+          "logSha256": "86f58d4a45cbaae2b97ed26da6e0b1f08255a0b4962f795a88a3d6c40d121e6e"
+        },
+        {
+          "id": "staged-diff",
+          "command": "git diff --cached --check",
+          "exitCode": 0,
+          "result": "exit0 for all22 staged authored paths",
+          "privateLog": ".toolchain/rebuild-p01/continuation-staged-diff.log",
+          "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "id": "git-add",
+          "command": "git -c core.safecrlf=false add -- <22 reviewed explicit paths>",
+          "exitCode": 0,
+          "result": "Default sandbox tool exit1: .git/index.lock permission denied. Authorized managed escalation succeeded; no automatic approval review rejection."
+        }
+      ],
+      "helperReportSchemaVersion": 2,
+      "hostPythonTests": 18,
+      "hostHelperInvalidInputsRejected": 55,
+      "androidArtifacts": "not_built",
+      "realTun": "not_executed",
+      "nativeLifecycle": "not_executed",
+      "transportAdoption": "candidate_only",
+      "physicalAcceptance": "not_executed",
+      "historicalChecksNotRerun": [
+        "JVM154 passed/7 skipped",
+        "Java relay TCP/UDP families/100 close cycles"
+      ]
+    }
+  ]
 }

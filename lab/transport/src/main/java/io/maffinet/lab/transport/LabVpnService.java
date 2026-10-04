@@ -14,7 +14,7 @@ public final class LabVpnService extends VpnService {
     static final String SELECTED = "io.maffinet.lab.helper.selected";
     static final LabEvents EVENTS = new LabEvents();
     private final ScheduledExecutorService lifecycle = Executors.newSingleThreadScheduledExecutor();
-    private volatile boolean stopRequested;
+    private final LabStartTickets starts = new LabStartTickets();
     private ParcelFileDescriptor tun;
     private NativeTransport transport;
     private LabSocksServer relay;
@@ -24,20 +24,24 @@ public final class LabVpnService extends VpnService {
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent == null || "STOP".equals(intent.getAction())) {
-            stopRequested = true;
+            starts.cancelStarts();
             lifecycle.execute(this::stopLab);
         } else if ("START".equals(intent.getAction())) {
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            manager.createNotificationChannel(new NotificationChannel("p01", "P01 transport lab", NotificationManager.IMPORTANCE_LOW));
-            PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, LabActivity.class), PendingIntent.FLAG_IMMUTABLE);
-            startForeground(1, new Notification.Builder(this, "p01").setSmallIcon(android.R.drawable.stat_sys_warning)
-                    .setContentTitle("Maffinet P01 lab").setContentText("Selected helper only").setContentIntent(open).build());
-            // Do not overwrite a STOP queued behind a START; the runnable checks it.
+            foreground();
+            // Capture admission before enqueueing. Cleanup never makes an old ticket valid.
+            long ticket = starts.admitStart();
             boolean protectFailure = intent.getBooleanExtra("failProtect", false);
             boolean bindFailure = intent.getBooleanExtra("failBind", false);
-            lifecycle.execute(() -> startLab(protectFailure, bindFailure));
+            lifecycle.execute(() -> startLab(ticket, protectFailure, bindFailure));
         }
         return START_NOT_STICKY;
+    }
+    private void foreground() {
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        manager.createNotificationChannel(new NotificationChannel("p01", "P01 transport lab", NotificationManager.IMPORTANCE_LOW));
+        PendingIntent open = PendingIntent.getActivity(this, 0, new Intent(this, LabActivity.class), PendingIntent.FLAG_IMMUTABLE);
+        startForeground(1, new Notification.Builder(this, "p01").setSmallIcon(android.R.drawable.stat_sys_warning)
+                .setContentTitle("Maffinet P01 lab").setContentText("Selected helper only").setContentIntent(open).build());
     }
     private void state(String value, String reason) {
         state = value;
@@ -50,11 +54,14 @@ public final class LabVpnService extends VpnService {
         try { Files.write(new File(getFilesDir(), "p01-events.jsonl").toPath(), EVENTS.snapshot().getBytes(StandardCharsets.UTF_8)); }
         catch (Exception e) { EVENTS.add("snapshot-error", "reason", e.getClass().getSimpleName()); }
     }
-    private void startLab(boolean failProtect, boolean failBind) {
-        if (tun != null || failedStop) { state("Failed", "Previous resources still owned"); return; }
-        if (stopRequested) { stopLab(); return; }
+    private void startLab(long ticket, boolean failProtect, boolean failBind) {
+        if (!starts.current(ticket)) { EVENTS.add("start-cancelled", "ticket", ticket); return; }
+        if (failedStop) { state("Failed", "Previous resources still owned"); return; }
+        if (tun != null) { EVENTS.add("start-ignored", "reason", "Session already owned"); return; }
         generation++; EVENTS.generation(generation); state("Starting", "Consent granted");
         try {
+            // A queued STOP may have removed the notification after this START was admitted.
+            foreground();
             if (prepare(this) != null) throw new IllegalStateException("VPN consent missing");
             getPackageManager().getApplicationInfo(SELECTED, 0); // Absent selected helper is a hard error.
             ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -81,26 +88,26 @@ public final class LabVpnService extends VpnService {
             int accepted = transport.start(config, tun.getFd());
             if (accepted != 0) throw new IllegalStateException("Native start " + accepted);
             long deadline = SystemClock.elapsedRealtime() + 2000;
-            while (!stopRequested && transport.status() == 1 && SystemClock.elapsedRealtime() < deadline) Thread.sleep(10);
-            if (stopRequested) { stopLab(); return; }
+            while (starts.current(ticket) && transport.status() == 1 && SystemClock.elapsedRealtime() < deadline) Thread.sleep(10);
+            if (!starts.current(ticket)) { stopLab(); return; }
             if (transport.status() != 2) throw new IllegalStateException("Native readiness " + transport.status());
             state("Running", "Native TUN loop ready; forwarding not yet verified");
             long session = generation;
-            lifecycle.schedule(() -> monitor(session), 250, TimeUnit.MILLISECONDS);
+            lifecycle.schedule(() -> monitor(session, ticket), 250, TimeUnit.MILLISECONDS);
         } catch (Throwable e) {
             EVENTS.add("start-error", "reason", e.getClass().getSimpleName(), "detail", String.valueOf(e.getMessage()));
             stopLab();
             if (!failedStop) state("Failed", "Start failed; resources released");
         }
     }
-    private void monitor(long session) {
-        if (session != generation || stopRequested || transport == null) return;
+    private void monitor(long session, long ticket) {
+        if (session != generation || !starts.current(ticket) || transport == null) return;
         if (transport.status() != 2) {
             EVENTS.add("native-exit", "outcome", transport.status());
             stopLab(); if (!failedStop) state("Failed", "Native worker exited");
         } else {
             snapshot();
-            lifecycle.schedule(() -> monitor(session), 250, TimeUnit.MILLISECONDS);
+            lifecycle.schedule(() -> monitor(session, ticket), 250, TimeUnit.MILLISECONDS);
         }
     }
     private void stopLab() {
@@ -117,11 +124,10 @@ public final class LabVpnService extends VpnService {
         state("Idle", "Native reaped, TUN closed; outcome " + result);
         stopForeground(STOP_FOREGROUND_REMOVE);
         // Keep service owner alive for explicit restart; no restored desired state.
-        stopRequested = false;
     }
-    @Override public void onRevoke() { stopRequested = true; lifecycle.execute(this::stopLab); }
+    @Override public void onRevoke() { starts.cancelStarts(); lifecycle.execute(this::stopLab); }
     @Override public void onDestroy() {
-        stopRequested = true;
+        starts.destroy();
         lifecycle.execute(this::stopLab);
         lifecycle.shutdown();
         super.onDestroy();

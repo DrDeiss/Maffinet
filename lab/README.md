@@ -16,6 +16,7 @@ Linux; public include symlinks are copied from their in-tree target bytes.
 The preparation script rejects changed tracked source, unknown dependencies,
 changed lock, output outside `.toolchain`, and an existing output. It never
 deletes directories or mutates the inherited custom HEV submodule.
+Verification uses explicit checks that remain enabled with `python -O`.
 
 On a fresh provisioned host (no automatic SDK license acceptance):
 
@@ -79,6 +80,12 @@ readiness. STOP during initialization is remembered until the event pipe is
 ready; the bridge disables quit before HEV closes the pipe. A one-second timeout
 returns a failure and retains ownership, refusing restart; it does not claim Idle.
 Failure/restart behavior still requires native runtime and T02 evidence.
+Java START admission now captures a cancellation ticket. STOP/revoke invalidate
+all older queued STARTs; cleanup cannot resurrect them, and destroy is terminal.
+An explicit START after STOP may restart after serialized cleanup. Repeated START
+while a session is owned is ignored. Foreground notification is reasserted when
+a queued restart executes. The ticket contract runs on the host; Android service
+and foreground behavior, native early STOP/reap and T02 remain unverified.
 
 TCP gateway PCB `remote_*` is application local, `local_*` is destination.
 UDP's first tunnel callback has destination unset; lwIP updates it on the next
@@ -112,14 +119,24 @@ A/AAAA answers with matched transaction/question. For TLS/HTTPS add `--cert`,
 the helper; no CA installation, trust bypass, hostname bypass or credentials.
 Use the original certificate hostname in helper `name`; the connection uses
 the chosen numeric IP, ordinary certificate validation and HTTPS name checking.
-Wrong-name/untrusted tests must fail. HTTP makes only credential-free `GET /p01`
-and stores status/byte count/hash, never payload. Success is only that probe.
+Wrong-name/untrusted tests must fail. HTTP makes only credential-free `GET /p01`.
+The helper requires Content-Length framing, a complete response and the exact
+21-byte `maffinet-p01-fixture\n` body emitted by this server. Chunked responses,
+missing/duplicate length, early EOF, another body and a bare 200 status fail.
+It stores status/byte count/hash/fixture marker, never payload. This narrow
+fixture contract is not a general HTTP client or an application-access result.
 
 The helper UI selects numeric TCP echo, UDP echo, TLS, HTTPS, raw UDP/TCP DNS
-or system resolver. Raw DNS supports A (`qtype=1`) and AAAA (`qtype=28`);
-truncation/rcode/mismatched question is a failure, with no recovery. The system
-resolver's blocking timeout belongs to the OS, not the socket8s budget. Encrypted
+or system resolver. Raw DNS supports A (`qtype=1`) and AAAA (`qtype=28`).
+The raw helper validates this server's single compressed A/AAAA answer, including
+transaction, question, flags, counts, type/class, frame and address length.
+Empty/truncated/malformed answers fail; it does not accept general CNAME/EDNS
+resolver responses as this fixture. General DNS behavior remains P04.
+The system resolver's blocking timeout belongs to the OS, not the socket8s budget. Encrypted
 DNS and resolver attribution are not inferred from a system lookup success.
+IPv4 input requires four decimal octets; IPv6 requires an unscoped hexadecimal
+literal. Hex-looking names such as `face` and shortened IPv4 are rejected before
+resolution. An invalid protocol is rejected before opening a target socket.
 
 After explicit install/consent, adb may drive the foreground Activities (the
 service is not exported). These commands are a **recipe, not executed evidence**:
@@ -133,12 +150,17 @@ adb shell am start -n io.maffinet.lab.transport/.LabActivity --es command STOP
 
 Set `protocol` to `tls`/`https` and pass `--es name <original-hostname>` at
 TLS15443. DNS uses `dns-udp`/`dns-tcp`, DNS1053, `name`, `qtype`.
-System DNS uses `system-dns`/`name`. `count=100` runs sequential warm probes.
+System DNS uses `system-dns`/`name`. Run **both** `--ei qtype 1` and `--ei qtype 28`
+for each raw DNS protocol and each endpoint family, in selected and control.
+`count=100` runs sequential warm probes.
 Each scenario overwrites its helper's private `files/p01-results.jsonl`; capture
 and combine completed runs manually before starting the next scenario. Private
 transport `files/p01-events.jsonl` is snapshotted during readiness/monitor/STOP.
 Each new native generation clears its event ring; capture it before restart.
 512-event cap/dropped count is explicit; limit each evidence session accordingly.
+Capture the final transport snapshot after all probes have completed. Snapshots
+now include generation and elapsed time; earlier captures cannot cover later
+helper runs. Rebuild helpers for schemaVersion2; old reports are rejected.
 
 Copy private files using authorized `adb exec-out run-as <package> cat files/<file>`
 into ignored `.toolchain/rebuild-p01` paths. Preserve source HEAD/dirty tree,
@@ -150,10 +172,13 @@ Do not commit private IPs/names, APKs, keys, payload or raw logs.
 py -3.11 tools/check-transport-lab-run.py --selected <private-selected-jsonl> --control <private-control-jsonl> --events <private-events-jsonl>
 ```
 
-The checker requires passed TCP/UDP/TLS/HTTPS/raw-DNS in both families plus system
+The checker requires schemaVersion2 protocol-specific success metadata,
+passed TCP/UDP/TLS/HTTPS/raw-DNS in both families (both DNS qtypes) plus system
 DNS, distinct helper UIDs, native readiness, complete event buffer/generation,
-selected tuples during the probe and absence of control tuples. It checks only
-this JSONL T01 subset. It does not certify APK provenance, native worker/FD
+selected tuples during the probe and absence of control tuples, snapshots covering
+completed runs and valid finite timings/tuple families/ports. Its rejection
+checks remain active under `python -O`. It checks only this JSONL T01 subset.
+It does not certify APK provenance, native worker/FD
 cleanup, SLO, device network or application access. Do not feed synthetic unit
 fixtures as lab evidence. Failure injections need separate expected-failure
 reports and must show no target-side receive/connect.
@@ -162,14 +187,19 @@ reports and must show no target-side receive/connect.
 
 ```powershell
 py -3.11 tools/test-transport-relay.py
+py -3.11 tools/test-transport-lab-java.py
 py -3.11 tools/test-transport-lab-tools.py
 ```
 
 The first compiles the actual relay Java11 code with host fault seams, exercises
 real TCP/UDP IPv4/IPv6 sockets, pre-connect/pre-send rejection and 100 relay
 close cycles. It proves neither Android binding nor native/TUN lifecycle. The
-second uses synthetic evidence for rejection paths and fixture DNS/framing.
-It proves no Android network result.
+new Java contract tool compiles the actual ticket/validation classes at Java11
+and tests queued START/STOP/restart, revoke/destroy, numeric addresses and HTTP/DNS
+malformed/truncated fixture rejection (55 negative inputs). It does not compile
+the Android service or exercise JNI/TUN/TLS trust. The Python suite now has
+18 tests, using synthetic evidence for rejection paths, A/AAAA coverage, capture
+timing and optimized-interpreter checks. It proves no Android network result.
 
 Remaining P01 gates: first Android/NDK compilation and lint; four ABI artifacts,
 source/artifact/license hashes; native/socket/stream/sanitizers on provisioned

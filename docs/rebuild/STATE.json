@@ -34,12 +34,12 @@
     "P09": "pending"
   },
   "lastSessionReport": "sessions/P01.md",
-  "lastCheckpointCommit": "d812c81ebc55d117d8cb220fedc24605371436a7",
+  "lastCheckpointCommit": "56da2f39f8efbfd33686f4b91ceab4c8241739e0",
   "blockingIssues": [
     {
       "id": "ENV-SDK",
       "affectsStage": "P01",
-      "reason": "SDK/adb unavailable; baseline app and opt-in lab build/lint exit1 at SDK configuration before compilation/task resolution. No helper APK or four native ABI outputs.",
+      "reason": "SDK/adb still unavailable in continuation; baseline app and opt-in lab build/lint exit1 at SDK configuration before compilation/task resolution (24s/31s). No helper APK or four native ABI outputs; service/foreground/JNI changes uncompiled.",
       "requiredAction": "Use provisioned SDK36/CMake3.22.1/NDK29 with existing agreements; first compile/lint production baseline and lab modules, repair uncompiled recipes/Java/JNI. Do not accept new agreements automatically."
     },
     {
@@ -65,7 +65,9 @@
     "Inherited application code and required attribution need a documented replacement audit",
     "New P01 CMake/JNI/Android Java code is uncompiled due missing SDK; first provisioned build may expose integration errors",
     "P01 lab UDP relay serializes replies and changes upstream source port per datagram; only echo/DNS fixture scope, not general UDP/QUIC/media acceptance",
-    "Source tuple orientation established from lwIP callbacks but not verified against real Android helper/wire; outgoing UID never used"
+    "Source tuple orientation established from lwIP callbacks but not verified against real Android helper/wire; outgoing UID never used",
+    "Host START ticket tests prove admission only; Android foreground ordering, JNI early STOP/reap/timeout and service destruction remain device/native gates",
+    "Helper schemaVersion2 accepts only controlled Content-Length HTTP and single compressed A/AAAA DNS fixtures; it is not a general client/broker"
   ],
   "scope": {
     "localFirst": true,
@@ -77,9 +79,9 @@
   },
   "updatedAt": "2026-10-04",
   "completionCommitSubject": "docs(rebuild): complete P00 audit cleanup and implementation plan",
-  "checkpointResolution": "lastCheckpointCommit is completed P00; resolve this partial P01 by checkpointCommitSubject plus sessions/P01.md in git log. completionCommitSubject retains historical P00 subject.",
-  "implementationStatus": "Legacy production app/runtime/binaries unchanged. Opt-in P01 lab source bridge/helpers/harness added; Android Java/native not compiled, no production transport adoption or application-layer independence claim.",
-  "checkpointCommitSubject": "feat(lab): scaffold P01 source transport and helper harness",
+  "checkpointResolution": "lastCheckpointCommit is the existing initial P01 scaffold; resolve the continuation by checkpointCommitSubject plus the dated sessions/P01.md continuation in git log. completionCommitSubject retains historical P00 subject.",
+  "implementationStatus": "Legacy production app/runtime/binaries unchanged. Opt-in P01 lab START admission and helper fixture/evidence contracts repaired and host-tested; Android service/JNI/native not compiled, no source-built ABI/APK/TUN or production transport adoption claim.",
+  "checkpointCommitSubject": "fix(lab): fence P01 starts and validate helper evidence",
   "p01Checkpoint": {
     "sourceLock": "../../lab/transport/source-lock.json",
     "sourceLockSha256": "97e0a9d357a8880271aacab6fc166c096f6e23f449326b840d257c7321cd4b75",
@@ -99,7 +101,11 @@
       6
     ],
     "hostRelayCloseCycles": 100,
-    "hostToolTests": 10,
+    "hostToolTests": 18,
+    "hostStartAdmissionVerified": true,
+    "hostHelperValidationNegativeCases": 55,
+    "helperReportSchemaVersion": 2,
+    "continuationSourceCheckpoint": "56da2f39f8efbfd33686f4b91ceab4c8241739e0",
     "transportDecision": "HEV candidate; not adopted",
     "remainingStage": "P01"
   }

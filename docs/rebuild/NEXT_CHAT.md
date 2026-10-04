@@ -1,31 +1,33 @@
 # Автономное продолжение: P01 остаётся in_progress
 
 Работай только в `E:\maffinet android`. Прочитай AGENTS.md, START_HERE/STATE/
-ROADMAP, sessions/P01.md (последний report), sessions/P00.md (история),
-NEXT_SESSION_PROMPT, product/ARCHITECTURE/research/test-plan/usage-map/
-cleanup-ledger и оба ADR. Затем `lab/README.md`, source-lock/license-inventory
-и `docs/rebuild/evidence/P01-checks.json`. Выполняй **только продолжение P01**,
-не начинай P02 до настоящих exit criteria. Отсутствие среды не позволяет done.
+ROADMAP, sessions/P01.md целиком (initial scaffold + dated continuation),
+sessions/P00.md (история), NEXT_SESSION_PROMPT, product/ARCHITECTURE/research/
+test-plan/usage-map/cleanup-ledger и оба ADR. Затем lab/README.md,
+source-lock/license-inventory и evidence/P01-checks.json, включая continuations.
+Выполняй только **P01**, без P02 до реальных exit criteria. Missing environment
+не позволяет done. Без других чатов/subagents, push/publish/merge.
 
-## Git/checkpoint
+## Git и точка продолжения
 
-Previous completed P00: `d812c81ebc55d117d8cb220fedc24605371436a7`, branch
-`codex/rebuild-p00`. P01 начинался на этом HEAD, clean tree/index. Baseline
-исходной0.3.2 работы — `2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd`.
-Проверь actual HEAD/status/staged paths и git log по STATE.checkpointCommitSubject:
-`feat(lab): scaffold P01 source transport and helper harness`.
-STATE.lastCheckpointCommit — уже существующий P00; completionCommitSubject —
-historical P00. Будущий hash partial P01 не включался в его собственный commit.
-Не reset/clean/откатывать появившуюся работу.
+Branch `codex/rebuild-p00`; baseline `2d63fc3…`, completed P00 `d812c81…`,
+initial P01 scaffold `56da2f39f8efbfd33686f4b91ceab4c8241739e0`.
+Continuation начиналась на этом HEAD с чистым tree/index.
+STATE.lastCheckpointCommit хранит существующий initial P01; текущую фиксацию
+сверяй по STATE.checkpointCommitSubject и dated sessions/P01.md continuation:
+`fix(lab): fence P01 starts and validate helper evidence`.
+Будущий hash не записан в содержимое его commit. completionCommitSubject —
+historical P00. Проверь actual HEAD/status/staged paths/git log; не reset/clean/
+откатывать появившуюся работу.
 
-## Сделано, но Android/native ещё не compiled
+## Готовый experiment, без Android/native compilation
 
-Opt-in `-Pmaffinet.transportLab=true` добавляет modules `transport-lab`
-(отдельный VPN/JNI/relay APK) и `traffic-helper` (selected/control applicationId
-flavors). Default :app не подключает lab code. Production UI/service/settings/
-user data/custom HEV gitlink/eight binaries не менялись; production switch — P03.
+Opt-in `-Pmaffinet.transportLab=true`: `transport-lab` (отдельный VPN/JNI/numeric
+relay APK) и `traffic-helper` selected/control flavors. Default app не подключает
+lab. Production UI/service/settings/data/custom HEV gitlink/eight binaries
+не менялись; production transport switch принадлежит P03.
 
-Source lock закрепляет все recursive repos:
+Пять pinned compiled repositories:
 
 - HEV2.14.4 `4d6c334dbfb68a79d1970c2744e62d09f71df12f`.
 - Core `4be2e621813ba0315cfacd995bf501bde91d6996`.
@@ -33,104 +35,122 @@ Source lock закрепляет все recursive repos:
 - lwIP `07dbf162c718cc78ddedb9e67c6ebd17065eaf13`.
 - YAML `efa36117a8646d26d12b58e05bac472d7854a70d`.
 
-Ignored checkout: `.toolchain/rebuild-p01/hev-upstream`. Valid patched output:
-`.toolchain/transport-source-p01-ready`, 549 files, manifest SHA256
+Ignored checkout `.toolchain/rebuild-p01/hev-upstream`; verified output
+`.toolchain/transport-source-p01-ready`,549 files, manifest SHA256
 `4f6c4d25b4bd075a691c453609183db85260ca9714d2c803d5b9d80d6576cc9b`.
-Другие transport-source outputs — stale intermediates, сохранены и не используются.
-Archive/apply canonical LF; public header aliases materialized in-tree. Verify
-rejects stale patches/changed files/lock/license assets. Prepare требует fresh
-output, не удаляет существующие. Семь packaged license assets включают original
-libyaml authors и 101 verbatim lwIP blocks. Libyaml `2c891fc7a770e8ba2fec34fc6b545c672beb37e6`
-— license-only reference. Copyright/LICENSE/NOTICE/provenance сохранить.
+Other outputs — retained stale intermediates. Archive/apply canonical LF,
+include aliases materialized in-tree. Prepare требует fresh output, не удаляет
+existing. Source checks не отключаются `python -O`. Семь packaged license assets
+сохраняют libyaml authors и101 verbatim lwIP blocks. Libyaml `2c891fc7…` —
+license-only reference. LICENSE/NOTICE/provenance/lock/patches сохранить.
 
-Bridge: Java original TUN, native duplicate, accepted/ready/outcome раздельны.
-Early STOP сохраняется; timeout удерживает ownership и запрещает restart.
-main.c адаптирован из HEV с cleanup; patch добавляет partial gateway guards и
-socket/tuple/readiness callbacks. Custom JNI/TV Boolean не заимствован.
-TCP tuple app-local=PCB remote, destination=PCB local. В UDP первая callback
-не имеет destination; hook в session datagram callback после lwIP update,
-перед SOCKS framing каждого packet. JNI copies, UID Unknown/P03 pending;
-outgoing UID не app UID. Это source finding, **не Android helper/wire proof**.
+Bridge: Java original TUN, native duplicate; accepted/ready/outcome раздельны.
+Early STOP сохраняется; timeout удерживает ownership и запрещает restart до
+reap. Cleanup/partial gateway guards/socket/tuple callbacks добавлены, native
+runtime/failure/sanitizers не исполнялись. TCP app-local=PCB remote,
+destination=PCB local. UDP hook — session datagram callback после lwIP update,
+перед SOCKS framing. JNI copies, UID Unknown/P03; outgoing UID не helper UID.
+Source orientation ещё не Android helper/wire proof.
 
-Все HEV client fd protected, SOCKS fixed loopback (не bind physical). External
-Java relay sockets проходят protect+Network.bindSocket до connect/send, failure
-закрывает fd. Device injections protect/bind добавлены. Allowlist строго только
-`io.maffinet.lab.helper.selected`; control и own package excluded. Missing selected
-helper/start consent/physical network/DNS вызывает отказ, не full-device VPN.
-Helper probes: numeric TCP/UDP echo, system DNS отдельно, raw DNS UDP/TCP A/AAAA,
-ordinary certificate/name-verified TLS и credential-free HTTPS `/p01`, IPv4/IPv6,
-count1..100. Нет CA installation/trust/name bypass/credentials/payload logs.
+HEV sockets protected before loopback connect; Java external relay sockets
+protect+physical Network.bindSocket before connect/send, failure закрывает fd.
+Fixed nonempty allowlist только `io.maffinet.lab.helper.selected`; control/own
+excluded. Missing helper/consent/physical network/DNS — hard failure, не whole
+phone. Serial UDP/new socket per datagram ограничен echo/DNS fixture;
+general QUIC/media pending. Poll250ms/fixed helpers — experiment, не supervisor.
 
-Lab README содержит fixture server, foreground adb/capture recipe и T01 JSONL
-checker. Private JSONL/keys/APKs/logs не коммитить. Checker требует readiness,
-original tuple matches, separate UIDs, selected/control dual-stack matrix и
-полный event buffer; source/APK/SLO/device gates им не доказываются.
-Lab limitations: serial UDP/new socket per datagram, upstream source port может
-меняться, general UDP/QUIC/media pending. Fixed helpers/status polling250ms —
-experiment, не production supervisor. Обычное physical DNS forwarding не P04
-broker. Handover/process/OEM/TV/16KiB/native failures ещё не приняты.
+## Continuation fixes и новый capture contract
+
+`LabStartTickets` отменяет все START, принятые до STOP/revoke. Cleanup не
+восстанавливает old ticket; destroy terminal; explicit START после STOP может
+исполняться после cleanup. Duplicate START при owned session ignored.
+Foreground notification повторяется при actual queued restart после STOP.
+Host test покрывает admission gate, service/foreground/native behavior pending.
+
+Helper schemaVersion2 / `ProbeValidation`:
+
+- Numeric IPv4 — four decimal octets; IPv6 — unscoped hex literal с colon.
+  Hex-looking hostname (`face`), shortened IPv4 и invalid protocol отвергаются
+  до resolution/target socket.
+- TLS certificate+original hostname validation сохранена. HTTP — credential-free
+  GET `/p01`, Content-Length и complete21-byte `maffinet-p01-fixture\n` body
+  lab server. Bare200/short/duplicate length/chunked/другая body — failed.
+- Raw DNS — exact single compressed A/AAAA controlled fixture answer, matched
+  transaction/question/type/class/counts/frame/length. Это не general CNAME/EDNS
+  parser и не P04 broker. Numeric TCP/UDP echo и system DNS отдельно.
+
+Checker требует current schema/protocol metadata, readiness, complete buffer/
+generation/time, selected original tuples и отсутствие control tuples. Нужны
+DNS qtype1 **и** qtype28 для UDP/TCP на IPv4 **и** IPv6 endpoints обоих helpers,
+TCP/UDP/TLS/HTTPS и system DNS. Capture final transport snapshot **после всех
+completed probes**; old/early snapshot/event loss reject. Helper scenario
+overwrites private JSONL — capture/combine между runs; transport ring очищается
+на restart. `python -O` не отключает reject checks. Synthetic unit fixtures не
+lab evidence; checker не сертифицирует APK/source/native/SLO/device.
+lab/README.md содержит foreground adb/endpoint/capture recipe и limitations.
 
 ## Следующая работа
 
-1. Найди provisioned SDK36/build-tools/CMake3.22.1/NDK29/adb, Linux native host
-   и authorized device/emulator. В текущей среде SDK/adb/Android env/local.properties
-   отсутствовали, WSL не установлен. **Новые SDK agreements автоматически не
-   принимать**. Сначала app baseline и lab compile/lint; исправь ошибки uncompiled
-   Gradle/CMake/Java/JNI. Не устанавливать CA/не менять чужие данные.
-2. Current workspace commands:
+1. Найди provisioned SDK36/build-tools36/CMake3.22.1/NDK29/adb с существующими
+   agreements, Linux+C compiler и authorized lab device/emulator. SDK paths/
+   config/local.properties отсутствовали, adb/cc/clang/gcc/CMake/ninja/docker
+   не в PATH, WSL installation required. Command-line tools ZIP в downloads
+   не означает provisioned SDK. **Не принимать новые SDK agreements автоматически.**
+2. Сначала production baseline assemble/unit/lint, затем lab compile/lint.
+   Исправь ошибки Gradle/CMake/Java/JNI. Device T02: START1/START2→STOP→explicit
+   START, native init STOP, revoke/destroy, duplicate START, foreground ordering.
 
 ```powershell
 $env:JAVA_HOME='E:\maffinet android\.toolchain\jdk\jdk-21.0.12.1+1'
 $env:GRADLE_USER_HOME='E:\maffinet android\.toolchain\gradle'
 py -3.11 tools/verify-transport-source.py .toolchain/transport-source-p01-ready
 .\gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --offline --no-daemon --console=plain
-.\gradlew.bat -Pmaffinet.transportLab=true -Pmaffinet.ndkVersion=29.0.14206865 -Pmaffinet.transportSource=.toolchain/transport-source-p01-ready -Pmaffinet.python=C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe :transport-lab:assembleDebug :traffic-helper:assembleSelectedDebug :traffic-helper:assembleControlDebug :transport-lab:lintDebug :traffic-helper:lintSelectedDebug :traffic-helper:lintControlDebug --no-daemon --console=plain
+.\gradlew.bat -Pmaffinet.transportLab=true -Pmaffinet.ndkVersion=29.0.14206865 -Pmaffinet.transportSource=.toolchain/transport-source-p01-ready -Pmaffinet.python=C:/Users/Admin/AppData/Local/Programs/Python/Python311/python.exe :transport-lab:assembleDebug :traffic-helper:assembleSelectedDebug :traffic-helper:assembleControlDebug :transport-lab:lintDebug :traffic-helper:lintSelectedDebug :traffic-helper:lintControlDebug --offline --no-daemon --console=plain
 ```
 
 Fresh host: `prepare-transport-lab.py --fetch` создаёт default
-`.toolchain/transport-source` без source property. После edits patches используй
-fresh `--output` и matching source property. Не prepare поверх existing output.
-Git OpenSSL backend обошёл local schannel credential error без TLS weakening;
-recursive fetch script не использует недоступный Git sh submodule helper.
+`.toolchain/transport-source`. После patch edits — fresh output/matching property.
+Git OpenSSL обходил schannel local error без ослабления TLS; pinned fetch
+обходит broken Git sh submodule helper. Не устанавливать CA/не менять user DNS
+policy/данные. SDK installation/agreements/device changes не выполнялись.
 
-3. Собери четыре ABI from source и три APK. Сохрани private APK hashes/signer/
-   native exports/build recipe/license packaging audit. Legacy custom binary
-   не заменять stock. APK/signature/keys/toolchain/private logs не коммитить.
-4. Provisioned Linux: existing parser/socket/stream/sanitizers и new bridge
-   config/init/protect failures, early STOP/native restart/FD ownership fixtures.
-   STOP timeout не превращать в Idle; native worker должен быть реально reaped.
-5. Authorized lab install/consent: настоящие T01/T02 selected/control TUN,
-   original helper/socket/wire tuples, IPv4/IPv6 TCP/TLS/HTTP/UDP и raw/system DNS
-   отдельно. Control success должен быть вне TUN events; собственная проба
-   Maffinet не замена. Device protect/bind failures запрещают target connect/send.
-6. Test-plan SLO: starts30, **native/TUN** stops/restarts100, FD counts, p95
-   start/stop, warm overhead100, RSS growth и API26/29/36. TV/full16KiB runtime
-   отдельно P09. Measured ADR принимает stack только после evidence. Если HEV
-   неприемлем по hooks/измерениям, compare immutable Firestack/gVisor с licenses/
-   Android/runtime/RSS/size; environment blocker не доказывает неприемлемость HEV.
+3. Four ABI from source и три APK. Private hashes/signer/exports/source-artifact/
+   license packaging audit; legacy custom binary не заменять stock. APKs/keys/
+   signing/toolchain/private logs не коммитить.
+4. Linux: existing parser/socket/stream/sanitizers и bridge config/init/protect
+   failures, early STOP/native restart/FD ownership. Worker реально reaped;
+   timeout не Idle и restart не разрешён до reap.
+5. Authorized install/consent: real selected/control T01/T02 API26/29/36,
+   helper/socket/wire tuples, IPv4/IPv6 TCP/TLS/HTTP/UDP и raw/system DNS отдельно.
+   Wrong-name/untrusted TLS must fail. Protect/bind injections требуют отсутствия
+   target-side connect/receive; host seams не заменяют device evidence.
+6. SLO: starts30, native/TUN stops/restarts100, FD/RSSgrowth, p95 start/stop,
+   warm overhead≥100 samples/family. TV/full16KiB runtime — P09. Adopt stack ADR
+   лишь после actual evidence; environment blocker не rejects HEV.
 
-## Фактически проверено
+## Исполнено и ограничения
 
-JVM161 total:154 passed/7 native parser skipped, failures/errors0. Baseline
-Android exit1 SDK location not found до compilation21s, lab build/lint exit1
-там же27s, до lab task resolution. Native fixture exit1 requires Linux/C compiler.
-Source prepare/apply/integrity/license-assets exit0; legacy eight hashes/four
-JNI inverse bindings exit0. Actual Java11 relay host sockets TCP/UDP IPv4/IPv6,
-pre-connect/pre-send denial и relay close100 passed. Десять Python DNS/framing/
-confinement/synthetic evidence rejection tests passed. Это host-only; synthetic
-records не lab evidence. APK/source-built ABI/Android TUN/native100 не исполнены.
+Initial checkpoint JVM161/154 passed/7 skipped и relay IPv4/IPv6/denial/close100
+в continuation не rerun: historical host checks, не новые Android outcomes.
+Continuation Java11 actual gate/validation passed,55 invalid inputs rejected;
+Python18 tests passed (optimized reject included); source549/patch1/licenses7
+unchanged. Baseline Android exit1 SDK before compilation24s; lab exit1 same
+configuration blocker31s. Linux fixture exit1 requires Linux/C compiler.
+Это host build times, не SLO. First Java test fixture length20 mistake исправлен
+до21 до final pass; не Android regression.
+
+Нет source-built ABI/APK/TUN/native lifecycle/FD/RSS/latency/wire/physical app
+acceptance. Host gate не доказывает atomic production STOP publication/service
+destruction/foreground behavior. Handover/process/OEM/TV/16KiB pending. HEV
+candidate only. Без среды делай independent P01 fixes/checks, сохрани stage
+in_progress с конкретными blockers, не начинай P02/не снижай criteria.
 
 ## Завершение
 
-Без среды делай независимые fixes/checks, сохраняй P01 in_progress с конкретными
-remaining gates. Не повторяй checks десятками, не начинай P02, не уменьшай exit
-criteria из-за missing device. Empty selection никогда не весь телефон;
-application data/0-RTT не replay, TLS/ECH не ослаблять. Сохранить чужие изменения/
-user data. Без новых чатов/subagents, push/publish/merge/main reset.
-
-Дополняй sessions/P01.md отдельной dated continuation, сохраняя историю.
-Обнови STATE, evidence, ADR findings/provenance и автономный NEXT_CHAT. Проверь
-`py -3.11 tools/verify-rebuild-docs.py`, JSON/links/staged paths/diff и exclusions.
-Создай только local commit конкретных files. STATE хранит existing previous hash
-и current subject, не будущий hash в самом commit. Финал: actual commit/checkpoint,
-checks, remaining gates, short continuation P01 (P02 лишь после всех exits).
+Дополняй sessions/P01.md dated continuation, сохраняй историю. Обнови STATE,
+evidence/limitations/ADR/provenance и standalone NEXT_CHAT. Выполни
+`py -3.11 tools/verify-rebuild-docs.py`, JSON/links/staged paths/diff/exclusions.
+Stage конкретные source/doc paths; local commit, без future hash в содержимом.
+Сохраняй чужую работу/данные; empty allowlist не весь телефон, TLS/ECH не
+ослаблять, application data/0-RTT не replay. Финал: actual commit/checks/remaining
+gates и prompt «Прочитай docs/rebuild/NEXT_CHAT.md и продолжи P01 по STATE.json».

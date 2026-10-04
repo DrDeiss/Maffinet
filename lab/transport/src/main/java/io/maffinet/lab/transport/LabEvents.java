@@ -19,6 +19,7 @@ final class LabEvents {
         } catch (Exception ignored) { dropped++; }
     }
     synchronized String snapshot() {
-        return "{\"kind\":\"snapshot\",\"dropped\":" + dropped + "}\n" + String.join("\n", rows) + "\n";
+        return "{\"kind\":\"snapshot\",\"generation\":" + generation + ",\"elapsedMs\":" + SystemClock.elapsedRealtime() +
+                ",\"dropped\":" + dropped + "}\n" + String.join("\n", rows) + "\n";
     }
 }

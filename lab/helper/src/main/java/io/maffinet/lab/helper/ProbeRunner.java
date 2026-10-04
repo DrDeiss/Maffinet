@@ -16,7 +16,8 @@ final class ProbeRunner {
     static JSONObject run(String pkg, String protocol, String ip, int port, String name, int qtype) {
         JSONObject row = new JSONObject(); long started = SystemClock.elapsedRealtimeNanos();
         try {
-            row.put("package", pkg).put("uid", Process.myUid()).put("protocol", protocol)
+            ProbeValidation.protocol(protocol); // Invalid input must not open a target socket.
+            row.put("schemaVersion", 2).put("package", pkg).put("uid", Process.myUid()).put("protocol", protocol)
                     .put("runId", UUID.randomUUID().toString()).put("elapsedStartNs", started);
             if ("system-dns".equals(protocol)) {
                 JSONArray results = new JSONArray();
@@ -24,11 +25,11 @@ final class ProbeRunner {
                 row.put("addresses", results).put("attribution", "system-resolver-unknown");
             } else {
                 if (port < 1 || port > 65535) throw new IllegalArgumentException("port");
-                InetAddress address = numeric(ip);
+                InetAddress address = ProbeValidation.numeric(ip);
                 row.put("family", address.getAddress().length == 4 ? 4 : 6);
                 InetSocketAddress target = new InetSocketAddress(address, port);
                 byte[] request = ("maffinet-p01:" + row.getString("runId")).getBytes(StandardCharsets.US_ASCII);
-                if (protocol.startsWith("dns-")) request = dnsQuery(name, qtype);
+                if (protocol.startsWith("dns-")) { request = dnsQuery(name, qtype); row.put("qtype", qtype); }
                 if ("udp".equals(protocol) || "dns-udp".equals(protocol)) {
                     try (DatagramSocket socket = new DatagramSocket(null)) {
                         socket.setSoTimeout(TIMEOUT); socket.connect(target); tuple(row, socket.getLocalSocketAddress(), target);
@@ -82,10 +83,6 @@ final class ProbeRunner {
         catch (JSONException ignored) { }
         return row;
     }
-    private static InetAddress numeric(String input) throws Exception {
-        if (!(input.matches("[0-9.]+") || input.matches("[0-9a-fA-F:]+"))) throw new IllegalArgumentException("numeric IP only");
-        return InetAddress.getByName(input);
-    }
     private static String hostname(String name) {
         String value = IDN.toASCII(name);
         if (value.isEmpty() || value.length() > 253 || !value.matches("[A-Za-z0-9.-]+")) throw new IllegalArgumentException("hostname");
@@ -109,13 +106,9 @@ final class ProbeRunner {
         out.writeByte(0); out.writeShort(qtype); out.writeShort(1); return bytes.toByteArray();
     }
     private static void dnsResponse(JSONObject row, byte[] query, byte[] response) throws Exception {
-        if (response.length < query.length || response[0] != query[0] || response[1] != query[1] ||
-                (response[2] & 0x80) == 0 || response[4] != 0 || response[5] != 1 ||
-                !Arrays.equals(Arrays.copyOfRange(query, 12, query.length), Arrays.copyOfRange(response, 12, query.length)))
-            throw new IOException("DNS transaction/question mismatch");
-        int rcode = response[3] & 15; boolean truncated = (response[2] & 2) != 0;
-        row.put("dnsRcode", rcode).put("dnsTruncated", truncated);
-        if (rcode != 0 || truncated) throw new IOException("DNS rcode/truncation; no retry in P01 helper");
+        if (response.length >= 4) row.put("dnsRcode", response[3] & 15).put("dnsTruncated", (response[2] & 2) != 0);
+        InetAddress answer = ProbeValidation.dns(query, response);
+        row.put("dnsAnswer", answer.getHostAddress()).put("validatedDnsFixture", "p01-v1");
     }
     private static void http(JSONObject row, SSLSocket tls, String name) throws Exception {
         tls.getOutputStream().write(("GET /p01 HTTP/1.1\r\nHost: " + name + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.US_ASCII));
@@ -125,9 +118,9 @@ final class ProbeRunner {
             if (response.size() + count > 65536) throw new IOException("HTTP response cap"); response.write(buffer, 0, count);
         }
         byte[] bytes = response.toByteArray();
-        String status = new String(bytes, StandardCharsets.ISO_8859_1).split("\r\n", 2)[0];
-        if (!status.matches("HTTP/1\\.[01] 200 .*")) throw new IOException("HTTP status not 200");
-        row.put("httpStatus", 200).put("receivedBytes", bytes.length).put("responseSha256", hex(MessageDigest.getInstance("SHA-256").digest(bytes)))
+        int bodyBytes = ProbeValidation.http(bytes);
+        row.put("httpStatus", 200).put("receivedBytes", bytes.length).put("bodyBytes", bodyBytes)
+                .put("validatedFixture", "p01-v1").put("responseSha256", hex(MessageDigest.getInstance("SHA-256").digest(bytes)))
                 .put("evidenceScope", "credential-free-/p01-only");
     }
     private static String hex(byte[] bytes) { StringBuilder text = new StringBuilder(); for (byte b : bytes) text.append(String.format(Locale.ROOT, "%02x", b & 255)); return text.toString(); }

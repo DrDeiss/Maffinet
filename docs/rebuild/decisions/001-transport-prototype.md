@@ -54,3 +54,20 @@ Linux/C compiler. Нет размера/RSS/latency/четырёх ABIs/APK/TUN 
 **HEV остаётся кандидатом; production stack не принят.** Сравнение Firestack
 не запускается по одному environment blocker: неприемлемость HEV не измерена.
 TV Boolean semantics и full16KiB acceptance остаются отдельными gates.
+
+## Продолжение P01: границы host evidence
+
+4 октября 2026 года найден и исправлен Java admission race: START1/START2,
+принятые до STOP, могли ожить после сброса общего stop flag. Cancellation tickets
+инвалидируют все старые START; cleanup не восстанавливает право запуска.
+Исполняемый Java11 host contract проверяет очередь, явный последующий START,
+revoke/destroy. Foreground notification повторяется при фактическом queued
+restart; Android service/foreground behavior ещё не compiled/verified.
+
+Helper validation теперь требует полный HTTP fixture и настоящий single-address
+DNS fixture; checker schemaVersion2 отвергает старые/incomplete captures и
+missing A/AAAA coverage. Checks под Python optimization не отключаются.
+55 Java negative cases и 18 Python tests прошли. Это admission/validation,
+не проверка JNI/TUN/HEV worker, TLS trust, FD/RSS/latency или physical app.
+Повторные SDK/Linux blockers не дают причины принять/отвергнуть HEV.
+Stack остаётся кандидатом; все исходные P01 acceptance gates сохранены.

@@ -62,3 +62,10 @@ MIT/BSD и дополнительные lwIP copyright/license blocks упако
 lab APK. Реальной APK упаковки пока нет: Android/NDK build blocked.
 Custom HEV gitlink, eight shipped binaries, production manifest/UI/settings,
 migration/user data и root LICENSE/NOTICE не менялись. Нет active legacy removal.
+
+Продолжение P01: `LabStartTickets.java`, `ProbeValidation.java`,
+`lab/contract-fixtures` и `tools/test-transport-lab-java.py` — новые Maffinet
+GPLv3 реализации laboratory admission/fixture contracts, без переноса внешнего
+кода. Изменения LabVpnService/ProbeRunner/LabEvents/checker/source verifier
+остаются внутри opt-in experiment. Настоящего нового production application
+layer, Android lifecycle acceptance или DNS broker это не доказывает.

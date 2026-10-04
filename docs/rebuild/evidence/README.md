@@ -28,6 +28,16 @@ Baseline Git commit `2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd`
 восстанавливает исходный SHA256; validator дополнительно сравнивает historical
 content с Git baseline с допустимой LF/CRLF нормализацией для будущих checkout.
 
+## P01
+
+[P01-checks.json](P01-checks.json) сохраняет initial scaffold checks и отдельный
+continuation ledger на HEAD `56da2f3`: Android baseline/lab SDK failures,
+Linux fixture blocker, Java admission/helper validation, Python18 rejection
+contracts и source/license integrity. Raw continuation logs/environment JSON
+с SHA256 остаются ignored `.toolchain/rebuild-p01/continuation-*`; это host
+evidence, без private network/device captures. [Session](../sessions/P01.md)
+фиксирует границы. JVM154/7 и relay100 не повторялись и остаются historical.
+
 Публичные Gradle logs сохраняют все строки с удалением trailing spaces в
 стандартном сообщении Gradle daemon. Raw copies в ignored
 `.toolchain/rebuild-p00/raw-logs/`; raw/saved SHA256 записаны в checks.json.

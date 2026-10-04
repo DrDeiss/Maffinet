@@ -8,6 +8,9 @@ P00 завершён 4 октября 2026 года. Рабочий scope при
 P01 начат 4 октября и остаётся in_progress. [Отчёт](sessions/P01.md) и
 [lab harness](../../lab/README.md) сохраняют source/hooks/helpers и host checks;
 SDK/Android/native/real TUN/SLO gates ещё pending. Exit criteria не сокращались.
+В продолжении добавлены host-verified START cancellation tickets и строгие
+helper fixture/evidence checks. Android service/JNI по-прежнему uncompiled;
+полученные host checks не закрывают P01/T02.
 
 Каждый новый чат выполняет один следующий этап и сохраняет результат в этой папке. Следующий этап начинается только после проверки exit criteria предыдущего. Размер этапа можно уменьшить в P00/P01, если прототип обнаружит новую зависимость; изменения графа фиксируются, старые результаты не переписываются как будто они были известны заранее.
 

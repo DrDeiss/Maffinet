@@ -38,6 +38,13 @@ passed. Это не native/TUN/device evidence. Android build/unit/lint blocked
 [Lab recipe](../../lab/README.md), [checks](evidence/P01-checks.json).
 P01 не объявлять done без настоящего TUN, source-built ABIs/APKs и SLO.
 
+Продолжение P01 4 октября: исправлена отмена queued START после STOP/revoke,
+helper получил schemaVersion2 и строгие HTTP/DNS fixture checks; checker
+требует обе DNS qtypes и capture после completion, проверки не отключаются
+`python -O`. Java admission/validation passed (55 negative inputs), Python18
+passed. Повторные Android baseline/lab attempts: SDK blocker до compilation
+(24s/31s). Linux fixture вновь blocked. Это host-only; P01 остаётся in_progress.
+
 Каждый чат завершает один текущий этап, сохраняет session/evidence/STATE/NEXT_CHAT
 и локальный commit. Push/publish/merge не выполняются автоматически. Секреты и
 signing material остаются локальными; чужие изменения и данные сохраняются.
