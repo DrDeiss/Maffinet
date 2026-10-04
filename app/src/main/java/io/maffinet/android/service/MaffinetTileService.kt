@@ -1,5 +1,6 @@
 package io.maffinet.android.service
 
+import android.annotation.SuppressLint
 import android.content.Intent
 import android.app.PendingIntent
 import android.net.VpnService
@@ -36,11 +37,13 @@ class MaffinetTileService : TileService() {
         updateTileState()
     }
 
+    @SuppressLint("StartActivityAndCollapseDeprecated")
     private fun openApplication(intent: Intent) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startActivityAndCollapse(PendingIntent.getActivity(this, 1002, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE))
         } else {
+            // The PendingIntent overload requires API 34; this legacy call runs only below it.
             @Suppress("DEPRECATION")
             startActivityAndCollapse(intent)
         }
