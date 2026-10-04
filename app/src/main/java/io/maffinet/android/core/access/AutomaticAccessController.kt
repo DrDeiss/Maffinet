@@ -234,18 +234,18 @@ object AutomaticAccessController {
         }
         for (resolver in resolvers.take(4)) {
             checkCurrent(session)
-            val dns = session.resolver.diagnose("example.com", resolver,
+            val dns = session.resolver.diagnose(DnsControlProbe.HOST, resolver,
                 checkCancelled = { checkSessionActive(session) })
             checkCurrent(session)
             val https = dns.addresses.firstOrNull()?.let { ip ->
-                session.run.probe.probe("example.com", 443, ip,
+                session.run.probe.probe(DnsControlProbe.HOST, 443, ip,
                     localSocksPort = session.run.listenerPort, timeoutMs = 3_000,
                     checkCancelled = { checkSessionActive(session) }, localSocksIp = session.run.listenerIp)
             }
             checkCurrent(session)
             synchronized(lock) {
                 if (!isSessionActive(session)) return
-                session.dnsChecks = session.dnsChecks + DnsCheckEvidence(resolver, "example.com", dns, https)
+                session.dnsChecks = session.dnsChecks + DnsCheckEvidence(resolver, DnsControlProbe.HOST, dns, https)
                 publishLocked(session, AutomaticAccessPhase.OBSERVING)
             }
         }

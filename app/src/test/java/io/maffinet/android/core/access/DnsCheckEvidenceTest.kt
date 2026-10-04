@@ -43,6 +43,13 @@ class DnsCheckEvidenceTest {
         assertFalse(value.summary().contains("сертификат и передача данных проверены"))
     }
 
+    @Test fun internalHttpsPolicyErrorIsVisibleWithoutBlockingAttribution() {
+        val value = evidence(https = GenericHttpsProbe.Result(null, false, "Invalid public HTTPS host"))
+        assertTrue(value.hasProblem)
+        assertTrue(value.summary().contains("причина: Invalid public HTTPS host"))
+        assertFalse(value.summary().contains("блокировку"))
+    }
+
     @Test fun validatedTlsAndBodyAreSuccessOnlyForThisResolverAndHost() {
         val value = evidence(https = GenericHttpsProbe.Result(200, true))
         assertFalse(value.hasProblem)

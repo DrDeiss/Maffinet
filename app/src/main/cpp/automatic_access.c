@@ -4,6 +4,9 @@
 #include <string.h>
 #include <ctype.h>
 #include <time.h>
+#ifdef ANDROID_APP
+#include <android/log.h>
+#endif
 
 struct access_route {
     char host[ACCESS_HOST_MAX + 1];
@@ -252,7 +255,15 @@ static bool extract_sni(const unsigned char *hello, size_t size,
         }
         p += length;
     }
-    if (ech) host[0] = 0;
+    if (ech) {
+        host[0] = 0;
+#ifdef ANDROID_APP
+        // Metadata only: never log the ClientHello, inner hostname or app data.
+        // This is not a claim that the extension is genuine ECH rather than GREASE.
+        if (p == end) __android_log_print(ANDROID_LOG_DEBUG, "proxy",
+            "auto-access: ECH extension present (possibly GREASE); exact-host route unavailable");
+#endif
+    }
     return p == end;
 }
 

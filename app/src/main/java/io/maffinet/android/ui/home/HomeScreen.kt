@@ -19,6 +19,7 @@ import io.maffinet.android.R
 import io.maffinet.android.core.access.AutomaticAccessController
 import io.maffinet.android.core.access.AutomaticAccessPhase
 import io.maffinet.android.core.access.DnsConfigurationMonitor
+import io.maffinet.android.core.access.DnsControlProbe
 import io.maffinet.android.core.dns.DnsConfiguration
 import io.maffinet.android.core.connection.ModeConnectionState
 import io.maffinet.android.core.dns.DnsCatalog
@@ -132,7 +133,7 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
         if (showDnsDetails) ProductCard {
             dnsConfiguration?.summaryLines()?.forEach { line -> Text(line, style = MaterialTheme.typography.bodySmall) }
             Text("Пробы: обычный DNS по UDP, TCP при усечённом ответе. DoT/DoH не проверяются. " +
-                "Контроль example.com не подтверждает доступ ко всем приложениям.", style = MaterialTheme.typography.bodySmall)
+                "Контроль ${DnsControlProbe.HOST} не подтверждает доступ ко всем приложениям.", style = MaterialTheme.typography.bodySmall)
             if (currentDnsChecks.isEmpty()) Text("Для текущей конфигурации результатов пока нет.", style = MaterialTheme.typography.bodySmall)
             currentDnsChecks.forEach { Text(it.summary(), style = MaterialTheme.typography.bodySmall) }
         }

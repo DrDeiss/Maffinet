@@ -28,8 +28,13 @@ Main checkout/index and all prior uncommitted changes remain intact.
 OnePlus wireless ADB briefly returned: installed version was 0.2.0-alpha,
 Android16 and Private DNS xbox-dns.ru. Set stay_on_while_plugged_in to 0 and
 removed /data/local/tmp/maffinet-ui.xml; forward list was empty. Connection then
-disappeared before APK installation; device remains offline. The old Chrome test
-tab has not been identified/closed and should not be confused with user tabs.
+disappeared before APK installation. Later wireless ADB returned and 0.3.1-alpha
+was installed successfully with `adb install -r`; versionCode4/target36 confirmed.
+Selected LinkedIn/Chrome, GeoHide, manual strategy and system Private DNS survived.
+The phone then showed system UI and Maffinet's exit history recorded REMOVE TASK,
+not a crash. Auto network acceptance awaits an unlocked idle device; no success
+of Auto/LinkedIn is claimed yet. The old Chrome test tab has not been identified/
+closed and should not be confused with user tabs.
 
 DNS interception before TLS, ECH/GREASE, QUIC and IPv6 recovery remain unimplemented;
 concrete code/protocol research is in docs/NETWORK_RECOVERY_RESEARCH.md.

@@ -17,8 +17,8 @@ android {
         applicationId = "io.maffinet.android"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "0.3.1-alpha"
+        versionCode = 5
+        versionName = "0.3.2-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -141,5 +141,5 @@ tasks.register<Exec>("rebuildHevTunnel") {
 }
 
 base {
-    archivesName.set("Maffinet-0.3.1-alpha")
+    archivesName.set("Maffinet-0.3.2-alpha")
 }

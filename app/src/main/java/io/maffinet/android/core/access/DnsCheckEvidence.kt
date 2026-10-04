@@ -24,7 +24,9 @@ data class DnsCheckEvidence(
             "; непубличные адреса (возможная заглушка): ${dns.rejectedAddresses.joinToString()}; причина не установлена"
         val service = https?.let {
             when {
-                !it.bodyComplete -> "; TLS/передача данных не подтверждены" + (it.statusCode?.let { code -> " (HTTP $code)" } ?: "")
+                !it.bodyComplete -> "; TLS/передача данных не подтверждены" +
+                    (it.statusCode?.let { code -> " (HTTP $code)" } ?: "") +
+                    (it.error?.takeIf { reason -> reason.isNotBlank() }?.let { reason -> "; причина: ${reason.take(240)}" } ?: "")
                 it.statusCode in 200..399 -> "; сертификат и передача данных проверены (HTTP ${it.statusCode}, до 64 КиБ)"
                 else -> "; получен HTTP ${it.statusCode}; отказ сервера не доказывает блокировку"
             }

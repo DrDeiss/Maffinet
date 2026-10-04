@@ -56,7 +56,7 @@
     "lintErrors": 0,
     "lintWarnings": 140,
     "lintHints": 5,
-    "physicalDeviceAcceptance": "pending; wireless ADB disappeared before installation"
+    "physicalDeviceAcceptance": "APK installed successfully on OnePlus CPH2747 Android 16; versionCode 4 confirmed; Auto network acceptance still pending an unlocked idle device"
   },
   "scope": {
     "defaultMode": "Automatic Access",

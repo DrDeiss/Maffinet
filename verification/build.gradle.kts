@@ -32,6 +32,7 @@ kotlin {
                 "io/maffinet/android/core/access/AutomaticAccessArguments.kt",
                 "io/maffinet/android/core/access/AutomaticAccessStatus.kt",
                 "io/maffinet/android/core/access/DnsCheckEvidence.kt",
+                "io/maffinet/android/core/access/DnsControlProbe.kt",
                 "io/maffinet/android/core/access/DnsProbeResolver.kt",
                 "io/maffinet/android/core/access/GenericHttpsProbe.kt",
                 "io/maffinet/android/core/connection/ConnectionModes.kt",
