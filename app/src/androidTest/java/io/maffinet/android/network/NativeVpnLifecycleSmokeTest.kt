@@ -1,10 +1,12 @@
 package io.maffinet.android.network
 
 import android.Manifest
+import android.content.BroadcastReceiver
 import android.app.Notification
 import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.VpnService
@@ -14,8 +16,12 @@ import android.os.ParcelFileDescriptor
 import android.os.Build
 import android.os.SystemClock
 import android.system.Os
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.maffinet.android.MainActivity
 import io.maffinet.android.core.dpibypass.ByeDpiVpnService
 import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTester
@@ -27,7 +33,11 @@ import io.maffinet.android.core.tgproxy.TgProxyService
 import io.maffinet.android.service.WatchdogReceiver
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.strategy.StrategyEvaluation
+import io.maffinet.android.data.FAILED_BROADCAST
 import io.maffinet.android.data.Mode
+import io.maffinet.android.data.SENDER
+import io.maffinet.android.data.STOPPED_BROADCAST
+import io.maffinet.android.data.Sender
 import io.maffinet.android.data.domains.DomainListRepository
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import java.io.File
@@ -36,12 +46,6 @@ import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collect
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.junit.After
@@ -54,6 +58,7 @@ import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.junit.runners.model.MultipleFailureException
 
 /** Real JNI + TUN smoke checks. No remote service availability is required to pass. */
 @RunWith(AndroidJUnit4::class)
@@ -67,12 +72,23 @@ class NativeVpnLifecycleSmokeTest {
     private var savedPreferences: Map<String, Any?>? = null
     private var savedUserFile: ByteArray? = null
     private var originalConsentMode: String? = null
-    private var statusObserver: Job? = null
+    private var receiverRegistered = false
+    private var foregroundActivity: ActivityScenario<MainActivity>? = null
     private var originalTunCount = 0
     private var originalConfigs = emptySet<String>()
     private var proxyPort = 0
     private lateinit var helperPackage: String
     private lateinit var settings: MaffinetSettingsRepository
+
+    private val statusReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.getIntExtra(SENDER, -1) != Sender.VPN.ordinal) return
+            when (intent.action) {
+                STOPPED_BROADCAST -> stopped.incrementAndGet()
+                FAILED_BROADCAST -> failed.incrementAndGet()
+            }
+        }
+    }
 
     @Before
     fun isolateSettingsAndGrantConsentOnOptedInEmulator() {
@@ -95,20 +111,10 @@ class NativeVpnLifecycleSmokeTest {
         originalTunCount = tunDescriptorCount()
         assertEquals("A TUN descriptor leaked before this isolated test", 0, originalTunCount)
         originalConfigs = temporaryConfigs()
-        // Observe the same state as Home. Legacy implicit broadcasts are not a reliable
-        // completion signal in modern instrumentation. Synchronous collection captures
-        // even an already-empty pipeline's brief Stopping -> Stopped acknowledgement.
-        statusObserver = CoroutineScope(Dispatchers.Unconfined).launch(start = CoroutineStart.UNDISPATCHED) {
-            var previous: ModeConnectionState? = null
-            ByeDpiVpnService.currentStatus.collect { state ->
-                if (state == ModeConnectionState.Stopped && previous == ModeConnectionState.Stopping) {
-                    stopped.incrementAndGet()
-                } else if (state == ModeConnectionState.Failed && previous != null) {
-                    failed.incrementAndGet()
-                }
-                previous = state
-            }
-        }
+        ContextCompat.registerReceiver(context, statusReceiver,
+            IntentFilter(STOPPED_BROADCAST).apply { addAction(FAILED_BROADCAST) },
+            ContextCompat.RECEIVER_NOT_EXPORTED)
+        receiverRegistered = true
 
         assertTrue(preferences.edit().clear()
             .putBoolean("service_enabled", false)
@@ -116,6 +122,9 @@ class NativeVpnLifecycleSmokeTest {
             .putBoolean("autostart", false)
             .putBoolean("auto_connect_on_start", false)
             .putBoolean("auto_update_enabled", false)
+            .putBoolean("onboarding_completed", true)
+            .putBoolean("maffinet_fork_notice_seen", true)
+            .putBoolean("notification_permission_requested", true)
             .putBoolean("telegram_proxy_enabled_by_user", false)
             .putBoolean("byedpi_enable_cmd_settings", true)
             .putString("byedpi_mode", "vpn")
@@ -155,24 +164,34 @@ class NativeVpnLifecycleSmokeTest {
             ?: if (operation.contains("No operations")) "default" else error("Cannot snapshot VPN app-op: $operation")
         shell("appops set ${context.packageName} ACTIVATE_VPN allow")
         assertNull("Emulator app-op did not authorize VpnService.prepare", VpnService.prepare(context))
+        // Android 14+ can defer registered broadcasts while the app is cached.
+        // Exercise user-driven lifecycle with a resumed Activity, including the denied-
+        // notification invocation. The saved flags above prevent automatic dialogs/start.
+        foregroundActivity = ActivityScenario.launch(MainActivity::class.java)
+        assertEquals(Lifecycle.State.RESUMED, foregroundActivity?.state)
         stopAndAwaitCleanup() // Observe a completed STOP before any test START is queued.
     }
 
     @After
     fun stopAndRestoreIsolatedState() {
         if (savedPreferences == null) return // Assumption skipped before any mutation.
+        val cleanupFailures = mutableListOf<Throwable>()
         try {
-            if (statusObserver != null) {
-                stopAndAwaitCleanup()
-                stopTelegramAndAwaitCleanup()
+            if (receiverRegistered) {
+                // A failed VPN assertion must not leave Telegram running for the next test.
+                runCatching { stopAndAwaitCleanup() }.exceptionOrNull()?.let(cleanupFailures::add)
+                runCatching { stopTelegramAndAwaitCleanup() }.exceptionOrNull()?.let(cleanupFailures::add)
             } else ConnectionCoordinator.stopAll(context)
         } finally {
             try {
-                originalConsentMode?.let { shell("appops set ${context.packageName} ACTIVATE_VPN $it") }
+                try { foregroundActivity?.close() }
+                finally {
+                    foregroundActivity = null
+                    originalConsentMode?.let { shell("appops set ${context.packageName} ACTIVATE_VPN $it") }
+                }
             } finally {
                 try {
-                    statusObserver?.cancel()
-                    statusObserver = null
+                    if (receiverRegistered) context.unregisterReceiver(statusReceiver)
                     savedUserFile?.let {
                         userFile.parentFile?.mkdirs()
                         userFile.writeBytes(it)
@@ -182,6 +201,7 @@ class NativeVpnLifecycleSmokeTest {
                 }
             }
         }
+        MultipleFailureException.assertEmpty(cleanupFailures)
     }
 
     @Test(timeout = 30_000)
@@ -570,7 +590,13 @@ class NativeVpnLifecycleSmokeTest {
     private fun eventually(message: String, timeoutMs: Long = 8_000, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
         while (!condition() && SystemClock.elapsedRealtime() < deadline) SystemClock.sleep(50)
-        assertTrue(message, condition())
+        if (!condition()) {
+            assertTrue("$message; VPN=${ByeDpiVpnService.currentStatus.value}, " +
+                "VPN resources=${ByeDpiVpnService.hasProxyResources}, " +
+                "Telegram=${TgProxyController.status.value}, Telegram resources=${TgProxyController.hasResources}, " +
+                "Telegram listener=${isListening(TgProxyController.getPort(context))}, STOP acknowledgements=${stopped.get()}",
+                false)
+        }
     }
 
     private fun shell(command: String): String =
