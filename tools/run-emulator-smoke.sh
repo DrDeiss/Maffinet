@@ -206,6 +206,20 @@ print(f"{log_file.stem}: {completed.group(1)} tests, {skipped} skipped; result X
 PY
 }
 
+check_denied_notifications() {
+  (( API_LEVEL >= 33 )) || return 0
+  # Revoking a runtime permission can kill the target process. Do it only
+  # between runner invocations, then check real FGS/VPN lifecycle with denial.
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm revoke io.maffinet.android android.permission.POST_NOTIFICATIONS
+  timeout --signal=TERM --kill-after=20s 2m "$ADB" -s "$ANDROID_SERIAL" shell am instrument -w -r \
+    -e maffinet.allowEmulatorVpnConsent true \
+    -e maffinet.expectedNotificationPermission denied \
+    -e class io.maffinet.android.network.NativeVpnLifecycleSmokeTest#modernForegroundServicesWorkWithDeniedOrGrantedNotifications \
+    io.maffinet.android.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$REPORT_DIR/instrumentation-notifications-denied.log"
+  verify_instrumentation instrumentation-notifications-denied
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
+}
+
 if [[ "$PREBUILT" == true ]]; then
   mapfile -t APP_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' | sort)
   mapfile -t TEST_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/androidTest/debug" -maxdepth 1 -type f -name '*.apk' | sort)
@@ -224,23 +238,23 @@ if [[ "$PREBUILT" == true ]]; then
     -e maffinet.expectedNotificationPermission granted \
     io.maffinet.android.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$REPORT_DIR/instrumentation.log"
   verify_instrumentation instrumentation
-  if (( API_LEVEL >= 33 )); then
-    # Revoking a runtime permission can kill the target process. Do it only
-    # between runner invocations, then check real FGS/VPN lifecycle with denial.
-    timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm revoke io.maffinet.android android.permission.POST_NOTIFICATIONS
-    timeout --signal=TERM --kill-after=20s 2m "$ADB" -s "$ANDROID_SERIAL" shell am instrument -w -r \
-      -e maffinet.allowEmulatorVpnConsent true \
-      -e maffinet.expectedNotificationPermission denied \
-      -e class io.maffinet.android.network.NativeVpnLifecycleSmokeTest#modernForegroundServicesWorkWithDeniedOrGrantedNotifications \
-      io.maffinet.android.test/androidx.test.runner.AndroidJUnitRunner 2>&1 | tee "$REPORT_DIR/instrumentation-notifications-denied.log"
-    verify_instrumentation instrumentation-notifications-denied
-    timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
-  fi
+  check_denied_notifications
   exit 0
+fi
+
+if (( API_LEVEL >= 33 )); then
+  # connectedDebugAndroidTest installs the app immediately before testing.
+  # Preinstall it so notification permission is already granted at first launch.
+  timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:assembleDebug -Pmaffinet.ndkVersion=29.0.14206865 --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/manual-build.log"
+  mapfile -t MANUAL_APP_APKS < <(find "$ROOT_DIR/app/build/outputs/apk/debug" -maxdepth 1 -type f -name '*.apk' | sort)
+  (( ${#MANUAL_APP_APKS[@]} == 1 )) || { echo 'Expected exactly one assembled debug app APK.' >&2; exit 1; }
+  timeout 120s "$ADB" -s "$ANDROID_SERIAL" install -r "${MANUAL_APP_APKS[0]}"
+  timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pm grant io.maffinet.android android.permission.POST_NOTIFICATIONS
 fi
 
 # AGP 9.0.1 marks this retention option stable and wires it to keepInstalledApks.
 # Retain APKs only on this isolated test emulator until screenshots are pulled.
 # AndroidX uses the same option for screenshot outputs:
 # https://android.googlesource.com/platform/frameworks/support/+/eb74b1a4b3527414639994574a201f125aff90f5
-timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+timeout --signal=TERM --kill-after=20s 12m bash ./gradlew :app:connectedDebugAndroidTest -Pmaffinet.ndkVersion=29.0.14206865 -Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true -Pandroid.testInstrumentationRunnerArguments.maffinet.allowEmulatorVpnConsent=true -Pandroid.testInstrumentationRunnerArguments.maffinet.expectedNotificationPermission=granted --no-daemon --console=plain 2>&1 | tee "$REPORT_DIR/instrumentation.log"
+check_denied_notifications
