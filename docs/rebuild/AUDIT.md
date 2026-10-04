@@ -10,7 +10,9 @@
 
 Исходник Windows доступен только для чтения в `E:\maffinet\research\NetFix`. Его HEAD подтверждён: `f53d458dc85d329a5f4cf25d3222e3fc48686e66`. Прочитаны соответствующие части `DnsManagerService.cs`, `AutoHostsModService.cs`, `ModActivator.cs`; изучены прежняя Android-таблица и соседняя матрица desktop-проекта. Другой проект не изменён. Windows-репозиторий использован как закреплённый образец v1.2.0; статус «последний на сегодня» не является условием выводов.
 
-В этой сессии проверки приложения не запускались. Ниже сохранены результаты прежних испытаний с явным указанием их происхождения.
+В PREP проверки приложения не запускались. P00 повторно исполнил standalone
+JVM suite и Android build attempts; факты ниже дополнены новым baseline.
+Прежние физические испытания по-прежнему отделены от текущего дерева.
 
 ## Что было сделано
 
@@ -77,3 +79,43 @@ Windows-столбец описывает закреплённый код v1.2.0
 Новая идея: Maffinet управляет доступом выбранных приложений на данной сети и объясняет наблюдаемый результат. Простота автоматического запуска остаётся вдохновением. Организация экранов, сценарии, тексты, логика Android-интеграции и управление политиками создаются заново.
 
 В текущем репозитории сохранены заимствованный код и заявления upstream об атрибуции. Удаление строк с названием не доказывает самостоятельное происхождение. План предусматривает собственную реализацию слоя приложения и прямое подключение независимых native-проектов с их лицензиями. Пока заимствованный слой сохраняется, существующие NOTICE, provenance и лицензионные сведения сохраняются. Исследовательская история может называть сравниваемый продукт. Отсутствие продуктовых отсылок проверяется отдельно по новой поставляемой реализации.
+
+## Повторная проверка P00
+
+Начало на main/HEAD `0d1cf68054120f2248f038fbbb3af9fe448589a0`:
+85 status entries при группировке каталогов, 121 при раскрытии untracked.
+PREP84 относится к дереву до появления docs/rebuild, противоречия source нет.
+Теперь source/docs baseline восстановим в `2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd`
+на `codex/rebuild-p00`; raw ZIP и SHA256 [manifest](evidence/baseline-manifest.json)
+проверены до cleanup. Commit из APK `33a144…` всё ещё отсутствует в object store.
+Windows и Mobile reference hashes подтверждены повторно; соседний checkout не менялся.
+
+Проверены MainActivity/manifest/service/receivers, schema2 preferences и domain
+schema1, Telegram secret/runtime, DomainParser, actual patches/JNI/CMake,
+verification/CI/provenance. Upstream MainActivity имеет ту же numeric-tab модель,
+а VpnService вставляет YouTube/SmartTube пакеты. Текущий Maffinet уже исключает
+автоматическую вставку и защищает пустой allowlist. Это функциональное изменение,
+при этом организационное наследование application layer остаётся.
+
+Windows `DnsManagerService.SetDnsServerAsync` меняет физический интерфейс через
+Set-DnsClientServerAddress и настраивает системный DoH; `ModActivator` записывает
+строки list в системный hosts. Android parseImport отбрасывает IP и сохраняет
+имена для фильтра. Вызов addDnsServer не воспроизводит Windows policy/broker.
+Это проверено по закреплённым локальным C#/Kotlin исходникам, а не по названию UI.
+
+Все восемь ограничений из NEXT_SESSION_PROMPT остаются подтверждёнными:
+до-TLS DNS recovery нет; ECH extension исключается независимо от GREASE;
+native routes — IPv4, UDP unchanged, owner tuple/UID отсутствуют;
+первый запрос/next flow и anonymous probe/app scenario различаются.
+Подробнее callers и этапы удаления — [usage-map.md](usage-map.md).
+
+Baseline и после cleanup: 161 JVM cases, 154 passed, 7 skipped native parser,
+0 failures/errors. SDK отсутствует: assemble/unit/lint остановились до compilation
+в обоих runs. Native hash/inverse-JNI verification и ByeDPI patch preparation passed;
+Linux fixture/sanitizers и device acceptance не выполнялись. Нельзя называть этот
+baseline полностью собранным APK. Команды/exit codes — [session P00](sessions/P00.md).
+
+Удалён только недостижимый ServicesScreen. ServiceProfile/ApplicationRouting,
+settings/test setters и reachable Youtube/Settings/Info экраны оставлены до
+замены; исторический PLAN архивирован с указателем. [Cleanup ledger](cleanup-ledger.md)
+содержит точные операции и восстановление.

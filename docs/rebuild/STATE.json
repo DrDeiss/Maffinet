@@ -3,9 +3,9 @@
   "preparedAt": "2026-10-04",
   "project": "Maffinet Android",
   "workspace": "E:\\maffinet android",
-  "phase": "preparation_complete",
+  "phase": "p00_complete",
   "currentStage": null,
-  "nextStage": "P00",
+  "nextStage": "P01",
   "baseline": {
     "localHead": "0d1cf68054120f2248f038fbbb3af9fe448589a0",
     "existingDirtyEntriesBeforePreparation": 84,
@@ -14,10 +14,15 @@
     "recordedApkSourceCommitAvailableLocally": false,
     "mobileReferenceCommit": "19cb13c19f87a1fe6339acb65e35da2ab4d14a43",
     "windowsReferenceCommit": "f53d458dc85d329a5f4cf25d3222e3fc48686e66",
-    "snapshotCreated": false
+    "snapshotCreated": true,
+    "sourceCheckpointCommit": "2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd",
+    "dirtyEntriesAtP00Start": 85,
+    "preservedChangedFiles": 121,
+    "manifest": "evidence/baseline-manifest.json",
+    "rawSnapshot": ".toolchain/rebuild-p00/baseline.zip"
   },
   "stages": {
-    "P00": "pending",
+    "P00": "done",
     "P01": "pending",
     "P02": "pending",
     "P03": "pending",
@@ -28,11 +33,30 @@
     "P08": "pending",
     "P09": "pending"
   },
-  "lastSessionReport": "sessions/PREP.md",
-  "lastCheckpointCommit": null,
-  "blockingIssues": [],
+  "lastSessionReport": "sessions/P00.md",
+  "lastCheckpointCommit": "2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd",
+  "blockingIssues": [
+    {
+      "id": "ENV-SDK",
+      "affectsStage": "P01",
+      "reason": "No provisioned Android SDK/adb; assemble/unit/lint exit1 before compilation, before and after cleanup",
+      "requiredAction": "Locate provisioned SDK36/NDK29 with existing agreements; run first Android build before P01 production edits"
+    },
+    {
+      "id": "ENV-LINUX",
+      "affectsStage": "P01",
+      "reason": "Native fixture requires Linux/C compiler; WSL not installed; seven parser tests skipped",
+      "requiredAction": "Provisioned Linux host for native/socket/stream/sanitizer fixtures"
+    },
+    {
+      "id": "LAB-TUN",
+      "affectsStage": "P01",
+      "reason": "No helper/real-TUN device or emulator evidence yet",
+      "requiredAction": "Build helper and transport, execute selected/nonselected TCP/UDP/IPv6 TUN gates; without environment keep P01 in_progress"
+    }
+  ],
   "openRisks": [
-    "Existing uncommitted work must be preserved before cleanup",
+    "Existing source/docs work preserved by baseline commit; ignored private/toolchain/signing assets remain untouched",
     "Recorded APK and CI evidence do not certify the current dirty tree",
     "Custom inherited HEV source is unavailable; source-built replacement needs a prototype",
     "Actual LinkedIn Auto access failed recorded physical acceptance",
@@ -47,5 +71,9 @@
     "explicitSelectedApplicationsOnly": true,
     "independentApplicationLayer": true,
     "automaticPublication": false
-  }
+  },
+  "updatedAt": "2026-10-04",
+  "completionCommitSubject": "docs(rebuild): complete P00 audit cleanup and implementation plan",
+  "checkpointResolution": "lastCheckpointCommit is baseline; resolve completed P00 by subject plus sessions/P00.md in git log",
+  "implementationStatus": "Legacy application layer remains; P00 defines replacement, no independence completion claim"
 }

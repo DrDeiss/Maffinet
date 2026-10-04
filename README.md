@@ -1,5 +1,9 @@
 # Maffinet
 
+Переработка приложения ведётся по [docs/rebuild](docs/rebuild/START_HERE.md).
+P00 завершён; следующий этап и автономная инструкция — [NEXT_CHAT.md](docs/rebuild/NEXT_CHAT.md).
+Описание 0.3.2-alpha ниже сохраняет факты прежнего приложения.
+
 Maffinet is an Android application for local, selective DPI bypass with explicit
 application routing, a separate Telegram proxy, editable hosts and strategy testing.
 

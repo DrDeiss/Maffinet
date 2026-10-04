@@ -1,0 +1,351 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/9.1.0/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build
+> Task :checkKotlinGradlePluginConfigurationErrors SKIPPED
+> Task :processResources NO-SOURCE
+> Task :processTestResources NO-SOURCE
+> Task :compileKotlin
+> Task :compileJava NO-SOURCE
+> Task :classes UP-TO-DATE
+> Task :jar
+
+> Task :compileTestKotlin
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:14:36 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:15:37 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:31:41 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:46:28 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:47:28 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:48:28 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:59:40 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/domains/DomainSourceDownloaderTest.kt:72:19 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+w: file:///E:/maffinet%20android/app/src/test/java/io/maffinet/android/core/strategy/HttpProbeBodyValidatorTest.kt:103:30 'constructor(p0: String!): URL' is deprecated. Deprecated in Java.
+
+> Task :compileTestJava NO-SOURCE
+> Task :testClasses UP-TO-DATE
+
+> Task :test
+
+AccessSessionLifecycleTest > aLateReadyCallbackCannotClaimAReplacementStart PASSED
+
+AccessSessionLifecycleTest > delayedNetworkMonitorCannotClearAProxyStartedAfterStop PASSED
+
+AccessSessionLifecycleTest > networkLossInvalidatesOldWorkButTheSameOwnerCanResumeOnANewPolicy PASSED
+
+AutomaticAccessArgumentsTest > onlyTlsHandshakeGroupsHaveRetryDetection PASSED
+
+AutomaticAccessArgumentsTest > unknownHostsAreNotRestrictedByGeneralAndUdpKeepsForwarding PASSED
+
+AutomaticAccessArgumentsTest > diagnosticUseCanDisableObservationWithoutChangingTheChain PASSED
+
+DnsCheckEvidenceTest > rejectedAddressesRemainAProblemEvenIfPublicAnswerServesHttps PASSED
+
+DnsCheckEvidenceTest > internalHttpsPolicyErrorIsVisibleWithoutBlockingAttribution PASSED
+
+DnsCheckEvidenceTest > nonexistentNameIsReportedWithoutAttributingBlocking PASSED
+
+DnsCheckEvidenceTest > successfulStatusWithPartialBodyDoesNotClaimDataTransferSuccess PASSED
+
+DnsCheckEvidenceTest > forbiddenHttpResponseIsAServiceFailureWithoutBlockingAttribution PASSED
+
+DnsCheckEvidenceTest > dnsAnswerAloneDoesNotClaimHttpsSuccess PASSED
+
+DnsCheckEvidenceTest > validatedTlsAndBodyAreSuccessOnlyForThisResolverAndHost PASSED
+
+DnsControlProbeTest > controlHostPassesProductionHostAndProbeValidation PASSED
+
+DnsControlProbeTest > documentationDomainStillFailsBeforeNetwork PASSED
+
+DnsProbeResolverTest > lanResolversAreAcceptedButPrivateAnswersStillCannotReceiveRoutes PASSED
+
+DnsProbeResolverTest > resolverMustBeNumericUnicastEvenWithAnInjectedLocalDestination PASSED
+
+DnsProbeResolverTest > diagnosticDistinguishesMalformedTimeoutAndTransportFailure PASSED
+
+DnsProbeResolverTest > truncatedUdpFallsBackToTcpAndBindsBothTransports PASSED
+
+DnsProbeResolverTest > requestedLongTimeoutIsClampedToTwoSeconds PASSED
+
+DnsProbeResolverTest > diagnosticRetainsRejectedAnswersWithoutCallingThemNoData PASSED
+
+DnsProbeResolverTest > diagnosticDistinguishesNxDomainNoDataAndResolverErrors PASSED
+
+DnsProbeResolverTest > diagnosticErrorReplyCannotSupplyRoutesAndMixedAnswersRetainEvidence PASSED
+
+DnsProbeResolverTest > malformedTcpLengthShortBodyAndRepeatedTruncationAreRejected PASSED
+
+DnsProbeResolverTest > incompleteRecordLengthsAndTrailingBytesAreRejected PASSED
+
+DnsProbeResolverTest > wrongTransactionQuestionClassOrResponseFlagsAreRejected PASSED
+
+DnsProbeResolverTest > diagnosticPreservesTcpOutcomeAndCancellation PASSED
+
+DnsProbeResolverTest > cnameCyclesConflictingAliasesAndMixedCnameAOwnersAreRejected PASSED
+
+DnsProbeResolverTest > udpAndPartialTcpReadsShareOneDeadline PASSED
+
+DnsProbeResolverTest > onlyTerminalAnswerInTheQuestionCnameChainIsReturned PASSED
+
+DnsProbeResolverTest > packetsFromAnotherSourceCannotReplaceTheConnectedResolverAnswer PASSED
+
+DnsProbeResolverTest > compressedAnswersFilterPrivateAddressesAndDuplicates PASSED
+
+DnsProbeResolverTest > cancellationInterruptsPollingWithoutReturningAnAddress PASSED
+
+DnsProbeResolverTest > additionalRecordsCannotSupplyAnUnansweredQuestion PASSED
+
+DnsProbeResolverTest > compressionCyclesOutOfBoundsReservedLabelsAndLongNamesAreRejected PASSED
+
+DnsProbeResolverTest > truncatedUdpStillHasToMatchTheQuestionBeforeTcpIsUsed PASSED
+
+GenericHttpsProbeTest > redirectsAreReportedWithoutFollowingAndTheirBodiesStillMatter PASSED
+
+GenericHttpsProbeTest > stalled13781ByteBodyIsNotSuccessfulHeadersOnlyEvidence PASSED
+
+GenericHttpsProbeTest > cancellationIsNotConvertedIntoFailedHttpEvidence PASSED
+
+GenericHttpsProbeTest > fullBodyAndBoundedLargePrefixComplete PASSED
+
+GenericHttpsProbeTest > ambiguousFramingAndOversizedMetadataAreRejected PASSED
+
+GenericHttpsProbeTest > absoluteDeadlineInterruptsBodyStallAndPrivateDestinationNeverConnects PASSED
+
+GenericHttpsProbeTest > chunkedAndEofFramingRequireActualCompletion PASSED
+
+GenericHttpsProbeTest > hostnameAndTrustValidationRemainMandatory PASSED
+
+GenericHttpsProbeTest > errorStatusBodyIsValidatedAndRemainsSeparateFromAvailability PASSED
+
+GenericHttpsProbeTest > publicIpv6DirectProbeUsesNumericSocksAddressAndOriginalTlsIdentity PASSED
+
+GenericHttpsProbeTest > socksMarkerNumericDestinationOriginalSniAndNoCredentialsArePreserved PASSED
+
+HostAccessDecisionCacheTest > failuresBackOffForOneMinuteAndCannotCrossPhysicalNetworkOrPolicy PASSED
+
+HostAccessDecisionCacheTest > positiveEvidenceExpiresAtTenMinutesAndDirectProofHasNoRoute PASSED
+
+HostAccessDecisionCacheTest > boundedCacheEvictsTheLeastRecentlyUsedDecision PASSED
+
+HostAccessDecisionCacheTest > ANewDirectAddressDoesNotRenewOlderProofAndSleepCountsTowardExpiry PASSED
+
+HostAccessDecisionCacheTest > directSuccessDoesNotSuppressABrokenAddressOfTheSameHost PASSED
+
+HostAccessDecisionCacheTest > privateDnsAnswersCannotBeCachedAsRoutes PASSED
+
+HostAccessDecisionCacheTest > directProofsAreBoundedAndAnIpv6ProofCannotSuppressAnIpv4Failure PASSED
+
+HostAccessPolicyTest > publicNamesNormalizeWithoutAdmittingLocalNamesOrUrls PASSED
+
+HostAccessPolicyTest > privateReservedAndNonNumericAddressesCannotReceiveRoutes PASSED
+
+HostAccessPolicyTest > observationsNeedPublicOriginalAddressIncludingGlobalIpv6 PASSED
+
+HostAccessRecoveryTest > deadlineAndEightCandidateBoundStopFurtherProbes PASSED
+
+HostAccessRecoveryTest > geoDenialRequiresAnImprovementAndCannotInstallAnotherDenial PASSED
+
+HostAccessRecoveryTest > knownHintUsesOriginalHostnameForTlsAndRemainsPortScoped PASSED
+
+HostAccessRecoveryTest > epochChangeDuringAProbeDiscardsEvenAPositiveCandidate PASSED
+
+HostAccessRecoveryTest > availableDirectAndClientErrorBodiesDoNotTriggerResolverTraffic PASSED
+
+HostAccessRecoveryTest > unknownHostRecoversFromSmartDnsOnlyAfterBodyAndTlsProof PASSED
+
+HostAccessRecoveryTest > successfulEvidenceAfterTheHostDeadlineCannotBecomeARoute PASSED
+
+HostAccessRecoveryTest > smartDnsIsTriedBeforeAnotherSystemCdnAddressCanSpendTheBudget PASSED
+
+HostAccessWorkQueueTest > distinctPortsRemainIndependentAndQueueIncludingInflightIsBounded PASSED
+
+HostAccessWorkQueueTest > numericCandidateObservationsCannotRequeueAnInflightHost PASSED
+
+RouteHintRegistryTest > hintsAreExactPublicDnsNamesWithNoWildcardOrAddressMapping PASSED
+
+RouteHintRegistryTest > hostsOutsideTheRegistryRemainEligibleForAutomaticRecovery PASSED
+
+ConnectionModesTest > eachChoiceRequestsOnlyItsOwnModes PASSED
+
+ConnectionModesTest > stopClearsRequestsAndPreservesModeChoices PASSED
+
+DnsCatalogTest > corruptOrUnknownSavedSelectionUsesSystemDns PASSED
+
+DnsCatalogTest > idsAndLegacyAliasesAreUniqueAndAllVpnProfilesHavePublishedIpv4 PASSED
+
+DnsCatalogTest > legacySelectionsResolveToTheSameProviderWithCurrentAddresses PASSED
+
+DnsCatalogTest > customAddressesRoundTripAndRemoveDuplicatesWithoutMixingProviders PASSED
+
+DnsCatalogTest > geoHideRegionsApplyPublishedUdpResolversAndKeepLegacySelection PASSED
+
+DnsCatalogTest > hostnameOnlyProvidersNeverInheritAnotherProvidersIpv4 PASSED
+
+DnsCatalogTest > malformedHostnamesUrlsIpv6AndInvalidUnicastAreRejected PASSED
+
+DnsCatalogTest > validZeroFinalOctetAndFourResolverSelectionAreAccepted PASSED
+
+DnsCatalogTest > filteredVariantsDoNotReuseTheUnfilteredEndpoints PASSED
+
+DnsCatalogTest > legacyExternalSelectionsExplainThatVpnUsesNetworkDns PASSED
+
+DnsCatalogTest > geoAccessCatalogIncludesSmartDnsWithoutPublicAndFamilyResolvers PASSED
+
+DnsConfigurationTest > mismatchComparesAddressSetsWithoutFormattingOrOrderNoise PASSED
+
+DnsConfigurationTest > snapshotIsUnaffectedByLaterMutationsOfInputLists PASSED
+
+DnsConfigurationTest > identityIncludesEveryObservedAndSavedField PASSED
+
+DnsConfigurationTest > identicalDnsOnDifferentPhysicalNetworksDoesNotShareIdentity PASSED
+
+DnsConfigurationTest > absentVpnAndInheritedNetworkDnsHaveDistinctMeaning PASSED
+
+DnsConfigurationTest > summaryKeepsTransportAndActualResolverUnknown PASSED
+
+BuiltInDomainListsTest > activeHostsReachEveryNativeGroupWhileOldAliasesRemainAvailable PASSED
+
+BuiltInDomainListsTest > expandedBaseCoversContentApisAndCdnWithoutChangingLegacyAliases PASSED
+
+BuiltInDomainListsTest > baseIsValidAndUserExtensionHasStableDeduplicatedOrder PASSED
+
+BuiltInDomainListsTest > disablingUserRetainsSavedExtensionAndNeverDisablesBase PASSED
+
+DomainParserTest > importKeepsStrictDomainValidationAndReportsOriginalLines PASSED
+
+DomainParserTest > normalizesCommentsIdnCaseAndDuplicates PASSED
+
+DomainParserTest > mergingIncludesOnlyActiveNondeletedListsAndHasStableOrder PASSED
+
+DomainParserTest > importExtractsPublicIpv4AndIpv6AliasesAndPlainDomainsInStableOrder PASSED
+
+DomainParserTest > importDoesNotTurnBlockedOrLocalMappingsIntoBypassDomains PASSED
+
+DomainParserTest > rejectsUrlsPortsWildcardsAndArgumentsWithLineNumbers PASSED
+
+DomainSourceDownloaderTest > refusesHttpAtTheStartOrAfterARedirectBeforeOpeningIt PASSED
+
+DomainSourceDownloaderTest > byteLimitAppliesWithoutContentLengthAndUtf8IsValidated PASSED
+
+DomainSourceDownloaderTest > followsRelativeHttpsRedirectAndAppliesTimeoutsWithoutAutomaticRedirects PASSED
+
+DomainSourceDownloaderTest > rejectsRedirectLoopsHttpErrorsHtmlAndOversizedContentLength PASSED
+
+DomainSourceDownloaderTest > failedDownloadsAndInvalidBodiesPreservePreviouslySavedDomains PASSED
+
+ByeDpiArgumentCompilerTest > keepsNarrowTcpProtocolAndPreventsUdpFromIgnoringHosts PASSED
+
+ByeDpiArgumentCompilerTest > explicitAdvancedOverridePreservesWhitelistBlacklistAndDisabledFiltering PASSED
+
+ByeDpiArgumentCompilerTest > candidateListenerOverridesEmbeddedListenerAndUnsafeGroupingIsRejected PASSED
+
+ByeDpiArgumentCompilerTest > expandsListsInsideOneHostArgumentByNameOrId PASSED
+
+ByeDpiArgumentCompilerTest > splitsQuotesBeforeListExpansionAndRejectsUnclosedQuote PASSED
+
+ByeDpiArgumentCompilerTest > preservesLegacyFakeSniButNewFakeListsUseRepeatedNativeOptions PASSED
+
+ByeDpiArgumentCompilerTest > filtersEveryDesyncGroupAndAddsUnmodifiedFallback PASSED
+
+ByeDpiArgumentCompilerTest > missingEmptyAndUnknownListsFailInsteadOfBecomingUnrestricted PASSED
+
+ServiceProfileTest > routingUsesOnlyManualApplicationsAndExcludesProxyUid PASSED
+
+ServiceProfileTest > emptyManualSelectionDoesNotInheritDefaultServicePackages PASSED
+
+ServiceProfileTest > emptyOrUninstalledApplicationSelectionCannotBecomeFullDeviceVpn PASSED
+
+ServiceProfileTest > malformedCatalogDataIsRejected PASSED
+
+ServiceProfileTest > deselectionDoesNotReinsertKnownApplications PASSED
+
+ServiceProfileTest > catalogKeepsLinkedInVerifiedPackageAndLegacyYouTubeClients PASSED
+
+HttpProbeBodyValidatorTest > completeSmallResponseAndUnknownLengthEofAreSuccessful PASSED
+
+HttpProbeBodyValidatorTest > truncatedKnownLengthIsRejectedEvenAfterHttp200 PASSED
+
+HttpProbeBodyValidatorTest > slowTrickleIsBoundedEvenWhenEveryReadReturnsData PASSED
+
+HttpProbeBodyValidatorTest > alreadyCancelledProbeDoesNotOpenABody PASSED
+
+HttpProbeBodyValidatorTest > bodylessAndRedirectStatusesDoNotRequireAResponseBody PASSED
+
+HttpProbeBodyValidatorTest > knownSmallBodyMustAlsoReachItsDeclaredLength PASSED
+
+HttpProbeBodyValidatorTest > serverThatSends200ThenStallsAfterFirstPacketsIsRejectedByReadTimeout PASSED
+
+HttpProbeBodyValidatorTest > cancellationDuringReadingIsPropagatedAndClosesTheBody PASSED
+
+HttpProbeBodyValidatorTest > largeResponseRequires64KiBBeforeSuccessAndDoesNotReadTheWholeDownload PASSED
+
+ProbeTargetsTest > hostEditsAndUserEnableStateInvalidateEvidence PASSED
+
+ProbeTargetsTest > fingerprintsAreStableForEquivalentDomainSets PASSED
+
+ProbeTargetsTest > configuredAddressesAreIndependentAndNormalizedWithoutChangingEscapedPaths PASSED
+
+ProbeTargetsTest > targetCountIsBoundedAndRepeatedLinesDoNotConsumeTheLimit PASSED
+
+ProbeTargetsTest > manualCandidateAndDomainOrderChangesPreserveOrInvalidateTheActualProbeInputs PASSED
+
+ProbeTargetsTest > invalidTargetsRejectProtocolsCredentialsFragmentsPortsAndEmptySelections PASSED
+
+ProbeTargetsTest > targetChangesAdvancedOverrideAndCandidateChangesInvalidateEvidence PASSED
+
+StrategyScorerTest > equalCoverageUsesSuccessfulLatencyAndStablePresetOrder PASSED
+
+StrategyScorerTest > coverageOutranksLatency PASSED
+
+StrategyScorerTest > noSuccessfulTargetsNeverSelectsAStrategy PASSED
+
+StrategyScorerTest > duplicateServiceIdsCannotInflateCoverage PASSED
+
+StrategyScorerTest > allConfiguredTargetsOfAServiceMustPass PASSED
+
+StrategyScorerTest > autoRejectsPartialResultsWhileManualRankingKeepsThemAvailable PASSED
+
+StrategyScorerTest > autoSelectsFastestCompleteResultWithStablePresetOrder PASSED
+
+StrategyScorerTest > autoRequiresEvidenceForEveryConfiguredUrl PASSED
+
+ProxyLifecycleStateTest > concurrentStopPublicationCannotArriveAfterNewerCleanup PASSED
+
+ProxyLifecycleStateTest > destroyPreservesFailureAndExplicitStopClearsItAfterCleanup PASSED
+
+ProxyLifecycleStateTest > queuedStartInvalidatesOlderStopCompletion PASSED
+
+ProxyLifecycleStateTest > stoppingQueuedStartWithoutNativeResourcesStillLocksUntilCleanup PASSED
+
+ProxyLifecycleStateTest > idleStopInvalidatesOwnershipWithoutRepublishingStopping PASSED
+
+ProxyLifecycleStateTest > userStopRejectsOlderReadyAndFailureCallbacks PASSED
+
+UserDomainStoreTest > hostsImportMergesDomainsButAnyInvalidAliasPreservesTheEntireFile PASSED
+
+UserDomainStoreTest > invalidWritePreservesSavedDomains PASSED
+
+UserDomainStoreTest > savingReopeningReplacingAndClearingDomainsPersists PASSED
+
+UserDomainStoreTest > userEditorAndImportValidateBeforeSavingAndRoundTrip PASSED
+
+UserDomainStoreTest > exportedTextCanBeImportedAndFutureStorageVersionIsRejected PASSED
+
+DnsPresetsTest > geoAccessChoicesIncludeRegionalSmartDnsWithoutPublicAndFamilyResolvers PASSED
+
+DnsPresetsTest > switchingGroupsRetainsSystemCustomAndRoutesLegacySelectionsToTheirProvider PASSED
+
+NativeParserContractTest > allInheritedPresetsAreAcceptedByTheProductionNativeParser SKIPPED
+
+NativeParserContractTest > udpIsForwardedUnmodifiedWithoutApplyingAnyFakes SKIPPED
+
+NativeParserContractTest > automaticProductionChainHandlesUnknownTlsHostsAndKeepsUdpUnmodified SKIPPED
+
+NativeParserContractTest > tlsOnlyProtocolRemainsNarrowAndOpaqueTrafficUsesFallback SKIPPED
+
+NativeParserContractTest > selectedRootsAndSubdomainsReachDesyncForHttpAndTls SKIPPED
+
+NativeParserContractTest > retryGroupsStillEnforceTheSelectedHosts SKIPPED
+
+NativeParserContractTest > unrelatedAndBoundaryLookalikeHostsUseNoDesyncFallback SKIPPED
+
+BUILD SUCCESSFUL in 1m 17s
+4 actionable tasks: 4 executed
+Consider enabling configuration cache to speed up this build: https://docs.gradle.org/9.1.0/userguide/configuration_cache_enabling.html

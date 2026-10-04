@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "status": "passed",
+  "markdownFiles": 22,
+  "localLinks": 93,
+  "archiveHistoricalContentVerified": true,
+  "archiveOriginalRawHashMatch": true,
+  "checkpointObjectVerified": true,
+  "jvmXmlAvailable": true,
+  "jvmXmlTotals": {
+    "tests": 161,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 7
+  },
+  "deviceAcceptance": "not_verified_by_this_tool"
+}

@@ -62,3 +62,35 @@
 - Физические и CI-записи: `docs/ANDROID36_AND_LINKEDIN.md`, `docs/build-info-0.3.2-alpha.json`, `docs/DEVICE_VALIDATION.md`. Их происхождение и ограничение описаны в [аудите](AUDIT.md).
 
 Следующая сессия перепроверяет ревизии, доступность исходников и спорные API-контракты. Изменение внешнего README не должно автоматически менять утверждённые требования Maffinet.
+
+## Проверка P00 и новые уточнения
+
+4 октября 2026 года повторно открыты Android VPN/owner/protect/bind API и
+RFC2308/8484/9460/9849/9001/9114/8305. Добавлены
+[DNS over TCP RFC7766](https://www.rfc-editor.org/rfc/rfc7766.html),
+[EDNS RFC6891](https://www.rfc-editor.org/rfc/rfc6891.html),
+[DNS64 RFC6147](https://www.rfc-editor.org/rfc/rfc6147.html) и
+[Android radio/update guidance](https://developer.android.com/develop/connectivity/minimize-effect-regular-updates).
+Это источники protocol contracts, не свидетельства работы нового broker.
+
+HEV первый candidate pin:
+[`4d6c334dbfb68a79d1970c2744e62d09f71df12f`, tag2.14.4](https://github.com/heiher/hev-socks5-tunnel/commit/4d6c334dbfb68a79d1970c2744e62d09f71df12f).
+Прочитаны [JNI](https://raw.githubusercontent.com/heiher/hev-socks5-tunnel/2.14.4/src/hev-jni.c)
+и [tunnel](https://raw.githubusercontent.com/heiher/hev-socks5-tunnel/2.14.4/src/hev-socks5-tunnel.c):
+узкий bridge и callbacks до SOCKS доступны как source. Core gitlink
+[`4be2e621813ba0315cfacd995bf501bde91d6996`](https://github.com/heiher/hev-socks5-core/tree/4be2e621813ba0315cfacd995bf501bde91d6996).
+Остальные dependency hashes и runtime proof — P01.
+
+[Firestack n2 README](https://raw.githubusercontent.com/celzero/firestack/n2/README.md)
+подтверждает Android/gVisor и нестабильный API. Проверена
+[MPL2 LICENSE](https://raw.githubusercontent.com/celzero/firestack/main/LICENSE).
+Это исследовательский branch, не production pin. Прежний
+[Outline standalone README](https://raw.githubusercontent.com/OutlineFoundation/outline-go-tun2socks/master/README.md)
+указывает прекращение сопровождения и перенос в outline-apps/Intra: больше не
+рассматривать его как поддерживаемый самостоятельный кандидат.
+
+Rethink/Intra/PCAPdroid descriptions повторно просмотрены на первичных repos;
+immutable pins для копирования их кода не выбраны, код не импортирован.
+API/tag fetch и некоторые HEV session/raw pages вернули cache/access errors;
+полный source checkout в P00 не заявлен. Facts/hypotheses/prototypes/cost/acceptance
+каждого направления — [research.md](research.md), выбор — [ADR-001](decisions/001-transport-prototype.md).

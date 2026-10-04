@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-04",
+  "stage": "P00",
+  "environment": {
+    "shell": "PowerShell",
+    "jdk": "21.0.12.1+1",
+    "gradle": "9.1.0",
+    "python": "py -3.11",
+    "androidSdk": "not found",
+    "adb": "not found",
+    "linux": "WSL not installed"
+  },
+  "commands": [
+    {
+      "command": "gradlew.bat -p verification test --offline --rerun-tasks --no-daemon --console=plain",
+      "when": "before cleanup",
+      "exitCode": 0,
+      "log": "P00-baseline-jvm.log",
+      "tests": 161,
+      "passed": 154,
+      "skipped": 7,
+      "failures": 0,
+      "errors": 0,
+      "gradleDurationSeconds": 77
+    },
+    {
+      "command": "gradlew.bat -p verification test --offline --rerun-tasks --no-daemon --console=plain",
+      "when": "after cleanup",
+      "exitCode": 0,
+      "log": "P00-post-cleanup-jvm.log",
+      "tests": 161,
+      "passed": 154,
+      "skipped": 7,
+      "failures": 0,
+      "errors": 0,
+      "gradleDurationSeconds": 65
+    },
+    {
+      "command": "gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --offline --no-daemon --console=plain",
+      "when": "before cleanup",
+      "exitCode": 1,
+      "log": "P00-baseline-android.log",
+      "reason": "SDK location not found; configuration failed before compilation",
+      "gradleDurationSeconds": 31
+    },
+    {
+      "command": "gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --offline --no-daemon --console=plain",
+      "when": "after cleanup",
+      "exitCode": 1,
+      "log": "P00-post-cleanup-android.log",
+      "reason": "same SDK location blocker; configuration failed before compilation",
+      "gradleDurationSeconds": 21
+    },
+    {
+      "command": "py -3.11 tools/verify-native-binaries.py",
+      "exitCode": 0,
+      "result": "8 shipped hashes and 4 inverse-JNI bindings verified; not a source build"
+    },
+    {
+      "command": "py -3.11 tools/prepare-byedpi.py --output .toolchain/rebuild-p00/byedpi-prepared",
+      "exitCode": 0,
+      "result": "exact ba532298de7b28cfe854aea83d061369d13ca290 plus two patches applied; source checkout untouched",
+      "patchHashes": {
+        "paced-tls-buffer.patch": "029e542784d1e96122e81e9f795e254219eab7ecf87f2474e989210a991fc65e",
+        "runtime-auto-access.patch": "cd6e164e153a428937ac4430e9958061ff3fee5f9233e733902582e8007128d0"
+      }
+    },
+    {
+      "command": "py -3.11 tools/build-native-contract.py",
+      "exitCode": 1,
+      "log": "P00-native-fixture.log",
+      "reason": "requires Linux host and C compiler"
+    },
+    {
+      "command": "git -c core.safecrlf=false diff --cached --check -- . :(exclude)app/src/main/cpp/patches/*.patch",
+      "when": "baseline staging",
+      "exitCode": 0,
+      "limitation": "Full staged check exit2 reports patch context whitespace; patches preserved and apply-check passed"
+    },
+    {
+      "command": "py -3.11 tools/verify-rebuild-docs.py",
+      "exitCode": 0,
+      "result": {
+        "schemaVersion": 1,
+        "status": "passed",
+        "markdownFiles": 22,
+        "localLinks": 93,
+        "archiveHistoricalContentVerified": true,
+        "archiveOriginalRawHashMatch": true,
+        "checkpointObjectVerified": true,
+        "jvmXmlAvailable": true,
+        "jvmXmlTotals": {
+          "tests": 161,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 7
+        },
+        "deviceAcceptance": "not_verified_by_this_tool"
+      }
+    },
+    {
+      "command": "git -c core.safecrlf=false diff --check",
+      "when": "P00 tracked diff",
+      "exitCode": 0
+    },
+    {
+      "command": "SHA256 raw baseline ZIP roundtrip + archive reconstruction + candidate secret/whitespace scan",
+      "exitCode": 0,
+      "result": "121 saved changed files verified; only ServicesScreen production deletion; no secret pattern/trailing whitespace hits"
+    },
+    {
+      "command": "git -c core.safecrlf=false diff --cached --check",
+      "when": "before generated log whitespace normalization",
+      "exitCode": 2,
+      "reason": "Only four Gradle daemon-message lines have trailing spaces; raw copies saved, public full-line log copies normalized"
+    },
+    {
+      "command": "git -c core.safecrlf=false diff --cached --check",
+      "when": "before generated log whitespace normalization",
+      "exitCode": 2,
+      "reason": "Only four Gradle daemon-message lines have trailing spaces; raw copies saved, public full-line log copies normalized"
+    },
+    {
+      "command": "git -c core.safecrlf=false diff --cached --check",
+      "when": "final P00 staging after log normalization",
+      "exitCode": 0,
+      "result": "33 exact reviewed paths; only production change is unreachable ServicesScreen deletion"
+    }
+  ],
+  "pending": [
+    "Android full build/unit/lint",
+    "Linux native/parser/stream/sanitizer",
+    "Helper real TUN",
+    "Physical app scenarios/energy/OEM/TV",
+    "API26/29/36 new runtime",
+    "IPv6-only/NAT64/ECH/QUIC acceptance",
+    "16KiB runtime"
+  ],
+  "verificationRule": "skipped and missing-environment gates are not passed",
+  "gradleLogCaptures": [
+    {
+      "log": "P00-baseline-android.log",
+      "rawSha256": "40dff5bfb9581e005e853410c603797163826ff8974b3046f5d7b78ff28c5cd0",
+      "savedSha256": "9f571585c08cdd6f14607264575b91ad37eb7f989d1313ecbfeba0fcaedd568b",
+      "rawLocalCopy": ".toolchain\\rebuild-p00\\raw-logs\\P00-baseline-android.log",
+      "normalization": "trailing spaces only; full lines preserved"
+    },
+    {
+      "log": "P00-baseline-jvm.log",
+      "rawSha256": "adb108f415b0d25ee7f53faea886f78653b846f0197fcdedae96e6a36bab1a43",
+      "savedSha256": "88fc653c14f432f58d97ff8a4cb0f0fa27200566e263dacf5d1e518eccbe4510",
+      "rawLocalCopy": ".toolchain\\rebuild-p00\\raw-logs\\P00-baseline-jvm.log",
+      "normalization": "trailing spaces only; full lines preserved"
+    },
+    {
+      "log": "P00-post-cleanup-android.log",
+      "rawSha256": "9c7fa1e798354736270e98a7bd4d6ddccad49f88a3091aefd53fef8a4c9b2969",
+      "savedSha256": "3cd0067e1014484a0ad2584a85b24d6604a4c9dd489b22a3f2740aaedad0e4df",
+      "rawLocalCopy": ".toolchain\\rebuild-p00\\raw-logs\\P00-post-cleanup-android.log",
+      "normalization": "trailing spaces only; full lines preserved"
+    },
+    {
+      "log": "P00-post-cleanup-jvm.log",
+      "rawSha256": "517a324890f00b3696f1acfe138f8bd5bbf3da4265c6f48611863602d7b8e3c2",
+      "savedSha256": "fa1b97572dbc97502b124f610f39d48fe507e2d23a3effebcc7cc66d3f791be4",
+      "rawLocalCopy": ".toolchain\\rebuild-p00\\raw-logs\\P00-post-cleanup-jvm.log",
+      "normalization": "trailing spaces only; full lines preserved"
+    }
+  ]
+}

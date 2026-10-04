@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "E:\maffinet android\tools\build-native-contract.py", line 15, in <module>
+    raise RuntimeError("This host native fixture requires Linux and a C compiler; JVM-only tests remain available.")
+RuntimeError: This host native fixture requires Linux and a C compiler; JVM-only tests remain available.

@@ -1,3 +1,5 @@
+> Историческая документация слоя 0.3.2-alpha. Актуальный план и scope: [docs/rebuild](rebuild/START_HERE.md). Результаты ниже относятся к указанным исходникам и сборкам.
+
 # Maffinet application, proxy and hosts model
 
 The 2026-10-03 clarification replaces the former service-catalog interface.
