@@ -186,7 +186,7 @@ object TgProxyController {
     fun stop(preserveFailure: Boolean = false, onStopped: () -> Unit = {}) {
         // Allocate ownership and publish Stopping together: an older caller must not
         // overwrite a newer STOP's already-completed state after being preempted.
-        val request = lifecycle.beginStop(preserveFailure)
+        val request = lifecycle.beginStop(preserveFailure, nativeStarted)
         val token = request.generation
         scope.launch {
             operations.withLock {

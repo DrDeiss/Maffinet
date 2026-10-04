@@ -12,6 +12,26 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProxyLifecycleStateTest {
+    @Test fun idleStopInvalidatesOwnershipWithoutRepublishingStopping() {
+        val published = mutableListOf<ModeConnectionState>()
+        val lifecycle = ProxyLifecycleState(published::add)
+        val first = lifecycle.beginStop(false, hasResources = false)
+        assertEquals(ModeConnectionState.Stopped, lifecycle.currentState)
+        val second = lifecycle.beginStop(false, hasResources = false)
+        assertFalse(lifecycle.isCurrent(first.generation))
+        assertTrue(lifecycle.publishIfCurrent(second.generation, ModeConnectionState.Stopped))
+        assertEquals(listOf(ModeConnectionState.Stopped), published)
+    }
+
+    @Test fun stoppingQueuedStartWithoutNativeResourcesStillLocksUntilCleanup() {
+        val lifecycle = ProxyLifecycleState {}
+        val start = lifecycle.beginStart()
+        val stop = lifecycle.beginStop(false, hasResources = false)
+        assertEquals(ModeConnectionState.Stopping, lifecycle.currentState)
+        assertFalse(lifecycle.publishIfCurrent(start, ModeConnectionState.Running))
+        assertTrue(lifecycle.publishIfCurrent(stop.generation, ModeConnectionState.Stopped))
+    }
+
     @Test fun queuedStartInvalidatesOlderStopCompletion() {
         val published = mutableListOf<ModeConnectionState>()
         val lifecycle = ProxyLifecycleState(published::add)

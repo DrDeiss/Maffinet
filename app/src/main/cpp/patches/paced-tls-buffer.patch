@@ -351,3 +351,18 @@
              break;
          
          #ifdef __linux__
+--- a/proxy.c
++++ b/proxy.c
+@@ -684,6 +684,12 @@
+         }
+         if (sn < n || wait) {
+             val->buff->offset += sn;
++            /* A short write enables POLLOUT; pacing on its retry must disable
++             * it again, otherwise readiness callbacks bypass the timer. */
++            if (mod_etype(pool, pair, wait ? 0 : POLLOUT)) {
++                uniperror("mod_etype");
++                return -1;
++            }
+             return 0;
+         }
+         buff_push(pool, val->buff);

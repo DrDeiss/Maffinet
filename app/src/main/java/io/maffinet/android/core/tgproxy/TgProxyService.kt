@@ -1,7 +1,6 @@
 package io.maffinet.android.core.tgproxy
 
 import android.app.Notification
-import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -151,14 +150,19 @@ class TgProxyService : LifecycleService() {
 
     override fun onDestroy() {
         releaseWakeLock()
-        if (isCurrent(lastRequest)) TgProxyController.stop(preserveFailure = true)
+        // STOP already owns native cleanup. Allocating another STOP here would
+        // invalidate its completion and briefly publish Stopping after Stopped.
+        if (isCurrent(lastRequest) && (TgProxyController.status.value in
+                setOf(ModeConnectionState.Starting, ModeConnectionState.Running) ||
+                (TgProxyController.status.value == ModeConnectionState.Failed && TgProxyController.hasResources)))
+            TgProxyController.stop(preserveFailure = true)
         super.onDestroy()
     }
 
     private fun publish(action: String, status: AppStatus) {
         isTgProxyRunningGlobal = status == AppStatus.Running
-        (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-            .notify(FOREGROUND_SERVICE_ID, createNotification())
+        if (status == AppStatus.Running) startForeground()
+        else stopForeground(STOP_FOREGROUND_REMOVE)
         // Legacy appStatus is used by the VPN strategy wizard. Telegram has its own
         // StateFlow and sender broadcasts and must not overwrite the VPN status.
         // Android 14+ filters implicit intents to non-exported runtime receivers.

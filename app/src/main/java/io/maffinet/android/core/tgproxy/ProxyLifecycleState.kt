@@ -16,10 +16,13 @@ internal class ProxyLifecycleState(private val onStateChanged: (ModeConnectionSt
         return token
     }
 
-    @Synchronized fun beginStop(preserveFailure: Boolean): StopRequest {
+    @Synchronized fun beginStop(preserveFailure: Boolean, hasResources: Boolean = true): StopRequest {
         val keepFailure = preserveFailure && currentState == ModeConnectionState.Failed
         val token = ++generation
-        if (!keepFailure) publish(ModeConnectionState.Stopping)
+        // An idle STOP still invalidates older commands, but must not briefly lock
+        // settings again while a completed service is being destroyed.
+        if (!keepFailure && (currentState != ModeConnectionState.Stopped || hasResources))
+            publish(ModeConnectionState.Stopping)
         return StopRequest(token, keepFailure)
     }
 
