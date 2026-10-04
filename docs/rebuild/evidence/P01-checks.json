@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "stage": "P01",
+  "status": "in_progress",
+  "date": "2026-10-04",
+  "sourceCheckpoint": "d812c81ebc55d117d8cb220fedc24605371436a7",
+  "sourceLockSha256": "97e0a9d357a8880271aacab6fc166c096f6e23f449326b840d257c7321cd4b75",
+  "preparedManifestSha256": "4f6c4d25b4bd075a691c453609183db85260ca9714d2c803d5b9d80d6576cc9b",
+  "preparedSourceFiles": 549,
+  "jvmXmlTotals": {
+    "tests": 161,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 7
+  },
+  "checks": [
+    {
+      "id": "android-baseline",
+      "command": "gradlew.bat :app:assembleDebug :app:testDebugUnitTest :app:lintDebug -Pmaffinet.ndkVersion=29.0.14206865 --offline --no-daemon --console=plain",
+      "exitCode": 1,
+      "result": "SDK location not found before compilation",
+      "gradleReportedSeconds": 21,
+      "privateLog": ".toolchain/rebuild-p01/android-baseline.log",
+      "logSha256": "9c7fa1e798354736270e98a7bd4d6ddccad49f88a3091aefd53fef8a4c9b2969"
+    },
+    {
+      "id": "android-lab",
+      "command": "gradlew.bat -Pmaffinet.transportLab=true -Pmaffinet.transportSource=.toolchain/transport-source-p01-ready -Pmaffinet.python=<provisioned Python> :transport-lab:assembleDebug :traffic-helper:assembleSelectedDebug :traffic-helper:assembleControlDebug :transport-lab:lintDebug :traffic-helper:lintSelectedDebug :traffic-helper:lintControlDebug --offline --no-daemon --console=plain",
+      "exitCode": 1,
+      "result": "SDK location not found configuring :app before lab compilation/task resolution",
+      "gradleReportedSeconds": 27,
+      "privateLog": ".toolchain/rebuild-p01/android-lab.log",
+      "logSha256": "192c97d6a04d3eeb1aa72d5992a80fdb59c558aacf88ca5214c5ce3b269c749b"
+    },
+    {
+      "id": "jvm",
+      "command": "gradlew.bat -p verification test --offline --rerun-tasks --no-daemon --console=plain",
+      "exitCode": 0,
+      "result": "161 total, 154 passed, 7 native parser skipped, no failures/errors",
+      "gradleReportedSeconds": 71,
+      "privateLog": ".toolchain/rebuild-p01/jvm.log",
+      "logSha256": "c27d2c9908e54abce82d7c17d94ed09bb30a32548e0f334b8b30db52aad82de1"
+    },
+    {
+      "id": "source-fetch",
+      "command": "git -c http.sslBackend=openssl clone --no-checkout <public upstream>; checkout reviewed commit, repeated for four recursive gitlinks",
+      "exitCode": 0,
+      "result": "Five source repositories, exact commits and trees; no further recursive gitlinks"
+    },
+    {
+      "id": "default-fetch-attempt",
+      "command": "git clone https://github.com/heiher/hev-socks5-tunnel.git <ignored output>",
+      "exitCode": 1,
+      "result": "schannel SEC_E_NO_CREDENTIALS; resolved using Git OpenSSL backend, certificate validation unchanged"
+    },
+    {
+      "id": "submodule-attempt",
+      "command": "git -C <ignored upstream> submodule update --init --recursive",
+      "exitCode": 1,
+      "result": "Git sh signal pipe Win32 error5; resolved with separate pinned checkouts without shell submodule helper"
+    },
+    {
+      "id": "native-fixture",
+      "command": "py -3.11 tools/build-native-contract.py",
+      "exitCode": 1,
+      "result": "Requires Linux/C compiler; no native/sanitizer runtime result"
+    },
+    {
+      "id": "source-verify",
+      "command": "py -3.11 tools/verify-transport-source.py .toolchain/transport-source-p01-ready",
+      "exitCode": 0,
+      "result": "{\"status\": \"passed\", \"files\": 549, \"patches\": 1, \"licenseAssets\": 7, \"manifestSha256\": \"4f6c4d25b4bd075a691c453609183db85260ca9714d2c803d5b9d80d6576cc9b\", \"androidBuild\": \"not-proven\"}",
+      "privateLog": ".toolchain/rebuild-p01/source-verify.log",
+      "logSha256": "4713d1e69694f7fdac5002bbb6519eb6d7aeeb3578a8d05d4f3718e32065e845"
+    },
+    {
+      "id": "relay-host",
+      "command": "py -3.11 tools/test-transport-relay.py",
+      "exitCode": 0,
+      "result": "{\"status\":\"passed\",\"tcpFamilies\":2,\"udpFamilies\":2,\"preConnectDenial\":true,\"relayStopCycles\":100,\"androidTun\":\"not-tested\"}",
+      "privateLog": ".toolchain/rebuild-p01/relay-host.log",
+      "logSha256": "696904d864f971a24c6f4d24b12c250a93efc9d0e9dc6718fa565e7cc13864f9"
+    },
+    {
+      "id": "legacy-native-hashes",
+      "command": "py -3.11 tools/verify-native-binaries.py",
+      "exitCode": 0,
+      "result": "Verified eight shipped native hashes and four Maffinet HEV JNI bindings with exact inverse provenance.",
+      "privateLog": ".toolchain/rebuild-p01/legacy-native-hashes.log",
+      "logSha256": "e3fcc4f8a1bacde4987c50dda8827019f7e2120502f1e60e0fa5c5b5721fb318"
+    },
+    {
+      "id": "tools-host",
+      "command": "py -3.11 tools/test-transport-lab-tools.py",
+      "exitCode": 0,
+      "result": "..........\r\n----------------------------------------------------------------------\r\nRan 10 tests in 0.053s\r\n\r\nOK",
+      "privateLog": ".toolchain/rebuild-p01/tools-host.log",
+      "logSha256": "bb312fda4bd4cae8a1760f8ecc79074a04842e7cf2d93d5681c82b9f5b2e9d3b"
+    },
+    {
+      "id": "docs-links-json",
+      "command": "py -3.11 tools/verify-rebuild-docs.py",
+      "exitCode": 0,
+      "result": "{\r\n  \"schemaVersion\": 1,\r\n  \"status\": \"passed\",\r\n  \"markdownFiles\": 24,\r\n  \"localLinks\": 114,\r\n  \"archiveHistoricalContentVerified\": true,\r\n  \"archiveOriginalRawHashMatch\": true,\r\n  \"checkpointObjectVerified\": true,\r\n  \"jvmXmlAvailable\": true,\r\n  \"jvmXmlTotals\": {\r\n    \"tests\": 161,\r\n    \"failures\": 0,\r\n    \"errors\": 0,\r\n    \"skipped\": 7\r\n  },\r\n  \"deviceAcceptance\": \"not_verified_by_this_tool\"\r\n}",
+      "privateLog": ".toolchain/rebuild-p01/docs-links-json.log",
+      "logSha256": "7eead74b00d4dffa7bc6a62a88db2c19ac71e5bc608f7491dff7778ed56da534"
+    },
+    {
+      "id": "working-diff",
+      "command": "git -c core.safecrlf=false diff --check",
+      "exitCode": 0,
+      "result": "passed",
+      "privateLog": ".toolchain/rebuild-p01/working-diff.log",
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "id": "staged-full-diff",
+      "command": "git diff --cached --check",
+      "exitCode": 2,
+      "result": "Only original whitespace in verbatim lwIP LICENSE/source notice blocks; all seven staged assets match pinned inventory SHA256; retained byte-for-byte."
+    },
+    {
+      "id": "staged-authored-diff",
+      "command": "git diff --cached --check -- . :(exclude)lab/transport/licenses/lwip-LICENSE :(exclude)lab/transport/licenses/lwip-source-NOTICES.txt",
+      "exitCode": 0,
+      "result": "Passed all authored source/config/docs and patch context handling, excluding two exact upstream license assets."
+    },
+    {
+      "id": "staged-paths-secrets",
+      "command": "Compare git cached paths to explicit reviewed 50-path manifest; scan staged blobs and verify seven license SHA256",
+      "exitCode": 0,
+      "result": "50 expected source/doc paths only; no app production/binary/APK/signing/toolchain paths or credential/key markers."
+    },
+    {
+      "id": "git-add",
+      "command": "git add -- <50 reviewed explicit paths>",
+      "exitCode": 0,
+      "result": "Default sandbox exit128 index.lock permission denied; authorized managed escalation succeeded. No automatic approval review rejection."
+    }
+  ],
+  "androidArtifacts": "not_built",
+  "realTun": "not_executed",
+  "nativeLifecycle": "not_executed",
+  "transportAdoption": "candidate_only",
+  "physicalAcceptance": "not_executed"
+}

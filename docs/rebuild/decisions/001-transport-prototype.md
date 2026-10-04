@@ -28,3 +28,29 @@ Go runtime/размер/память/лицензии и API stability. Стар
 
 Результат P01 — ADR принятого транспорта с фактическими pins/evidence,
 не декларация в P00. Если среды нет, P01 остаётся in_progress с точным gate.
+
+## Findings P01, 4 октября 2026 года
+
+Все пять source repositories получены: [immutable lock](../../../lab/transport/source-lock.json)
+содержит recursive gitlinks, Git trees, canonical archive и license hashes.
+Кастомный gitlink/prebuilts не изменены. Изолированный
+[bridge/test path](../../../lab/README.md) включается отдельным Gradle property.
+
+TCP gateway PCB ориентирован destination→app; JNI копирует remote как
+application local до SOCKS translation. UDP первое создание PCB ещё не имеет
+destination: hook перенесён в datagram callback после обновления адресов lwIP,
+перед SOCKS framing, для каждого destination. Это source finding; helper/wire
+orientation acceptance ещё отсутствует. UID остаётся Unknown/P03 pending.
+
+Stock quit ждёт event fd бесконечно. Bridge сохраняет early STOP, вызывает quit
+только в ready interval, сохраняет ownership при timeout и запрещает новый
+worker до reap. Main wrapper освобождает приобретённые logger/task resources;
+patch защищает partial gateway allocation failures. Native execution и
+failure/restart/FD acceptance не исполнялись из-за отсутствующей среды.
+
+Host relay прошёл TCP/UDP IPv4/IPv6, pre-connect/pre-send denial и 100 close
+cycles. SDK baseline/lab build blocked до compilation; native fixtures требуют
+Linux/C compiler. Нет размера/RSS/latency/четырёх ABIs/APK/TUN результата.
+**HEV остаётся кандидатом; production stack не принят.** Сравнение Firestack
+не запускается по одному environment blocker: неприемлемость HEV не измерена.
+TV Boolean semantics и full16KiB acceptance остаются отдельными gates.

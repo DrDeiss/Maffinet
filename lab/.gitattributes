@@ -1,0 +1,5 @@
+# Canonical license and source hash inputs on Windows and Linux.
+transport/source-lock.json text eol=lf
+transport/license-inventory.json text eol=lf
+transport/licenses/* text eol=lf
+transport/native/patches/*.patch text eol=lf whitespace=-blank-at-eol

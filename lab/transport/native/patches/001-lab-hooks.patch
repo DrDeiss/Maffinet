@@ -1,0 +1,169 @@
+--- a/src/hev-socks5-tunnel.c
++++ b/src/hev-socks5-tunnel.c
+@@ -38,6 +38,7 @@
+ #include "hev-socks5-session-udp.h"
+ 
+ #include "hev-socks5-tunnel.h"
++#include "hooks.h"
+ 
+ static int run;
+ static int tun_fd = -1;
+@@ -51,6 +52,7 @@
+ static size_t stat_rx_bytes;
+ 
+ static struct netif netif;
++static int gateway_added;
+ static struct tcp_pcb *tcp;
+ static struct udp_pcb *udp;
+ 
+@@ -173,6 +175,9 @@
+     if (!run)
+         return ERR_RST;
+ 
++    /* Gateway PCB is destination -> app. Copy before SOCKS translation. */
++    maffinet_lab_tuple (6, &pcb->remote_ip, pcb->remote_port,
++                        &pcb->local_ip, pcb->local_port);
+     tcp = hev_socks5_session_tcp_new (pcb, &mutex);
+     if (!tcp)
+         return ERR_MEM;
+@@ -444,8 +449,11 @@
+ {
+     ip4_addr_t addr4, mask, gw;
+     ip6_addr_t addr6;
+-
+-    netif_add_noaddr (&netif, NULL, netif_init_handler, ip_input);
++    struct tcp_pcb *listener;
++
++    if (!netif_add_noaddr (&netif, NULL, netif_init_handler, ip_input))
++        return -1;
++    gateway_added = 1;
+ 
+     ip4_addr_set_loopback (&addr4);
+     ip4_addr_set_any (&mask);
+@@ -461,14 +469,23 @@
+     netif_set_flags (&netif, NETIF_FLAG_PRETEND_TCP);
+ 
+     tcp = tcp_new_ip_type (IPADDR_TYPE_ANY);
++    if (!tcp)
++        return -1;
+     tcp_bind_netif (tcp, &netif);
+-    tcp_bind (tcp, NULL, 0);
+-    tcp = tcp_listen (tcp);
++    if (tcp_bind (tcp, NULL, 0) != ERR_OK)
++        return -1;
++    listener = tcp_listen (tcp);
++    if (!listener)
++        return -1;
++    tcp = listener;
+     tcp_accept (tcp, tcp_accept_handler);
+ 
+     udp = udp_new_ip_type (IPADDR_TYPE_ANY);
++    if (!udp)
++        return -1;
+     udp_bind_netif (udp, &netif);
+-    udp_bind (udp, NULL, 0);
++    if (udp_bind (udp, NULL, 0) != ERR_OK)
++        return -1;
+     udp_recv (udp, udp_recv_handler, NULL);
+ 
+     return 0;
+@@ -477,9 +494,18 @@
+ static void
+ gateway_fini (void)
+ {
+-    udp_remove (udp);
+-    tcp_close (tcp);
+-    netif_remove (&netif);
++    if (udp) {
++        udp_remove (udp);
++        udp = NULL;
++    }
++    if (tcp) {
++        tcp_close (tcp);
++        tcp = NULL;
++    }
++    if (gateway_added) {
++        netif_remove (&netif);
++        gateway_added = 0;
++    }
+ }
+ 
+ static int
+@@ -682,7 +708,9 @@
+     hev_task_run (task_lwip_timer, lwip_timer_task_entry, NULL);
+ 
+     run = 1;
++    maffinet_lab_ready ();
+     hev_task_system_run ();
++    maffinet_lab_stopping ();
+ 
+     return 0;
+ }
+@@ -695,16 +723,12 @@
+ 
+     LOG_D ("socks5 tunnel stop");
+ 
+-    for (;;) {
+-        fd = READ_ONCE (event_fds[1]);
+-        if (fd >= 0)
+-            break;
+-        /* Wait for async initialization */
+-        usleep (100 * 1000);
+-    }
+-
+-    res = write (fd, &res, 1);
+-    assert (res > 0 && "socks5 tunnel write event");
++    /* Called only between ready/stopping, under the bridge lifecycle lock. */
++    fd = READ_ONCE (event_fds[1]);
++    if (fd < 0)
++        return;
++    res = 1;
++    (void) write (fd, &res, 1);
+ }
+ 
+ void
+--- a/src/hev-socks5-session-udp.c
++++ b/src/hev-socks5-session-udp.c
+@@ -28,6 +28,7 @@
+ #include "hev-socks5-tunnel.h"
+ 
+ #include "hev-socks5-session-udp.h"
++#include "hooks.h"
+ 
+ typedef struct _HevSocks5UDPFrame HevSocks5UDPFrame;
+ 
+@@ -189,6 +190,10 @@
+         return;
+     }
+ 
++    /* First callback creates the PCB with destination unset. The lwIP
++     * second callback sets local_ip/local_port; sample here for EVERY datagram. */
++    maffinet_lab_tuple (17, &pcb->remote_ip, pcb->remote_port,
++                         &pcb->local_ip, pcb->local_port);
+     frame->data = p;
+     memset (&frame->node, 0, sizeof (frame->node));
+     hev_socks5_addr_from_lwip (&frame->addr, &pcb->local_ip, pcb->local_port);
+--- a/src/core/src/hev-socks5-misc.c
++++ b/src/core/src/hev-socks5-misc.c
+@@ -23,6 +23,8 @@
+ 
+ #include "hev-socks5-misc.h"
+ #include "hev-socks5-misc-priv.h"
++
++extern int maffinet_lab_protect_loopback (int fd);
+ 
+ static int connect_timeout = 10000;
+ static int tcp_timeout = 300000;
+@@ -66,6 +68,12 @@
+     if (fd < 0)
+         return -1;
+ 
++    /* Fixed loopback-only lab SOCKS client; reject unprotected descriptors. */
++    if (maffinet_lab_protect_loopback (fd) < 0) {
++        close (fd);
++        return -1;
++    }
++
+     res = setsockopt (fd, IPPROTO_IPV6, IPV6_V6ONLY, &zero, sizeof (zero));
+     if (res < 0) {
+         close (fd);

@@ -124,3 +124,24 @@ provisioned host: `python3 tools/build-native-contract.py`, затем verificat
 build-tools36, CMake3.22.1, NDK29 и существующие SDK agreements.
 После P01 добавить actual module/helper tasks в этот файл и CI; выдуманные
 имена задач не считать проверкой. Проведение нового CI run/publish в P00 нет.
+
+## P01 checkpoint
+
+[Lab recipe](../../lab/README.md) описывает opt-in `transport-lab` и
+`traffic-helper` modules, native source preparation/CMake, отдельные UID variants,
+explicit endpoints, consent, private captures и T01 JSONL checker. Gradle recipe
+задана actual AGP module declarations; её запуск пока blocked на SDK configuration
+до разрешения lab tasks/компиляции. Успешного Android build/CI run не заявляется.
+
+Фактически исполнены source preparation/apply-check/integrity/license-assets,
+host relay TCP/UDP IPv4/IPv6+failure denial+100 relay close cycles, 10 tool contracts
+и повторный JVM suite154 passed/7 skipped. Baseline Android21s и lab attempt27s
+exit1 с missing SDK; это host build times, не SLO приложения.
+[Command ledger](evidence/P01-checks.json) и [session](sessions/P01.md).
+
+`py -3.11 tools/test-transport-relay.py` компилирует actual relay Java11 с
+host fault seams; Android protect/bind и native STOP не испытывает.
+`py -3.11 tools/test-transport-lab-tools.py` использует synthetic fixtures для
+reject paths, а не TUN evidence. Seven native parser cases остаются skipped.
+Четыре ABI/helper APKs, real Android T01/T02, starts30/native stops100,
+FD/RSS/latency/source-artifact evidence pending. P01 не отмечать done.

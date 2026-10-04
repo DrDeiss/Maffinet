@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "candidate": "HEV 2.14.4",
+  "repositories": [
+    {
+      "path": ".",
+      "commit": "4d6c334dbfb68a79d1970c2744e62d09f71df12f",
+      "tree": "54027a9c5f8dcf2f83b717b069567c36ebffee60",
+      "archiveSha256": "792089ed89d7e3c3574a02b8b82dde1ff1c608f16e7d0a5238e4267ffd2421a8",
+      "licenses": [
+        {
+          "path": "LICENSE",
+          "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+        }
+      ],
+      "url": "https://github.com/heiher/hev-socks5-tunnel"
+    },
+    {
+      "path": "third-part/hev-task-system",
+      "url": "https://github.com/heiher/hev-task-system",
+      "commit": "8d83bbbf79557138726c8ee5a5fae99cbb978d61",
+      "tree": "29852ac0ad0e421eb01966614964be128db45c83",
+      "archiveSha256": "f751eebcc1a1df0b0fe1cb19e0fe2ccecf20a608eeb4eeab3a00eafafe9b1cdf",
+      "licenses": [
+        {
+          "path": "LICENSE",
+          "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+        }
+      ]
+    },
+    {
+      "path": "third-part/yaml",
+      "url": "https://github.com/heiher/yaml",
+      "commit": "efa36117a8646d26d12b58e05bac472d7854a70d",
+      "tree": "562968200a282ed6a7f7740fa7bf8aa41ae642d8",
+      "archiveSha256": "b0f33a1062e687bef8f86d5e0690895e8e5f7f5fdeda285216a00bfcc5616334",
+      "licenses": [
+        {
+          "path": "License",
+          "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+        }
+      ]
+    },
+    {
+      "path": "third-part/lwip",
+      "url": "https://github.com/heiher/lwip",
+      "commit": "07dbf162c718cc78ddedb9e67c6ebd17065eaf13",
+      "tree": "d6ad4686b76dae59b3952ef5b8d79330b2e268db",
+      "archiveSha256": "cce5a2f91fca72697b078189f72951eccbf0b62675b8cc72d1ec1c9227e4716d",
+      "licenses": [
+        {
+          "path": "LICENSE",
+          "sha256": "ef4aac92e05e87cd1cdc140870ed52206ba03d4a7fe46c1e11d7ffa6c87d252b"
+        }
+      ]
+    },
+    {
+      "path": "src/core",
+      "url": "https://github.com/heiher/hev-socks5-core",
+      "commit": "4be2e621813ba0315cfacd995bf501bde91d6996",
+      "tree": "b444a728f398c44f4b76c8cbed4978d8caf6cb25",
+      "archiveSha256": "e2706720e56b1d79c173c3cdf725e612ad3f8334edc3a063afa89343ec7c54a2",
+      "licenses": [
+        {
+          "path": "LICENSE",
+          "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+        }
+      ]
+    }
+  ]
+}

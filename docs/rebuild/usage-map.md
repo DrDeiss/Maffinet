@@ -44,3 +44,21 @@ source, copied/adapted/contract-only, лицензия и заменённый l
 и references с upstream `19cb13c19f87a1fe6339acb65e35da2ab4d14a43`.
 Ни новая namespace, ни малый процент текстового совпадения сами по себе не exit.
 Если derived участок остаётся, attribution и статус derived остаются тоже.
+
+## P01 provenance registry
+
+`lab/transport/src/main/java`, `lab/helper/src/main/java`, native bridge/hooks,
+Gradle/CMake recipes, host fault seams и новые transport lab tools — новая
+Maffinet experiment implementation, GPLv3 проекта, contract-only использование
+Android API/legacy audit. Они не подключены в production application layer.
+`native/main.c` адаптирован из pinned HEV `hev-main.c`, с сохранённым copyright/MIT;
+`native/patches/001-lab-hooks.patch` изменяет доступный upstream в отдельном
+export, сохраняя исходные headers. Clean-room процесс не заявляется.
+
+[Source lock](../../lab/transport/source-lock.json) и
+[license inventory](../../lab/transport/license-inventory.json) фиксируют
+пять compiled repositories и дополнительный upstream libyaml license reference.
+MIT/BSD и дополнительные lwIP copyright/license blocks упаковываются в assets
+lab APK. Реальной APK упаковки пока нет: Android/NDK build blocked.
+Custom HEV gitlink, eight shipped binaries, production manifest/UI/settings,
+migration/user data и root LICENSE/NOTICE не менялись. Нет active legacy removal.

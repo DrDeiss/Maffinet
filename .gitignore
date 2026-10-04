@@ -19,6 +19,8 @@ TELEGRAM_POST_*.md
 /.gradle-user/
 /app/build/
 /verification/build/
+/lab/transport/build/
+/lab/helper/build/
 /.kotlin/
 /verification/.kotlin/
 *.jks

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "licenses": [
+    {
+      "file": "hev-tunnel-LICENSE",
+      "source": "https://github.com/heiher/hev-socks5-tunnel",
+      "commit": "4d6c334dbfb68a79d1970c2744e62d09f71df12f",
+      "path": "LICENSE",
+      "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+    },
+    {
+      "file": "hev-task-system-LICENSE",
+      "source": "https://github.com/heiher/hev-task-system",
+      "commit": "8d83bbbf79557138726c8ee5a5fae99cbb978d61",
+      "path": "LICENSE",
+      "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+    },
+    {
+      "file": "hev-yaml-LICENSE",
+      "source": "https://github.com/heiher/yaml",
+      "commit": "efa36117a8646d26d12b58e05bac472d7854a70d",
+      "path": "License",
+      "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+    },
+    {
+      "file": "lwip-LICENSE",
+      "source": "https://github.com/heiher/lwip",
+      "commit": "07dbf162c718cc78ddedb9e67c6ebd17065eaf13",
+      "path": "LICENSE",
+      "sha256": "ef4aac92e05e87cd1cdc140870ed52206ba03d4a7fe46c1e11d7ffa6c87d252b"
+    },
+    {
+      "file": "hev-core-LICENSE",
+      "source": "https://github.com/heiher/hev-socks5-core",
+      "commit": "4be2e621813ba0315cfacd995bf501bde91d6996",
+      "path": "LICENSE",
+      "sha256": "3cca1a91ca82e9b9c41852945ef15858f932828ceeb765b86bc1fe3f39127514"
+    },
+    {
+      "file": "libyaml-LICENSE",
+      "source": "https://github.com/yaml/libyaml",
+      "commit": "2c891fc7a770e8ba2fec34fc6b545c672beb37e6",
+      "path": "License",
+      "sha256": "c40112449f254b9753045925248313e9270efa36d226b22d82d4cc6c43c57f29",
+      "reason": "HEV YAML README identifies libyaml; retain original authors too"
+    },
+    {
+      "file": "lwip-source-NOTICES.txt",
+      "source": "https://github.com/heiher/lwip",
+      "commit": "07dbf162c718cc78ddedb9e67c6ebd17065eaf13",
+      "sha256": "631e21dfb5e67380171c98323ee8f1ff8a2432cc15120168563567de6ca0336a",
+      "uniqueSourceBlocks": 101
+    }
+  ]
+}

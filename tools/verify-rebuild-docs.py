@@ -26,7 +26,13 @@ def main():
     assert all((DOCS / p).is_file() for p in required), "Incomplete P00 handoff"
     for file in DOCS.rglob("*.json"):
         json.loads(file.read_text(encoding="utf-8-sig"))
-    files = [*DOCS.rglob("*.md"), ROOT / "PLAN.md", ROOT / "AGENTS.md", ROOT / "README.md"]
+    for file in (ROOT / "lab").rglob("*.json"):
+        json.loads(file.read_text(encoding="utf-8-sig"))
+    if state.get("currentStage") == "P01":
+        assert stages["P01"] in {"in_progress", "done"}, "Current P01 cannot remain pending"
+        assert (DOCS / "sessions/P01.md").is_file()
+        assert (DOCS / "evidence/P01-checks.json").is_file()
+    files = [*DOCS.rglob("*.md"), *(ROOT / "lab").rglob("*.md"), ROOT / "PLAN.md", ROOT / "AGENTS.md", ROOT / "README.md"]
     errors = []
     link_count = 0
     for file in files:

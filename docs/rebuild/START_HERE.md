@@ -1,11 +1,12 @@
 # Переработка Maffinet Android
 
-P00 завершён 4 октября 2026 года: baseline сохранён, повторный аудит и
-исследование выполнены, безопасная очистка записана, продукт/архитектура/этапы
-и проверки определены. Новый runtime ещё не реализован. Следующий этап — P01.
+P00 завершён 4 октября 2026 года. P01 начат в тот же день и остаётся
+**in_progress**: отдельный pinned HEV source/bridge, lab VPN, два helper variants
+и host harness добавлены, но SDK/Linux/device gates не пройдены. Production
+runtime не переключён. Продолжать P01; к P02 не переходить.
 
 Начинай с [STATE.json](STATE.json), [NEXT_CHAT.md](NEXT_CHAT.md),
-[ROADMAP.md](ROADMAP.md) и последнего [отчёта P00](sessions/P00.md).
+[ROADMAP.md](ROADMAP.md) и последнего [отчёта P01](sessions/P01.md).
 Проверь Git status/HEAD и subject stage checkpoint. Первоначальная полная
 инструкция — [NEXT_SESSION_PROMPT.md](NEXT_SESSION_PROMPT.md).
 
@@ -30,9 +31,12 @@ Baseline commit: `2d63fc3d6e2e04d2ba8a088f234e19aa2e4e75cd`, ветка
 будущий hash не записывается в содержимое самого коммита. Raw snapshot
 изменённых файлов дополнительно проверен по SHA256 manifest.
 
-P00 JVM: 154 passed, 7 skipped native parser. Android build/unit/lint blocked
-отсутствующим SDK; Linux fixture требует provisioned Linux host. Device/helper
-и новый TUN ещё не испытывались. P01 не объявлять done без настоящего TUN.
+P01 JVM: 154 passed, 7 skipped native parser. Host relay TCP/UDP IPv4/IPv6,
+pre-connect/pre-send denial и 100 relay close cycles passed; 10 harness tests
+passed. Это не native/TUN/device evidence. Android build/unit/lint blocked
+отсутствующим SDK; Linux fixture требует provisioned Linux host.
+[Lab recipe](../../lab/README.md), [checks](evidence/P01-checks.json).
+P01 не объявлять done без настоящего TUN, source-built ABIs/APKs и SLO.
 
 Каждый чат завершает один текущий этап, сохраняет session/evidence/STATE/NEXT_CHAT
 и локальный commit. Push/publish/merge не выполняются автоматически. Секреты и
