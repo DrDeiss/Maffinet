@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import io.maffinet.android.core.debug.AppDebugManager as Log
-import io.maffinet.android.MainActivity
 import io.maffinet.android.core.connection.ConnectionCoordinator
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
@@ -18,12 +17,7 @@ class WatchdogReceiver : BroadcastReceiver() {
         val prefs = appCtx.getSharedPreferences(appCtx.packageName + "_preferences", Context.MODE_PRIVATE)
 
         if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
-            val mainIntent = Intent(context, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                putExtra("showUpdateInstalledMessage", true)
-            }
-            context.startActivity(mainIntent)
-            return
+            prefs.edit().putBoolean("show_update_installed_message", true).apply()
         }
 
         val isBoot = intent.action == Intent.ACTION_BOOT_COMPLETED ||

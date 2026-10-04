@@ -1,5 +1,6 @@
 package io.maffinet.android.network
 
+import android.Manifest
 import android.content.BroadcastReceiver
 import android.app.Notification
 import android.app.NotificationManager
@@ -7,10 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.net.VpnService
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.ParcelFileDescriptor
+import android.os.Build
 import android.os.SystemClock
 import android.system.Os
 import androidx.core.content.ContextCompat
@@ -89,6 +92,7 @@ class NativeVpnLifecycleSmokeTest {
             InstrumentationRegistry.getArguments().getString(CONSENT_ARGUMENT) == "true")
         assertTrue("Refusing simulated VPN consent outside a qemu emulator",
             shell("getprop ro.kernel.qemu").trim() == "1" || shell("getprop ro.boot.qemu").trim() == "1")
+        assertEquals("The installed APK must target the current Android release", 36, context.applicationInfo.targetSdkVersion)
         assertFalse("A VPN was already running before this isolated smoke test", ByeDpiVpnService.isVpnActive)
         assertFalse("Native resources were already present", ByeDpiVpnService.hasProxyResources)
         assertFalse("Telegram resources were already present", TgProxyController.hasResources)
@@ -191,6 +195,41 @@ class NativeVpnLifecycleSmokeTest {
             stopAndAwaitCleanup()
             assertFalse("User STOP must persist", preferences.getBoolean("service_enabled", true))
         }
+    }
+
+    @Test(timeout = 40_000)
+    fun modernForegroundServicesWorkWithDeniedOrGrantedNotifications() {
+        assumeTrue("Runtime notification permission exists on Android 13+", Build.VERSION.SDK_INT >= 33)
+        val expected = InstrumentationRegistry.getArguments().getString("maffinet.expectedNotificationPermission")
+        assumeTrue("The emulator harness must choose the notification permission state", expected == "granted" || expected == "denied")
+        val granted = expected == "granted"
+        assertEquals("The harness must apply notification permission outside the instrumented UID", granted,
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)
+        preferences.edit().putBoolean("notification_permission_requested", true).commit()
+        settings.setTelegramEnabled(true)
+        val started = ConnectionCoordinator.startSelected(context)
+        assertTrue(started.errors.toString(), started.errors.isEmpty())
+        eventually("VPN and Telegram FGS must run even after the user denies notifications") {
+            ByeDpiVpnService.isVpnActive && ByeDpiVpnService.hasProxyResources &&
+                TgProxyController.status.value == ModeConnectionState.Running && TgProxyController.hasResources
+        }
+        assertTrue("Modern FGS startup must establish the real TUN", tunDescriptorCount() > originalTunCount)
+        assertSocks5Ready(proxyPort)
+        val notifications = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        assertEquals(granted, notifications.areNotificationsEnabled())
+        if (granted) {
+            eventually("Granted permission must expose the Telegram foreground notification") {
+                notifications.activeNotifications.any { it.id == 100 &&
+                    (it.notification.flags and Notification.FLAG_FOREGROUND_SERVICE) != 0 }
+            }
+        }
+        ConnectionCoordinator.stopAll(context)
+        eventually("Modern user STOP must release both foreground services") {
+            !ByeDpiVpnService.isVpnActive && !ByeDpiVpnService.hasProxyResources && !TgProxyController.hasResources &&
+                TgProxyController.status.value == ModeConnectionState.Stopped
+        }
+        assertFalse(settings.anyModeRequested())
+        awaitCleanResources()
     }
 
     @Test(timeout = 30_000)

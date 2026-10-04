@@ -134,6 +134,19 @@ SDK-независимый Gradle-прогон production моделей и те
 199 доменов, GeoHide — 1003, в обоих случаях 0 ошибок. Синтаксический разбор 84
 Kotlin-файлов production/UI/instrumentation не обнаружил ошибок.
 
-`:app:assembleDebug` остановился на `SDK location not found`. APK, Android
-instrumentation и реальная работа новых DNS в этом изменении пока не проверены.
-Синтаксический разбор UI не заменяет Android-компиляцию или проверку на устройстве.
+Локальный `:app:assembleDebug` остановился на `SDK location not found`. Сборка
+перенесена на настроенный GitHub runner с существующей лицензией SDK и stable NDK
+r29. Для исходников `9efbce486c50c34a3b2a6eed335aa6f7be7f0018`
+[CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931)
+успешно собрал debug, unsigned release и test APK: **66 JVM/native, 65 Android JVM
+и 22 instrumentation теста API29**, без ошибок и пропусков. Lint: 0 ошибок,
+136 предупреждений, 5 hints. Получены 19 скриншотов эмулятора. Тест редактора
+выбирает User-поле по отдельному tag, поскольку рядом теперь есть поле URL.
+
+Готовый подписанный debug APK: `build/apk/Maffinet-smartdns-debug.apk`, 30 528 787
+байт, Android 8/API26+. APK Signature Scheme v2 проверена через ApkVerifier;
+движки для arm64-v8a, armeabi-v7a, x86 и x86_64 присутствуют. SHA-256:
+`ce01c19fd674054b9e95c4a87b71d1d5dec4a814e206a39103573f561113088e`.
+Сведения о сборке сохранены рядом в `build-info.json`; CI-артефакт
+`maffinet-debug-apk` (ID `11285608775`) хранится семь дней. Реальную доступность
+Smart DNS и поведение выбранных приложений следует проверить на устройстве.

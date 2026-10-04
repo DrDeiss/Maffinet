@@ -16,9 +16,9 @@ android {
     defaultConfig {
         applicationId = "io.maffinet.android"
         minSdk = 26
-        targetSdk = 26
-        versionCode = 1
-        versionName = "0.1.0-alpha"
+        targetSdk = 36
+        versionCode = 2
+        versionName = "0.2.0-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -65,7 +65,7 @@ android {
 }
 
 dependencies {
-    implementation("net.java.dev.jna:jna:5.14.0@aar")
+    implementation("net.java.dev.jna:jna:5.19.1@aar")
     implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.startup:startup-runtime:1.2.0")
     implementation("androidx.lifecycle:lifecycle-service:2.9.4")
@@ -141,5 +141,5 @@ tasks.register<Exec>("rebuildHevTunnel") {
 }
 
 base {
-    archivesName.set("Maffinet-0.1.0-alpha")
+    archivesName.set("Maffinet-0.2.0-alpha")
 }

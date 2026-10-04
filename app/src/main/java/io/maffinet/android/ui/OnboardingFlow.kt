@@ -610,7 +610,7 @@ private fun YoutubeBypassStep(
                     text = if (isSmartTv) {
                         "Разблокировать YouTube?"
                     } else {
-                        "Включить VPN для сервисов?"
+                        "Включить VPN для приложений?"
                     },
                     fontSize = 32.sp,
                     lineHeight = 38.sp,
@@ -625,7 +625,7 @@ private fun YoutubeBypassStep(
                     text = if (isSmartTv) {
                         "Для YouTube на Android TV доступна настройка SmartTube. Выберите вариант подключения."
                     } else {
-                        "VPN направляет выбранные приложения через Maffinet. YouTube включён по умолчанию; Instagram, LinkedIn и другие сервисы можно выбрать на экране «Сервисы»."
+                        "VPN направляет выбранные приложения через Maffinet. После настройки выберите нужные приложения на главном экране. Чтобы проверять сайты в браузере, добавьте и браузер."
                     },
                     fontSize = 16.sp,
                     lineHeight = 22.sp,

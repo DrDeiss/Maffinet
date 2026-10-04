@@ -34,6 +34,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     LaunchedEffect(revision) { StrategyTestManager.refreshConfiguration(context) }
     val urls = remember(revision) { targets.urls() }
     val applied = settings.getString("byedpi_cmd_args", "")
+        .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
     val current = StrategyTestManager.historyMatchesCurrentConfiguration(context)
     val results = if (current) StrategyTestManager.matrixResults.values.sortedWith(StrategyScorer.comparator) else emptyList()
 
@@ -63,7 +64,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
         dismissButton = { TextButton({ editTargets = false }) { Text("Отмена") } },
     )
 
-    ProductScreen("Стратегии", focusRequester, subtitle = "Auto проверяет заданные адреса с текущими Hosts и выбирает лучший результат.") {
+    ProductScreen("Стратегии", focusRequester, subtitle = "Auto применяет стратегию, только если все заданные адреса прошли проверку с текущими Hosts.") {
         ProductCard {
             Text("Auto strategy", style = MaterialTheme.typography.titleLarge)
             Text("Проверочных адресов: ${urls.size}")
@@ -81,7 +82,6 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                 OutlinedButton({ StrategyTestManager.cancelTesting() }, Modifier.fillMaxWidth()) { Text("Остановить проверку") }
             } else {
                 Button(onClick = {
-                    settings.setBoolean("strategy_manual_mode", false)
                     StrategyTestManager.startTesting(context)
                 }, Modifier.fillMaxWidth(), enabled = urls.isNotEmpty()) { Text("Проверить стратегии") }
             }
@@ -101,6 +101,10 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
             ProductCard {
                 Text(StrategyTestManager.getStrategyName(evaluation.command, context), style = MaterialTheme.typography.titleLarge)
                 Text("${evaluation.passedServices} / ${evaluation.totalServices} адресов прошли последнюю проверку")
+                if (!evaluation.fullyReachable && evaluation.passedServices > 0) {
+                    Text("Частичный результат: доступен для ручного выбора.",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 evaluation.averageLatencyMs?.let { Text("Средняя задержка: $it мс", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 evaluation.services.forEach { targetGroup ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -108,7 +112,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                         Text(if (targetGroup.passed) "OK · ${targetGroup.latencyMs} мс" else "FAIL",
                             color = if (targetGroup.passed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                     }
-                    if (expandedCommand == evaluation.command) targetGroup.targets.forEach { target ->
+                    targetGroup.targets.filter { !it.reachable || expandedCommand == evaluation.command }.forEach { target ->
                         Text("${target.url}\n${target.httpStatus?.let { "HTTP $it" } ?: target.error ?: "Ответ не получен"}",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }

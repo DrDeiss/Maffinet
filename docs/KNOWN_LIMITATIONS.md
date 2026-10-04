@@ -20,11 +20,12 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   AOSP API29 x86_64 instrumentation covers native SOCKS/TUN start/stop/retry and
   restoration after testing; it does not certify routed helper-app traffic or
   equivalent behavior on physical devices and other Android versions.
-- **Native page alignment:** Android Lint reports that the inherited JNA5.14.0
-  x86_64 `libjnidispatch.so` is not 16KB aligned. This AOSP API29 test does not
-  validate 16KB-page compatibility; audit every packaged native dependency before
-  claiming support for that environment. The retained HEV binaries themselves
-  have 16KB-aligned ELF load segments on all four ABIs.
+- **Native page alignment:** JNA is updated to official5.19.1; its packaged
+  libraries have16KB-aligned LOAD segments and RELRO boundaries. This removes the
+  confirmed inherited JNA5.14.0 issue. Full16KB runtime compatibility is still
+  unverified for the complete APK; LOAD alignment alone does not certify all
+  dependencies. The retained HEV binaries have16KB-aligned LOAD segments on all
+  four ABIs.
 - **Connectivity checks:** HTTP/TLS reachability does not prove authentication,
   media delivery or every feature of an application. The General base and explicit
   checking addresses are initial values and require maintenance.
@@ -52,8 +53,9 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
 - **Native termination:** a worker that still runs after bounded stop/force-close
   blocks another singleton start. Restart the application process before retrying;
   activity recreation alone cannot reset a native worker.
-- **Publication:** targetSdk remains the inherited 26. Store publication needs a
-  separate target SDK migration and permission/foreground-service validation.
+- **Publication:** targetSdk is36; minimum SDK remains26. The migration includes
+  notification permission and foreground-service handling, with API29/API36 CI
+  validation tracked separately from physical-device acceptance.
   Release signing is unconfigured; use a private maintainer key outside Git.
 - **SDK agreements:** portable setup stages Android SDK and Preview agreements
   without accepting them. CI uses stable NDK r29 with the runner's existing standard

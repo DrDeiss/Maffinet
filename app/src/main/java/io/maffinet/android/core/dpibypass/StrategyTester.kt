@@ -101,7 +101,7 @@ class StrategyTester(private val context: Context) {
                 val latency = evaluation.averageLatencyMs?.let { "$it мс" } ?: "нет соединения"
                 onProgress(index, strategy, "${evaluation.passedServices}/${evaluation.totalServices} адресов · $latency")
             }
-            val best = StrategyScorer.best(evaluations)?.command
+            val best = StrategyScorer.bestComplete(evaluations, snapshot.urls)?.command
             currentCoroutineContext().ensureActive()
             check(snapshot.fingerprint == ProbeTargetRepository(context).snapshot().fingerprint) {
                 "Hosts или проверочные адреса изменились. Повторите проверку для текущих настроек."

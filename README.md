@@ -10,24 +10,35 @@ NOTICE and source provenance remain in the repository in both cases.
 
 ## Status and requirements
 
-Development version: **0.1.0-alpha**. [PLAN.md](PLAN.md) records implementation
+Development version: **0.2.0-alpha**. [PLAN.md](PLAN.md) records implementation
 phases and actual checks; [known limitations](docs/KNOWN_LIMITATIONS.md) documents
 release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
 installation alongside NetFix Mobile.
+
+The app now targets Android 16/API36 while retaining Android 8/API26 as its
+minimum. This fixes the inherited old-target configuration; notification
+permission, quick-settings launch and background recovery are adapted for modern
+Android. Auto strategy selection now requires every configured checking address
+to pass before replacing the active strategy. See
+[Android compatibility and LinkedIn investigation](docs/ANDROID36_AND_LINKEDIN.md).
 
 ## Interface
 
 Home retains Maffinet's large connection button and exposes Applications,
 installed-app selection, Telegram, DNS, Strategy and Hosts. The main navigation
 contains Home, Strategies and Settings; the former Services destination is retired.
-[CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
-passed debug/release assembly, 43 JVM/native tests, 42 Android JVM tests and 22
-instrumentation tests without failures/skips. Lint has zero errors, 135 warnings
-and five hints. Nineteen new emulator captures document this model.
+[CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931)
+passed the expanded Hosts/Smart DNS implementation: debug/release assembly,
+66 JVM/native tests, 65 Android JVM tests and 22 API29 instrumentation tests
+without failures/skips. Lint has zero errors, 136 warnings and five hints.
+The signed debug APK and its build metadata are saved locally in `build/apk/`;
+CI also retains `maffinet-debug-apk` for seven days. See
+[Hosts/DNS validation](docs/HOSTS_AND_DNS.md) for the exact source and APK hash.
 
 [Additional screen captures](docs/screenshots/README.md) and
-[recorded runtime checks](docs/DEVICE_VALIDATION.md) describe the actual tested scope.
+[recorded runtime checks](docs/DEVICE_VALIDATION.md) document the preceding
+independent-mode baseline. Physical-device Smart DNS acceptance remains open.
 
 ## Features
 

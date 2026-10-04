@@ -1,5 +1,26 @@
 # Maffinet — audit and implementation plan
 
+## Current update — Android compatibility and LinkedIn, 2026-10-04
+
+Physical feedback on 0.1.0-alpha reported Android's old-target warning and failed
+LinkedIn access in both its application and browser, while other services worked.
+The old targetSdk26 is confirmed and changed to36 (minimum26), version0.2.0-alpha.
+Modern notification permission, Tile PendingIntent launch, deferred foreground
+recovery and background update handling are implemented. JNA is upgraded from
+5.14.0 to the verified official5.19.1 AAR, including its Android16KB fixes.
+Auto now preserves the active strategy unless every configured URL passes;
+partial results remain visible for manual selection, with failed URLs reported.
+The onboarding text now directs users to the actual application picker and
+diagnostic reports show the effective native arguments with host contents omitted.
+
+LinkedIn's root domains and their subdomains already match General. Its actual
+network failure remains unproven until the offered USB phone is connected and
+tested. The default DPI recipe, host list and native transport code are unchanged.
+Local verification passed63 JVM tests; six Linux native checks remain CI-only.
+The revised CI builds one app/test APK pair and tests it on API29 andAPI36,
+including notification denial onAPI36. Updated CI/runtime results are pending.
+See [investigation notes](docs/ANDROID36_AND_LINKEDIN.md).
+
 ## Current update — Hosts and DNS, 2026-10-04
 
 The user requested comparison with NetFix Windows and broader Hosts/DNS support.
@@ -21,7 +42,16 @@ built-in DoH and automatic source updates remain outside this implementation.
 Local validation: 60 production-model/catalog JVM tests passed; six Linux native-fixture
 tests skipped. The full malw/GeoHide source snapshots parse without errors. Kotlin
 PSI parsed 84 main/instrumentation files without syntax errors. Android assembly
-is blocked by the missing local SDK; this update has no new APK/device evidence.
+remains unavailable on the local host because its SDK is missing. The exact source
+`9efbce486c50c34a3b2a6eed335aa6f7be7f0018` passed
+[CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931):
+debug/unsigned release/test APK assembly, 66 JVM/native, 65 Android JVM and 22
+API29 instrumentation tests, without failures/skips. Lint reports zero errors,
+136 warnings and five hints. The installable debug APK is saved locally at
+`build/apk/Maffinet-smartdns-debug.apk`; its verified v2 signature, source, hashes
+and exact validation are recorded in `build/apk/build-info.json`.
+CI retains the APK as `maffinet-debug-apk` for seven days. Physical Smart DNS
+reachability and device acceptance still require the user's device.
 
 ## Current goal — independent Applications, Telegram and Hosts
 

@@ -32,7 +32,8 @@ class TgProxyService : LifecycleService() {
         @Synchronized private fun isCurrent(intent: Intent?): Boolean =
             intent?.hasExtra(GENERATION) != true || intent.getLongExtra(GENERATION, -1L) == generation
 
-        @Synchronized fun requestStart(context: Context, openTelegram: Boolean = false) {
+        @Synchronized fun requestStart(context: Context, openTelegram: Boolean = false,
+            preserveDesiredStateOnFailure: Boolean = false) {
             val app = context.applicationContext
             val settings = MaffinetSettingsRepository(app)
             if (!settings.telegramEnabled()) return
@@ -47,7 +48,9 @@ class TgProxyService : LifecycleService() {
                     putExtra("open_tg", openTelegram)
                 })
             } catch (error: Exception) {
-                settings.setTelegramRequested(false)
+                // Android 12+ may defer a background watchdog's FGS start. Keep
+                // recovery requests so the visible Activity can resume them.
+                if (!preserveDesiredStateOnFailure) settings.setTelegramRequested(false)
                 TgProxyController.stop()
                 throw error
             }
@@ -57,7 +60,8 @@ class TgProxyService : LifecycleService() {
         @Synchronized fun ensureStarted(context: Context) {
             val settings = MaffinetSettingsRepository(context)
             if (settings.telegramRequested() && settings.telegramEnabled() &&
-                TgProxyController.status.value !in ConnectionCoordinator.activeStates) requestStart(context)
+                TgProxyController.status.value !in ConnectionCoordinator.activeStates)
+                requestStart(context, preserveDesiredStateOnFailure = true)
         }
 
         @Synchronized fun requestStop(context: Context) {
