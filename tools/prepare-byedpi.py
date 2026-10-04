@@ -35,6 +35,8 @@ def prepare(destination: Path) -> Path:
         subprocess.run([*args[:2], "--check", *args[2:]], cwd=ROOT, check=True)
         subprocess.run(args, cwd=ROOT, check=True)
         print(f"ByeDPI {PIN} + {patch.name} sha256={hashlib.sha256(patch.read_bytes()).hexdigest()}")
+    for name in ("automatic_access.c", "automatic_access.h"):
+        (destination / name).write_bytes((ROOT / "app/src/main/cpp" / name).read_bytes())
     return destination
 
 

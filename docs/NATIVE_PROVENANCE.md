@@ -93,8 +93,50 @@ encrypted follow-up data, zero cuts, raw fallback and server-first normal groups
 Parser checks cover scoped options and preservation of legacy global flags.
 These hermetic checks validate forwarding/state behavior, not an external TLS
 handshake or a DPI bypass in a particular network. Local patch preparation and
-Python syntax checks passed on Windows; Linux compilation/runtime results are
-pending CI.
+Python syntax checks passed on Windows. CI run
+[37196163868](https://github.com/DrDeiss/Maffinet/actions/runs/37196163868),
+commit `6e766b9a66d5e5ed4f25b33f0e087ca2416dfee1`, passed the 12 streaming
+cases and four invalid-value parser checks, including pacing after a short write.
+
+### Automatic Access source additions
+
+`runtime-auto-access.patch` adds the opt-in `--auto-access` path; the separately
+tracked `automatic_access.c/.h` module is copied into the generated source tree.
+The APK and Linux fixtures use this same preparation; the ByeDPI gitlink remains
+unchanged. Commands without `--auto-access` retain the manual cache/retry behavior.
+
+TCP 443 waits for a complete bounded ClientHello (16 KiB maximum, two seconds),
+then snapshots an exact hostname/port route for that connection. A mutex protects
+128 numeric public IPv4 routes and the active epoch. TTL uses `CLOCK_BOOTTIME`
+on Linux/Android, so routes expire during deep sleep; other platforms use the
+monotonic fallback. Java observation runs outside the route mutex. Epoch changes
+clear routes, stale epoch writes fail, and existing connections keep their
+destination. This feature does not change SNI, certificates or established TLS.
+
+Learning and hot routes exclude private/special original destinations and ECH
+ClientHello extensions, including conservative GREASE suppression. Private TCP
+443 destinations pass through without automatic desynchronization. Other ports
+connect immediately. TLS/server-first protocols on port 443 may incur the bounded
+ClientHello wait; missing DNS/SNI and ECH-hidden names cannot be recovered by
+this observer. The inherited strategy cache keyed only by destination IP is
+disabled in automatic mode to avoid sharing a result between CDN hostnames.
+
+A loopback SOCKS5 greeting containing both methods `0x00` and private marker
+`0x80` receives the ordinary `05 00` answer, but bypasses hot routes and learning
+for that probe connection. Normal desynchronization remains active. Non-loopback
+peers cannot activate this probe marker. Only preserved TLS handshake/CCS bytes
+may reconnect after sending client bytes; plaintext requests and TLS application
+records, including 0-RTT, never replay. After sending a complete replayable Hello,
+two seconds without any peer TLS bytes advances the fallback chain. First peer
+data or later client application bytes cancel this automatic response timer.
+
+The 19 automatic Linux map/SOCKS/socket cases cover unknown host routing, a
+second hostname on the same IP, probe bypass, partial/multiple TLS records,
+bounded time/size, other-port server-first behavior, epoch/TTL and public-address
+guards, ECH, absent/duplicate SOCKS replies, safe Hello retries, real server EOF
+and ACKed-but-silent TLS, and cancellation/no replay after application bytes.
+Local clean patch preparation and Python syntax checks passed; compilation and
+execution of these new automatic cases remain pending the next CI snapshot.
 
 The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
 published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.

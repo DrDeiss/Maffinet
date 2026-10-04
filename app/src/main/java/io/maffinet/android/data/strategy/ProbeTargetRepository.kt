@@ -11,7 +11,7 @@ import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 data class StrategyProbeSnapshot(
     val urls: List<String>, val filters: ByeDpiFilterConfiguration, val fingerprint: String,
-    val linkedInAlternativeRouteEnabled: Boolean = false,
+    val automaticAccessEnabled: Boolean = true,
 )
 
 /** Separate from service profiles, selected_apps, DNS and legacy strategy import/export. */
@@ -39,7 +39,7 @@ class ProbeTargetRepository(private val context: Context) {
         val active = lists.first { it.id == "general" }.domains
         val settings = MaffinetSettingsRepository(context)
         val override = settings.hostFilterOverride()
-        val linkedInRoute = settings.linkedInAlternativeRouteEnabled()
+        val automaticAccess = settings.automaticAccessEnabled()
         val urls = urls()
         val mode = preferences.getString("byedpi_hosts_mode", "disable") ?: "disable"
         val hosts = when (mode) {
@@ -49,7 +49,7 @@ class ProbeTargetRepository(private val context: Context) {
         }.orEmpty()
         return StrategyProbeSnapshot(urls, ByeDpiFilterConfiguration(lists, active, override),
             ProbeConfigurationFingerprint.create(urls, lists, active, override, mode, hosts,
-                linkedInAlternativeRouteEnabled = linkedInRoute), linkedInRoute)
+                automaticAccessEnabled = automaticAccess), automaticAccess)
     }
 
     companion object { const val KEY = "maffinet_probe_urls" }

@@ -54,13 +54,13 @@ class ProbeTargetsTest {
         assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s2")))
     }
 
-    @Test fun alternativeLinkedInRouteInvalidatesPreviousMatrixEvidence() {
+    @Test fun automaticAndManualModesCannotReusePreviousMatrixEvidence() {
         val urls = listOf("https://example.com")
         val candidates = listOf("-o1", "-s1")
-        val disabled = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false, candidates = candidates)
-        val enabled = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false,
-            candidates = candidates, linkedInAlternativeRouteEnabled = true)
-        assertNotEquals(disabled, enabled)
-        assertEquals(fingerprint(), disabled)
+        val automatic = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false, candidates = candidates)
+        val manual = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false,
+            candidates = candidates, automaticAccessEnabled = false)
+        assertNotEquals(automatic, manual)
+        assertEquals(fingerprint(), automatic)
     }
 }

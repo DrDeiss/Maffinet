@@ -35,9 +35,9 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     }
     LaunchedEffect(revision) { StrategyTestManager.refreshConfiguration(context) }
     val urls = remember(revision) { targets.urls() }
-    val linkedInRoute = remember(revision) { settings.linkedInAlternativeRouteEnabled() }
+    val automaticAccess = remember(revision) { settings.automaticAccessEnabled() }
     val applied = settings.getString("byedpi_cmd_args", "")
-        .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
+        .takeIf { !automaticAccess && settings.getBoolean("byedpi_enable_cmd_settings", false) }
     val current = StrategyTestManager.historyMatchesCurrentConfiguration(context)
     val results = if (current) StrategyTestManager.matrixResults.values.sortedWith(StrategyScorer.comparator) else emptyList()
 
@@ -67,27 +67,28 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
         dismissButton = { TextButton({ editTargets = false }) { Text("Отмена") } },
     )
 
-    ProductScreen("Стратегии", focusRequester, subtitle = "Auto применяет стратегию, только если все заданные адреса прошли проверку с текущими Hosts.") {
+    ProductScreen("Стратегии", focusRequester, subtitle = "Для обычного подключения достаточно выбрать приложения на главном экране. Здесь доступны режим и диагностика.") {
         ProductCard {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Альтернативный маршрут LinkedIn", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
-                Switch(checked = linkedInRoute, onCheckedChange = { enabled ->
+                Text("Автоматический доступ", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Switch(checked = automaticAccess, onCheckedChange = { enabled ->
                     try {
-                        settings.setLinkedInAlternativeRouteEnabled(enabled)
+                        settings.setAutomaticAccessEnabled(enabled)
                         routeError = null
                         StrategyTestManager.refreshConfiguration(context)
-                    } catch (error: Exception) { routeError = error.message ?: "Не удалось сохранить маршрут" }
+                    } catch (error: Exception) { routeError = error.message ?: "Не удалось сохранить режим" }
                 }, enabled = !locked)
             }
-            Text("Использует альтернативный сервер LinkedIn для HTTPS-соединений с www.linkedin.com. Может помочь, если сайт или приложение не загружаются; результат зависит от сети.",
+            Text("Подбирает обход для соединений выбранных приложений. При сбое проверяет DNS и доступные Smart DNS, сохраняя проверенный маршрут для этой сети.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Для VPN действует в выбранных приложениях. Обычная стратегия и Hosts сохраняются. Auto проверяет адреса с этим маршрутом, если он включён.",
+            Text("Неизвестные домены тоже проверяются. Ручные стратегии и Hosts сохраняются для экспертного режима.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (locked) Text("Остановите подключение и проверку стратегий, чтобы изменить маршрут.", style = MaterialTheme.typography.bodySmall)
+            if (locked) Text("Остановите подключение и проверку стратегий, чтобы изменить режим.", style = MaterialTheme.typography.bodySmall)
             routeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
         ProductCard {
-            Text("Auto strategy", style = MaterialTheme.typography.titleLarge)
+            Text("Диагностика ручных стратегий", style = MaterialTheme.typography.titleLarge)
+            if (automaticAccess) Text("Проверка отдельных рецептов не меняет автоматический режим. Выбор результата вручную включает экспертный режим.", style = MaterialTheme.typography.bodySmall)
             Text("Проверочных адресов: ${urls.size}")
             urls.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             OutlinedButton(onClick = {
@@ -144,7 +145,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                     Button({
                         settings.setBoolean("strategy_manual_mode", true)
                         StrategyTestManager.applyStrategy(context, evaluation.candidateIndex + 1, evaluation.command)
-                    }, Modifier.weight(1f), enabled = !StrategyTestManager.isTesting) { Text(if (applied == evaluation.command) "Выбрана" else "Выбрать") }
+                    }, Modifier.weight(1f), enabled = !locked) { Text(if (applied == evaluation.command) "Выбрана" else "Выбрать") }
                 }
             }
         }

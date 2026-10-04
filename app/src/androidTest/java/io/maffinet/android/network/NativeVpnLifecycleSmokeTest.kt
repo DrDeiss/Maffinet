@@ -125,6 +125,7 @@ class NativeVpnLifecycleSmokeTest {
             .putBoolean("onboarding_completed", true)
             .putBoolean("maffinet_fork_notice_seen", true)
             .putBoolean("notification_permission_requested", true)
+            .putBoolean("maffinet_hev_lifecycle_diagnostics", true)
             .putBoolean("telegram_proxy_enabled_by_user", false)
             .putBoolean("byedpi_enable_cmd_settings", true)
             .putString("byedpi_mode", "vpn")
@@ -144,6 +145,7 @@ class NativeVpnLifecycleSmokeTest {
         settings.setApplicationsEnabled(true)
         settings.setTelegramEnabled(false)
         settings.setRequested(false, false)
+        settings.setAutomaticAccessEnabled(false) // Invalid raw args/General cases must still exercise manual mode.
         val tgPort = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1")).use { it.localPort }
         TgProxyController.setPort(context, tgPort)
         TgProxyController.setCfEnabled(context, false)
@@ -202,6 +204,21 @@ class NativeVpnLifecycleSmokeTest {
             }
         }
         MultipleFailureException.assertEmpty(cleanupFailures)
+    }
+
+    @Test(timeout = 30_000)
+    fun automaticDefaultStartsAndStopsWithoutRequiringExternalProbeSuccess() {
+        assertTrue(preferences.edit().remove(MaffinetSettingsRepository.AUTOMATIC_ACCESS)
+            .putBoolean("byedpi_enable_cmd_settings", true)
+            .putString("byedpi_cmd_args", "--not-a-valid-manual-argument")
+            .commit())
+        assertTrue("Fresh settings use Automatic Access", settings.automaticAccessEnabled())
+        startAndAwaitNativeTunnel()
+        assertSocks5Ready(proxyPort)
+        assertTrue("Automatic startup must preserve the requested connection", settings.applicationsRequested())
+        stopAndAwaitCleanup()
+        assertFalse(settings.applicationsRequested())
+        assertFalse(ByeDpiVpnService.hasProxyResources)
     }
 
     @Test(timeout = 30_000)

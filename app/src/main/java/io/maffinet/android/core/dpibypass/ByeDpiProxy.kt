@@ -1,31 +1,15 @@
 package io.maffinet.android.core.dpibypass
 
-import android.os.Looper
-import io.maffinet.android.core.debug.AppDebugManager as Log
-import io.maffinet.android.core.strategy.LinkedInAlternativeRoute
-
 class ByeDpiProxy {
     companion object {
-        @Volatile var lastResolvedLinkedInAddress: String? = null
-            private set
-
         init {
             System.loadLibrary("byedpi")
         }
     }
 
     fun startProxy(preferences: ByeDpiProxyPreferences, shouldStart: () -> Boolean = { !Thread.currentThread().isInterrupted }): Int {
-        lastResolvedLinkedInAddress = null
-        if (preferences.linkedInAlternativeRouteEnabled) {
-            check(Thread.currentThread() != Looper.getMainLooper().thread) { "LinkedIn DNS must run on the proxy worker" }
-        }
-        val args = LinkedInAlternativeRoute.prepareArguments(prepareArgs(preferences),
-            preferences.linkedInAlternativeRouteEnabled, shouldStart, onResolved = { address ->
-                lastResolvedLinkedInAddress = address
-                Log.i("ByeDpiProxy", "LinkedIn alternative route: ${LinkedInAlternativeRoute.ENDPOINT_HOST} → $address")
-            }) ?: return 0
         if (!shouldStart()) return 0
-        return jniStartProxy(args)
+        return jniStartProxy(prepareArgs(preferences))
     }
 
     fun stopProxy(): Int {
@@ -36,9 +20,16 @@ class ByeDpiProxy {
         when (preferences) {
             is ByeDpiProxyCmdPreferences -> preferences.args
             is ByeDpiProxyUIPreferences -> preferences.uiargs
+            is ByeDpiAutomaticPreferences -> preferences.args
         }
+
+    fun setAccessEpoch(epoch: Long) = jniSetAccessEpoch(epoch)
+    fun updateHostRoute(epoch: Long, host: String, port: Int, ipv4: String?, ttlSeconds: Int): Boolean =
+        jniUpdateHostRoute(epoch, host, port, ipv4, ttlSeconds)
 
     private external fun jniStartProxy(args: Array<String>): Int
     private external fun jniStopProxy(): Int
+    private external fun jniSetAccessEpoch(epoch: Long)
+    private external fun jniUpdateHostRoute(epoch: Long, host: String, port: Int, ipv4: String?, ttlSeconds: Int): Boolean
     external fun jniForceClose(): Int
 }

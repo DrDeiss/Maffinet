@@ -57,7 +57,7 @@ class StrategyTester(private val context: Context) {
                 if (strategy in excludedCommands) continue
                 val proxy = ByeDpiProxy()
                 val configuration = ByeDpiProxyCmdPreferences(ByeDpiArgumentCompiler.compile(
-                    strategy, filters, "127.0.0.1", testPort.toString(), forceListener = true), snapshot.linkedInAlternativeRouteEnabled)
+                    strategy, filters, "127.0.0.1", testPort.toString(), forceListener = true))
                 val exitCode = AtomicInteger(Int.MIN_VALUE)
                 val stopping = AtomicBoolean(false)
                 val startupError = AtomicReference<String?>(null)

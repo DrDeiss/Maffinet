@@ -13,6 +13,7 @@ import android.os.ParcelFileDescriptor
 import io.maffinet.android.core.debug.AppDebugManager as Log
 import androidx.lifecycle.lifecycleScope
 import io.maffinet.android.MainActivity
+import io.maffinet.android.BuildConfig
 import io.maffinet.android.R
 import io.maffinet.android.data.AppStatus
 import io.maffinet.android.data.Mode
@@ -110,6 +111,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
                                 if (!isRunning || !recoveryIsCurrent(recoveryRequest)) return@withLock
                                 starting = true
                                 try {
+                                    io.maffinet.android.core.access.AutomaticAccessController.stop()
                                     updateStatus(ServiceStatus.Disconnected)
                                     stopTun2Socks()
                                     stopProxy()
@@ -162,6 +164,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
         // Native JNI blocks outside lifecycleScope; canceling the scope cannot stop it.
         // Always close both transports, including partially failed startup.
+        io.maffinet.android.core.access.AutomaticAccessController.stop()
         val failed = status == ServiceStatus.Failed
         stopTun2Socks()
         stopProxyBlocking()
@@ -356,6 +359,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
     }
 
     private suspend fun cleanupPipeline() = withContext(NonCancellable + Dispatchers.IO) {
+        io.maffinet.android.core.access.AutomaticAccessController.stop()
         stopTun2Socks()
         stopProxyBlocking()
     }
@@ -382,6 +386,8 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         val stopping = AtomicBoolean(false)
         val startupFailure = AtomicReference<Exception?>(null)
+        val accessEpoch = if (preferences.automaticAccess) io.maffinet.android.core.access.AutomaticAccessController.prepareStart() else 0L
+        byeDpiProxy.setAccessEpoch(accessEpoch)
         proxyStopping = stopping
         nativeProxyActive = true
         val worker = Thread({
@@ -421,12 +427,16 @@ class ByeDpiVpnService : LifecycleVpnService() {
             }
             error("ByeDPI SOCKS listener did not become ready")
         }
+        if (preferences.automaticAccess && !stopping.get()) {
+            io.maffinet.android.core.access.AutomaticAccessController.start(this, byeDpiProxy, listenerIp, port.toInt())
+        }
         Log.i(TAG, "Proxy listener ready")
     }
 
     private suspend fun stopProxy() = withContext(NonCancellable + Dispatchers.IO) { stopProxyBlocking() }
 
     private fun stopProxyBlocking() {
+        io.maffinet.android.core.access.AutomaticAccessController.stop()
         val worker = proxyThread ?: return
         proxyStopping.set(true)
         if (!worker.isAlive) {
@@ -468,12 +478,32 @@ class ByeDpiVpnService : LifecycleVpnService() {
         val dnsIps = DnsCatalog.vpnAddresses(customDnsPreset)
         val ipv6 = sharedPreferences.getBoolean("ipv6_enable", false)
 
+        // CI can opt in to the engine's own init/run/fini trace. Ordinary builds
+        // and sessions leave it disabled; the custom Smart TV JNI ABI is retained.
+        val lifecycleLog = if (BuildConfig.DEBUG &&
+            sharedPreferences.getBoolean("maffinet_hev_lifecycle_diagnostics", false)) {
+            runCatching {
+                File(filesDir, "hev-lifecycle.log").apply {
+                    if (length() > 2 * 1024 * 1024) {
+                        val previous = File(filesDir, "hev-lifecycle.previous.log")
+                        previous.delete()
+                        check(renameTo(previous)) { "Cannot rotate HEV lifecycle trace" }
+                    }
+                    appendText("\n=== HEV start ${System.currentTimeMillis()} ===\n")
+                }.absolutePath
+            }.onFailure { Log.w(TAG, "Cannot enable HEV lifecycle trace", it) }.getOrNull()
+        } else null
+
         val tun2socksConfig = buildString {
             appendLine("tunnel:")
             appendLine("  mtu: 1500")
 
             appendLine("misc:")
             appendLine("  task-stack-size: 81920")
+            lifecycleLog?.let {
+                appendLine("  log-file: \"$it\"")
+                appendLine("  log-level: debug")
+            }
 
             appendLine("socks5:")
             appendLine("  address: $ip")

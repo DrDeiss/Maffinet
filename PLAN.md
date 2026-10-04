@@ -1,5 +1,23 @@
 # Maffinet — audit and implementation plan
 
+## Current requirement — automatic access, 2026-10-04
+
+The user clarified that LinkedIn is a diagnostic example, and the product must
+serve new unavailable applications without adding a service toggle each time.
+The main interaction is application selection and one connection button.
+Only local DPI bypass and public Smart DNS are authorized; a private external
+proxy/VPN exit is outside the requested architecture.
+
+Automatic Access supersedes the proposed LinkedIn product switch. Current work:
+a short TLS fallback chain for selected applications including unknown hosts;
+bounded native observation, network-scoped decisions, direct DNS/body probes,
+generic data-based route hints and host-route updates for new connections without
+restarting VPN. Plain HTTP application payloads must not be automatically replayed.
+Manual settings and General/User remain available in expert mode.
+The general implementation and native/runtime checks are in progress; the earlier
+LinkedIn diagnostic success is evidence for one candidate, not completion of this
+new requirement. See [Automatic Access](docs/AUTOMATIC_ACCESS.md).
+
 ## Current update — Android compatibility and LinkedIn, 2026-10-04
 
 Physical feedback on 0.1.0-alpha reported Android's old-target warning and failed

@@ -263,7 +263,7 @@ object StrategyTestManager {
                             bestObserved = evaluations.minWithOrNull(StrategyScorer.comparator)
                             val best = StrategyScorer.bestComplete(evaluations, snapshot.urls)?.command
                             selectedBest = best
-                            if (best != null) {
+                            if (best != null && !io.maffinet.android.data.settings.MaffinetSettingsRepository(applicationContext).automaticAccessEnabled()) {
                                 bestStrategyResult = best
                                 appliedStrategy = best
                                 applicationContext.getPreferences().edit()
@@ -279,7 +279,9 @@ object StrategyTestManager {
                 Log.i("StrategyTestManager", "Автоподбор завершен. Лучшая стратегия: \"$best\"")
 
                 resortResults(applicationContext)
-                currentProgress = completionSummary(bestObserved, best != null)
+                currentProgress = if (io.maffinet.android.data.settings.MaffinetSettingsRepository(applicationContext).automaticAccessEnabled()) {
+                    "Диагностика завершена: ${bestObserved?.passedServices ?: 0}/${snapshot.urls.size} адресов. Автоматический доступ сохранён."
+                } else completionSummary(bestObserved, best != null)
                 showNotification(applicationContext, currentProgress)
             } catch (cancelled: CancellationException) {
                 currentProgress = "Проверка отменена"
@@ -365,8 +367,13 @@ object StrategyTestManager {
     }
 
     fun applyStrategy(context: Context, originalIndex: Int, strategy: String) {
+        if (io.maffinet.android.core.connection.ConnectionCoordinator.isConfigurationLocked(context)) {
+            android.widget.Toast.makeText(context, "Остановите подключение перед выбором ручной стратегии", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
         val accepted = synchronized(this) {
             if (deletedStrategies[strategy] == true) false else {
+                io.maffinet.android.data.settings.MaffinetSettingsRepository(context).setAutomaticAccessEnabled(false)
                 context.getPreferences().edit()
                     .putString("byedpi_cmd_args", strategy)
                     .putBoolean("byedpi_enable_cmd_settings", true)

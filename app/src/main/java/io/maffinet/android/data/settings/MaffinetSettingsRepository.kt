@@ -79,12 +79,12 @@ class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
         preferences.edit().putBoolean(HOST_FILTER_OVERRIDE, enabled).apply()
     }
 
-    fun linkedInAlternativeRouteEnabled(): Boolean = preferences.getBoolean(LINKEDIN_ALTERNATIVE_ROUTE, false)
-    fun setLinkedInAlternativeRouteEnabled(enabled: Boolean) = synchronized(preferences) {
+    fun automaticAccessEnabled(): Boolean = preferences.getBoolean(AUTOMATIC_ACCESS, true)
+    fun setAutomaticAccessEnabled(enabled: Boolean) = synchronized(preferences) {
         check(!anyModeRequested() && !ConnectionCoordinator.isConfigurationLocked()) {
-            "Остановите подключение и проверку стратегий перед изменением маршрута LinkedIn"
+            "Остановите подключение и проверку стратегий перед изменением режима доступа"
         }
-        preferences.edit().putBoolean(LINKEDIN_ALTERNATIVE_ROUTE, enabled).apply()
+        preferences.edit().putBoolean(AUTOMATIC_ACCESS, enabled).apply()
     }
 
     // Compatibility access for existing expert controls. New product settings use typed APIs above.
@@ -117,7 +117,7 @@ class MaffinetSettingsRepository(private val preferences: SharedPreferences) {
         private const val ENABLED_SERVICES = "maffinet_enabled_services"
         private const val USER_DOMAINS_ENABLED = "maffinet_user_domains_enabled"
         private const val HOST_FILTER_OVERRIDE = "maffinet_advanced_hosts_override"
-        const val LINKEDIN_ALTERNATIVE_ROUTE = "maffinet_linkedin_alternative_route"
+        const val AUTOMATIC_ACCESS = "maffinet_automatic_access"
         private const val MANUAL_APPLICATIONS = "selected_apps"
         const val APPLICATIONS_ENABLED = "maffinet_applications_enabled"
         const val TELEGRAM_ENABLED = "maffinet_telegram_enabled"

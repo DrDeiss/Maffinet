@@ -1,0 +1,304 @@
+--- a/conev.h
++++ b/conev.h
+@@ -92,6 +92,10 @@
+     ssize_t round_sent;
+     unsigned int round_count;
+     bool round_end_pending;
++    bool auto_ready, auto_probe, auto_socks_replied, auto_route_active, auto_passthrough;
++    bool auto_wait_response;
++    uint64_t auto_epoch;
++    union sockaddr_u auto_route_addr;
+     
+     struct desync_params *dp;
+     uint64_t dp_mask;
+--- a/params.h
++++ b/params.h
+@@ -157,6 +157,7 @@
+     bool resolve;
+     bool udp;
+     bool delay_conn;
++    bool auto_access;
+     bool auto_reconnect;
+     int max_open;
+     int debug;
+--- a/main.c
++++ b/main.c
+@@ -98,6 +98,7 @@
+     "    -R, --round <num[-numr]>  Number of request to which desync will be applied\n"
+     "        --group-pacing <ms>   Pace TCP parts for this group only (1..60000 ms)\n"
+     "        --group-redirect <uri> Connect through a destination for this group only\n"
++    "        --auto-access        Observe bounded TLS ClientHello on TCP 443\n"
+     "    -s, --split <pos_t>       Position format: offset[:repeats:skip][+flag1[flag2]]\n"
+     "                              Flags: +s - SNI offset, +h - HTTP host offset, +n - null\n"
+     "                              Additional flags: +e - end, +m - middle\n"
+@@ -127,7 +128,7 @@
+ };
+ 
+ 
+-enum { OPT_GROUP_PACING = 256, OPT_GROUP_REDIRECT };
++enum { OPT_GROUP_PACING = 256, OPT_GROUP_REDIRECT, OPT_AUTO_ACCESS };
+ 
+ const struct option options[] = {
+     #ifdef DAEMON
+@@ -188,6 +189,7 @@
+     {"wait-send",     0, 0, 'Z'}, //
+     {"await-int",     1, 0, 'W'}, //
+     {"group-pacing",  1, 0, OPT_GROUP_PACING},
++    {"auto-access",   0, 0, OPT_AUTO_ACCESS},
+     #ifdef __linux__
+     {"drop-sack",     0, 0, 'Y'},
+     {"protect-path",  1, 0, 'P'}, //
+@@ -1255,6 +1257,10 @@
+                 dp->group_pacing = val;
+             break;
+ 
++        case OPT_AUTO_ACCESS:
++            params.auto_access = true;
++            break;
++
+         case OPT_GROUP_REDIRECT:
+         case 'C':
+             dp->out_type = get_addr_scheme(optarg, &dp->out_addr);
+--- a/proxy.c
++++ b/proxy.c
+@@ -1,4 +1,5 @@
+ #include "proxy.h"
++#include "automatic_access.h"
+ 
+ #include <stdint.h>
+ #include <stdio.h>
+@@ -665,6 +666,8 @@
+     ssize_t n = 0;
+     bool wait = false;
+     struct eval *pair = val->pair;
++    if (etype == POLLTIMEOUT && params.auto_access && val->auto_wait_response)
++        return on_auto_response_timeout(pool, val);
+     
+     if (etype == POLLTIMEOUT && !pair->buff && val->round_count) {
+         LOG(LOG_S, "timeout (%u) (fd=%d)\n", val->to_count, val->fd);
+@@ -865,6 +868,7 @@
+         if (auth_socks5(val->fd, buff->data, n)) {
+             return -1;
+         }
++        val->auto_probe = access_probe_marker(val->fd, buff->data, n);
+         val->flag = FLAG_S5;
+         return 0;
+     }
+@@ -1003,6 +1007,7 @@
+     if (!error && val->pair->buff) {
+         return on_tunnel(pool, val, et);
+     }
++    if (val->pair->auto_socks_replied) return error ? -1 : 0;
+     if (resp_error(val->pair->fd,
+             error, val->pair->flag) < 0) {
+         uniperror("send");
+--- a/extend.c
++++ b/extend.c
+@@ -22,6 +22,7 @@
+ 
+ #include "desync.h"
+ #include "packets.h"
++#include "automatic_access.h"
+ 
+ 
+ static int set_timeout(int fd, unsigned int s)
+@@ -345,13 +346,24 @@
+ int on_trigger(int type, struct poolhd *pool, struct eval *val, bool client_alive)
+ {
+     struct eval *lav = val->pair;
++    if (params.auto_access && lav->auto_passthrough) return -1;
+     
+     bool before_req = !lav->recv_count && !val->recv_count;
+     
+     bool can_reconn = ((lav->sq_buff || before_req) && client_alive);
++    if (params.auto_access && !before_req) {
++        /* Never replay plaintext requests or TLS application/0-RTT records. */
++        can_reconn = can_reconn && lav->sq_buff
++            && (lav->recv_count == lav->sq_buff->lock)
++            && access_tls_replayable(lav->sq_buff->data, lav->sq_buff->lock);
++    }
+     INIT_ADDR_STR((val->addr));
+     
+-    struct elem_i *cache = cache_add(&val->addr, &lav->host, lav->host_len);
++    /* Auto Access cannot share a strategy cache across hosts at a CDN IP.
++     * Per-connection fallback remains active; verified hot routes key by SNI. */
++    struct elem_i local_cache = {0};
++    struct elem_i *cache = params.auto_access ? &local_cache
++        : cache_add(&val->addr, &lav->host, lav->host_len);
+     if (!cache) {
+         return -1;
+     }
+@@ -441,6 +453,12 @@
+     }
+     set_timer(pool, val, params.ptimeout);
+     return 0;
++}
++
++int on_auto_response_timeout(struct poolhd *pool, struct eval *val)
++{
++    val->auto_wait_response = false;
++    return on_trigger(DETECT_TORST, pool, val, true);
+ }
+ 
+ 
+@@ -596,11 +614,84 @@
+     return connect_hook(pool, val, &val->addr, &on_connect);
+ }
+ 
+-
+-int connect_hook(struct poolhd *pool, struct eval *val, 
++static int finish_auto_connect(struct poolhd *pool, struct eval *val, bool deadline)
++{
++    char host[ACCESS_HOST_MAX + 1];
++    enum access_hello_status status = access_client_hello(val->buff->data, val->buff->lock, host);
++    if (!deadline && status == ACCESS_MORE && val->buff->lock < ACCESS_HELLO_MAX) return 0;
++    remove_timer(pool, val);
++    val->auto_ready = true;
++    val->auto_passthrough = status != ACCESS_READY || !access_public_destination(&val->addr);
++    if (status == ACCESS_READY && host[0]) {
++        if (!val->host) {
++            val->host = strdup(host);
++            if (!val->host) return -1;
++            val->host_len = strlen(host);
++        }
++        if (!val->auto_probe && access_public_destination(&val->addr)) {
++            /* Take the destination snapshot before notifying a background
++             * verifier. Its future updates cannot redirect this connection. */
++            val->auto_route_active = access_lookup_route(val->auto_epoch, host, 443, &val->auto_route_addr);
++            access_observe(val->auto_epoch, host, &val->addr);
++        }
++    }
++    if (params.auto_reconnect && val->buff->lock) {
++        if (val->sq_buff) buff_push(pool, val->sq_buff);
++        val->sq_buff = buff_pop(pool, val->buff->size);
++        if (!val->sq_buff) return -1;
++        val->sq_buff->lock = val->buff->lock;
++        memcpy(val->sq_buff->data, val->buff->data, val->buff->lock);
++    }
++    if (!val->buff->lock) {
++        buff_push(pool, val->buff);
++        val->buff = 0;
++    }
++    return connect_hook(pool, val, &val->addr, &on_connect);
++}
++
++static int recv_auto_connect(struct poolhd *pool, struct eval *val, int type)
++{
++    if (type == POLLTIMEOUT) return finish_auto_connect(pool, val, true);
++    if (val->buff->lock >= ACCESS_HELLO_MAX) return finish_auto_connect(pool, val, true);
++    ssize_t n = recv(val->fd, val->buff->data + val->buff->lock,
++        ACCESS_HELLO_MAX - val->buff->lock, 0);
++    if (n < 0 && get_e() == EAGAIN) return 0;
++    if (n <= 0) return -1;
++    val->buff->lock += n;
++    val->recv_count += n;
++    if (!val->round_count) val->round_count = 1;
++    return finish_auto_connect(pool, val, false);
++}
++
++
++int connect_hook(struct poolhd *pool, struct eval *val,
+         const union sockaddr_u *dst, evcb_t next)
+ {
+-    if (!val->dp) {
++    if (params.auto_access && ntohs(dst->in.sin_port) == 443 && !val->auto_ready) {
++        val->auto_epoch = access_epoch();
++        val->addr = *dst;
++        if (!val->buff) {
++            val->buff = buff_pop(pool, ACCESS_HELLO_MAX);
++            if (!val->buff) return -1;
++            if (resp_error(val->fd, 0, val->flag) < 0) return -1;
++            val->auto_socks_replied = true;
++            val->cb = &recv_auto_connect;
++            set_timer(pool, val, ACCESS_HELLO_WAIT_MS);
++            return mod_etype(pool, val, POLLIN);
++        }
++        if (val->buff->size < ACCESS_HELLO_MAX) {
++            struct buffer *large = buff_pop(pool, ACCESS_HELLO_MAX);
++            if (!large || val->buff->lock > ACCESS_HELLO_MAX) return -1;
++            large->lock = val->buff->lock;
++            memcpy(large->data, val->buff->data, large->lock);
++            buff_push(pool, val->buff);
++            val->buff = large;
++        }
++        val->cb = &recv_auto_connect;
++        set_timer(pool, val, ACCESS_HELLO_WAIT_MS);
++        return finish_auto_connect(pool, val, false);
++    }
++    if (!val->dp && !params.auto_access) {
+         struct elem_i *e = cache_get(dst);
+         if (e) {
+             val->dp_mask = e->dp_mask;
+@@ -614,6 +705,12 @@
+         return -1;
+     }
+     val->dp = dp;
++
++    if (params.auto_access && val->auto_route_active) {
++        int result = create_conn(pool, val, &val->auto_route_addr, next);
++        if (!result) val->pair->addr = *dst;
++        return result;
++    }
+     
+     if ((dp->hosts || dp->proto) && !val->buff
+             && (params.delay_conn || dp->out_type)) {
+@@ -689,8 +786,9 @@
+         struct eval *remote, struct buffer *buff, ssize_t *n, bool *wait)
+ {
+     ssize_t sn = -1;
+-    int skip = remote->flag != FLAG_CONN; 
++    int skip = remote->flag != FLAG_CONN;
+     size_t off = buff->offset;
++    if (!skip && params.auto_access && remote->pair->auto_passthrough) skip = 1;
+     
+     if (!skip) {
+         struct eval *client = remote->pair;
+@@ -725,6 +823,14 @@
+         sender->round_sent = 0;
+         sender->part_sent = 0;
+     }
++    if (params.auto_access && remote->flag == FLAG_CONN && !remote->recv_count
++            && !sender->auto_passthrough && !*wait && off + sn >= (size_t)*n
++            && sender->sq_buff && sender->recv_count == sender->sq_buff->lock
++            && access_tls_replayable(sender->sq_buff->data, sender->sq_buff->lock)) {
++        remote->auto_wait_response = true;
++        remove_timer(pool, remote);
++        set_timer(pool, remote, ACCESS_RESPONSE_WAIT_MS);
++    }
+     return sn;
+ }
+ 
+@@ -744,6 +850,10 @@
+         return handle_err(pool, val, get_e());
+     }
+     val->recv_count += n;
++    if (val->auto_wait_response) {
++        val->auto_wait_response = false;
++        remove_timer(pool, val);
++    }
+     val->part_sent = 0;
+     buff->desync_initialized = false;
+     memset(&buff->desync_info, 0, sizeof(buff->desync_info));
+@@ -805,6 +915,12 @@
+             memcpy(val->sq_buff->data + val->sq_buff->lock - n, buff->data, n);
+         }
+     }
++    if (params.auto_access && val->flag != FLAG_CONN && val->pair
++            && val->pair->auto_wait_response && (!val->sq_buff
++                || !access_tls_replayable(val->sq_buff->data, val->sq_buff->lock))) {
++        val->pair->auto_wait_response = false;
++        remove_timer(pool, val->pair);
++    }
+     return n;
+ }
+ 
+--- a/extend.h
++++ b/extend.h
+@@ -25,6 +25,7 @@
+ int on_connerr(struct poolhd *pool, struct eval *val);
+ 
+ int on_timeout(struct poolhd *pool, struct eval *val);
++int on_auto_response_timeout(struct poolhd *pool, struct eval *val);
+ 
+ #ifdef __linux__
+ static int protect(int conn_fd, const char *path);

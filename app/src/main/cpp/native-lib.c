@@ -8,9 +8,71 @@
 
 #include "error.h"
 #include "main.h"
+#include "automatic_access.h"
 
 extern int server_fd;
 static int g_proxy_running = 0;
+static JavaVM *g_vm;
+static jclass g_access_controller;
+static jmethodID g_access_observer;
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
+    (void)reserved;
+    g_vm = vm;
+    return JNI_VERSION_1_6;
+}
+
+static void notify_access_host(uint64_t epoch, const char *host,
+        const char *original_ip, int port) {
+    JNIEnv *env = NULL;
+    if (!g_vm || !g_access_controller || !g_access_observer ||
+            (*g_vm)->GetEnv(g_vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK) return;
+    jstring jhost = (*env)->NewStringUTF(env, host);
+    jstring jip = (*env)->NewStringUTF(env, original_ip);
+    if (jhost && jip) (*env)->CallStaticVoidMethod(env, g_access_controller,
+        g_access_observer, (jlong)epoch, jhost, jip, (jint)port);
+    if (jhost) (*env)->DeleteLocalRef(env, jhost);
+    if (jip) (*env)->DeleteLocalRef(env, jip);
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+}
+
+static void prepare_access_observer(JNIEnv *env) {
+    if (!g_access_controller) {
+        jclass local = (*env)->FindClass(env,
+            "io/maffinet/android/core/access/AutomaticAccessController");
+        if (local) {
+            g_access_controller = (*env)->NewGlobalRef(env, local);
+            (*env)->DeleteLocalRef(env, local);
+        }
+        if (g_access_controller) g_access_observer = (*env)->GetStaticMethodID(env,
+            g_access_controller, "onNativeHostObserved", "(JLjava/lang/String;Ljava/lang/String;I)V");
+        if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    }
+    access_set_observer(g_access_observer ? &notify_access_host : NULL);
+}
+
+JNIEXPORT void JNICALL
+Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniSetAccessEpoch(
+        JNIEnv *env, jobject thiz, jlong epoch) {
+    (void)env; (void)thiz;
+    access_set_epoch(epoch > 0 ? (uint64_t)epoch : 0);
+}
+
+JNIEXPORT jboolean JNICALL
+Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniUpdateHostRoute(
+        JNIEnv *env, jobject thiz, jlong epoch, jstring host, jint port,
+        jstring ipv4, jint ttl_seconds) {
+    (void)thiz;
+    if (!host || epoch <= 0) return JNI_FALSE;
+    const char *name = (*env)->GetStringUTFChars(env, host, NULL);
+    if (!name) return JNI_FALSE;
+    const char *ip = ipv4 ? (*env)->GetStringUTFChars(env, ipv4, NULL) : NULL;
+    bool updated = (!ipv4 || ip) && access_update_route((uint64_t)epoch,
+        name, port, ip, ttl_seconds);
+    if (ip) (*env)->ReleaseStringUTFChars(env, ipv4, ip);
+    (*env)->ReleaseStringUTFChars(env, host, name);
+    return updated ? JNI_TRUE : JNI_FALSE;
+}
 
 struct params default_params = {
         .await_int = 10,
@@ -65,6 +127,7 @@ Java_io_maffinet_android_core_dpibypass_ByeDpiProxy_jniStartProxy(JNIEnv *env, _
     }
     
     LOG(LOG_S, "starting proxy with %d args", argc);
+    prepare_access_observer(env);
     reset_params();
     g_proxy_running = 1;
     optind = 1;

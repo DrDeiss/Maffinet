@@ -7,23 +7,31 @@ import io.maffinet.android.data.domains.DomainListRepository
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 
 sealed interface ByeDpiProxyPreferences {
-    val linkedInAlternativeRouteEnabled: Boolean
+    val automaticAccess: Boolean get() = false
 
     companion object {
-        fun fromSharedPreferences(preferences: SharedPreferences, context: Context): ByeDpiProxyPreferences =
-            when (preferences.getBoolean("byedpi_enable_cmd_settings", false)) {
+        fun fromSharedPreferences(preferences: SharedPreferences, context: Context): ByeDpiProxyPreferences {
+            if (MaffinetSettingsRepository(preferences).automaticAccessEnabled()) {
+                val (ip, port) = preferences.getProxyIpAndPort()
+                return ByeDpiAutomaticPreferences(io.maffinet.android.core.access.AutomaticAccessArguments.create(ip, port.toInt()))
+            }
+            return when (preferences.getBoolean("byedpi_enable_cmd_settings", false)) {
                 true -> ByeDpiProxyCmdPreferences(preferences, context)
                 false -> ByeDpiProxyUIPreferences(preferences, context)
             }
+        }
     }
+}
+
+class ByeDpiAutomaticPreferences(val args: Array<String>) : ByeDpiProxyPreferences {
+    override val automaticAccess = true
 }
 
 class ByeDpiProxyCmdPreferences(
     val args: Array<String>,
-    override val linkedInAlternativeRouteEnabled: Boolean = false,
 ) : ByeDpiProxyPreferences {
     constructor(preferences: SharedPreferences, context: Context) : this(
-        parseCmdToArguments(preferences, context), MaffinetSettingsRepository(preferences).linkedInAlternativeRouteEnabled()
+        parseCmdToArguments(preferences, context)
     )
 
     companion object {
@@ -35,8 +43,7 @@ class ByeDpiProxyCmdPreferences(
 
         /** Tests use production filtering, but always bind their own isolated listener. */
         fun fromCommand(command: String, context: Context, ip: String = "127.0.0.1", port: Int = 1082): ByeDpiProxyCmdPreferences {
-            return ByeDpiProxyCmdPreferences(ByeDpiArgumentCompiler.compile(command, filterConfiguration(context), ip, port.toString(), forceListener = true),
-                MaffinetSettingsRepository(context).linkedInAlternativeRouteEnabled())
+            return ByeDpiProxyCmdPreferences(ByeDpiArgumentCompiler.compile(command, filterConfiguration(context), ip, port.toString(), forceListener = true))
         }
     }
 }
@@ -53,16 +60,14 @@ private fun filterConfiguration(context: Context): ByeDpiFilterConfiguration {
 class ByeDpiProxyUIPreferences(
     val settings: UISettings = UISettings(),
     private val filter: ByeDpiFilterConfiguration? = null,
-    override val linkedInAlternativeRouteEnabled: Boolean = false,
 ) : ByeDpiProxyPreferences {
 
     constructor(preferences: SharedPreferences) : this(
-        UISettings.fromSharedPreferences(preferences), null, MaffinetSettingsRepository(preferences).linkedInAlternativeRouteEnabled()
+        UISettings.fromSharedPreferences(preferences), null
     )
 
     constructor(preferences: SharedPreferences, context: Context) : this(
-        UISettings.fromSharedPreferences(preferences), filterConfiguration(context),
-        MaffinetSettingsRepository(preferences).linkedInAlternativeRouteEnabled()
+        UISettings.fromSharedPreferences(preferences), filterConfiguration(context)
     )
 
     val uiargs: Array<String>

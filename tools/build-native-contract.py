@@ -19,13 +19,13 @@ spec = importlib.util.spec_from_file_location("prepare_byedpi", root / "tools/pr
 preparation = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(preparation)
 source = preparation.prepare(build / "byedpi-prepared")
-flags = ["-D_DEFAULT_SOURCE", "-std=c99", "-O1", "-I", str(source)]
+flags = ["-D_DEFAULT_SOURCE", "-std=c99", "-O1", "-pthread", "-I", str(source)]
 # Rename only the native CLI entry point; real parse_args remains unchanged.
 subprocess.run(["cc", *flags, "-Dmain=ciadpi_main", "-c", str(source / "main.c"),
                 "-o", str(build / "main.o")], check=True)
 # extend.c is included directly by the fixture to expose the static selector.
 sources = [source / name for name in
-           ("packets.c", "conev.c", "proxy.c", "desync.c", "mpool.c")]
+           ("packets.c", "conev.c", "proxy.c", "desync.c", "mpool.c", "automatic_access.c")]
 fixture = build / "native-contract"
 subprocess.run(["cc", *flags, str(root / "verification/native/native_contract.c"),
                 str(build / "main.o"), *(str(path) for path in sources),
@@ -61,3 +61,17 @@ for invalid in ("0", "60001", "20oops", ""):
     if result.returncode == 0:
         raise RuntimeError(f"Native parser accepted invalid group pacing {invalid!r}")
 print(f"Production native stream regressions: {len(stream_cases)} socket/parser cases + 4 invalid-value checks passed")
+
+access_fixture = build / "native-access-contract"
+subprocess.run(["cc", *flags, str(root / "verification/native/native_access_contract.c"),
+                str(build / "main.o"), *(str(path) for path in sources),
+                "-Wl,--wrap=send", "-Wl,--wrap=connect", "-o", str(access_fixture)], check=True)
+access_arguments = ["--auto-access", "-Kt", "-s2", "-r2", "--group-pacing=1", "-R1",
+                    "-At,r,s,c", "-Kt", "-R1", "-An", "-Kh", "-s1", "-R1", "-An"]
+access_cases = ("map", "route", "shared-ip", "probe", "partial", "tls-records", "timeout",
+                "oversize", "other-port", "plaintext", "early-data", "hello-retry",
+                "private-original", "ech", "empty-timeout", "upstream-error",
+                "silent-response", "server-eof", "late-application")
+for mode in access_cases:
+    subprocess.run([str(access_fixture), mode, "byedpi", *access_arguments], check=True, timeout=15)
+print(f"Production native Automatic Access regressions: {len(access_cases)} map/SOCKS/socket cases passed")

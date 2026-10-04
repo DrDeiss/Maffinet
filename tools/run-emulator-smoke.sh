@@ -54,6 +54,24 @@ cleanup() {
   set +e
   if [[ -n "$EMULATOR_PID" ]]; then
     timeout 15s "$ADB" -s "$ANDROID_SERIAL" logcat -d -v threadtime > "$REPORT_DIR/logcat.txt" 2>&1
+    # Engine traces distinguish initialization/quit waits from worker joins.
+    # run-as accesses only this debug APK's files, including on failed smoke.
+    for trace_name in hev-lifecycle.log hev-lifecycle.previous.log; do
+      timeout 10s "$ADB" -s "$ANDROID_SERIAL" exec-out run-as io.maffinet.android cat "files/$trace_name" > "$REPORT_DIR/$trace_name" 2> "$REPORT_DIR/$trace_name-pull.log"
+    done
+    if (( status != 0 )) && [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+      # Only this newly created, ephemeral CI emulator is eligible. debuggerd
+      # requires root; -b captures thread backtraces without a memory tombstone.
+      # Failure to obtain diagnostic access never changes the test result.
+      timeout 10s "$ADB" -s "$ANDROID_SERIAL" root > "$REPORT_DIR/native-backtrace-access.log" 2>&1
+      if timeout 10s "$ADB" -s "$ANDROID_SERIAL" wait-for-device >> "$REPORT_DIR/native-backtrace-access.log" 2>&1; then
+        local app_pid=""
+        app_pid="$(timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell pidof -s io.maffinet.android 2>> "$REPORT_DIR/native-backtrace-access.log" | tr -d '\r')"
+        if [[ "$app_pid" =~ ^[1-9][0-9]*$ ]]; then
+          timeout 10s "$ADB" -s "$ANDROID_SERIAL" shell debuggerd -b "$app_pid" > "$REPORT_DIR/native-backtrace.txt" 2>&1
+        fi
+      fi
+    fi
     timeout 10s "$ADB" -s "$ANDROID_SERIAL" exec-out screencap -p > "$REPORT_DIR/screenshots/final-screen.png" 2> "$REPORT_DIR/screencap.log"
     timeout 20s "$ADB" -s "$ANDROID_SERIAL" pull /sdcard/Android/data/io.maffinet.android/files/ui-smoke "$REPORT_DIR/screenshots/" > "$REPORT_DIR/screenshot-pull.log" 2>&1
     local screenshot_count=0

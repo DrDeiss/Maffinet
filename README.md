@@ -10,7 +10,7 @@ NOTICE and source provenance remain in the repository in both cases.
 
 ## Status and requirements
 
-Development version: **0.2.0-alpha**. [PLAN.md](PLAN.md) records implementation
+Development version: **0.3.0-alpha**. [PLAN.md](PLAN.md) records implementation
 phases and actual checks; [known limitations](docs/KNOWN_LIMITATIONS.md) documents
 release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
@@ -24,12 +24,13 @@ to pass before replacing the active strategy. HTTP success also requires the fir
 64KiB of a successful body, or its complete body when smaller. See
 [Android compatibility and LinkedIn investigation](docs/ANDROID36_AND_LINKEDIN.md).
 
-Strategies includes an optional **Alternative LinkedIn route**, disabled by default.
-It resolves LinkedIn's `gcp-lb.www.linkedin.com` endpoint at startup and routes only
-TLS traffic for `www.linkedin.com:443` there, preserving the original TLS hostname
-and ordinary strategy groups. The diagnostic route loaded LinkedIn's feed in its
-app and Chrome on the connected Android16 phone; the integrated build still needs
-CI and device validation.
+The current work introduces **Automatic Access** as the default connection mode:
+select applications on Home and connect. It combines a short TLS fallback chain,
+observed-host diagnostics, direct checks of selected/public Smart DNS and verified
+host routes. Unknown hostnames are eligible too; General/User remain manual-mode
+filters. LinkedIn is an initial route hint, rather than a separate product toggle.
+The implementation still needs CI and device validation. See
+[Automatic Access](docs/AUTOMATIC_ACCESS.md) for its exact scope and limitations.
 
 ## Interface
 
@@ -113,8 +114,9 @@ Android VpnService → TUN → HEV tun2socks → local SOCKS → ByeDPI → Inte
 Traffic is processed locally. Android VPN consent creates the local tunnel; this
 does not hide the public IP address. Routing packages through that tunnel and
 matching hostnames in ByeDPI are separate responsibilities. Default selective
-mode filters every TCP desync group by observable HTTP/TLS hostnames and forwards
-unselected traffic without desync. This native revision ignores host filters for
+manual mode filters every TCP desync group by observable HTTP/TLS hostnames and forwards
+unselected traffic without desync. Automatic Access discovers visible HTTPS hosts
+of the selected applications without a General allowlist. This native revision ignores host filters for
 UDP, so selective mode forwards UDP unchanged. Advanced host override retains
 unrestricted legacy behavior. IP-only and encrypted-hostname traffic may not match.
 

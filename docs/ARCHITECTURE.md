@@ -38,6 +38,23 @@ Migration snapshots existing mode preferences once and preserves `selected_apps`
 User hosts and engine preferences. Configuration changes remain locked while
 connection requests/resources or a strategy test are active.
 
+## Automatic Access
+
+The 2026-10-04 requirement makes Automatic Access the default Applications mode.
+Users select installed applications and connect. A bounded TLS fallback chain
+handles observable traffic without restricting it to General. Manual commands,
+Hosts filters and the isolated strategy tester remain available separately.
+
+The native TLS observer queues public hostname/port/original-address observations.
+One Kotlin worker checks a public credential-free response, then DNS/Smart DNS
+candidates when necessary. Every candidate preserves the original TLS identity
+and certificate checks. Verified exact-host routes have a TTL, network/policy
+scope and generation guard; JNI updates affect subsequent connections without
+restarting the VPN. Internal loopback probes bypass learned routes to measure
+the actual candidate. Account traffic and established TLS sessions are never
+replayed. See [Automatic Access](AUTOMATIC_ACCESS.md) for pending validation and
+the limits of local-only recovery.
+
 ## Explicit Android routing
 
 Only packages stored by the user in `selected_apps` are candidates for the VPN
@@ -68,7 +85,7 @@ The Hosts screen exposes the categories, User editor, document import/export and
 manual HTTPS import. The downloader bounds response size/time and rejects HTML,
 failed responses and redirects away from HTTPS. See [source policy](HOSTS_AND_DNS.md).
 
-`ByeDpiArgumentCompiler` injects a native `-H` whitelist in every selective desync
+In manual mode, `ByeDpiArgumentCompiler` injects a native `-H` whitelist in every selective desync
 group, constrains processing to TCP and adds an unchanged fallback for other
 hosts and UDP. This ByeDPI revision ignores hosts for UDP, so selective mode
 does not apply UDP desync. It is not configured with desktop winws arguments.

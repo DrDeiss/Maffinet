@@ -16,6 +16,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.maffinet.android.BuildConfig
 import io.maffinet.android.R
+import io.maffinet.android.core.access.AutomaticAccessController
+import io.maffinet.android.core.access.AutomaticAccessPhase
 import io.maffinet.android.core.connection.ModeConnectionState
 import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.core.dpibypass.StrategyTestManager
@@ -42,6 +44,8 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
     val telegramEnabled = remember(revision) { settings.telegramEnabled() }
     val selectedApps = remember(revision) { settings.manualApplications() }
     val dns = remember(revision) { settings.getString("custom_dns_preset", DnsPresets.DEFAULT) }
+    val automaticAccess = remember(revision) { settings.automaticAccessEnabled() }
+    val accessStatus by AutomaticAccessController.status.collectAsState()
     val locked = rememberConfigurationLocked()
     val active = vpnState in ACTIVE_STATES || telegramState in ACTIVE_STATES || settings.anyModeRequested()
     val connected = (!applicationsEnabled || vpnState == ModeConnectionState.Running) &&
@@ -77,6 +81,19 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
         ProductCard {
             ModeRow("Приложения", applicationsEnabled, locked, "applications-mode") { settings.setApplicationsEnabled(it) }
             Text("VPN / ByeDPI: ${stateLabel(vpnState)}", Modifier.testTag("vpn-status"))
+            if (automaticAccess && vpnState == ModeConnectionState.Running) {
+                Text(when (accessStatus.phase) {
+                    AutomaticAccessPhase.IDLE -> "Автоматический доступ запускается"
+                    AutomaticAccessPhase.OBSERVING -> "Автоматический доступ: ожидает подключения приложений"
+                    AutomaticAccessPhase.CHECKING -> "Автоматический доступ: проверяет соединение"
+                    AutomaticAccessPhase.ROUTE_APPLIED -> "Автоматический доступ: найден рабочий маршрут"
+                    AutomaticAccessPhase.UNRESOLVED -> "Для одного из доменов рабочий маршрут пока не найден"
+                }, Modifier.testTag("automatic-access-status"), style = MaterialTheme.typography.bodySmall,
+                    color = if (accessStatus.phase == AutomaticAccessPhase.UNRESOLVED)
+                        MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant)
+                if (accessStatus.appliedRoutes > 0) Text("Проверенных маршрутов: ${accessStatus.appliedRoutes}",
+                    style = MaterialTheme.typography.bodySmall)
+            }
             ProductSettingLink("Выбрать приложения", "Выбрано: ${selectedApps.size}", { showApps = true }, !locked)
             ModeRow("Telegram", telegramEnabled, locked, "telegram-mode") { settings.setTelegramEnabled(it) }
             Text("Telegram-прокси: ${stateLabel(telegramState)}", Modifier.testTag("telegram-status"))
@@ -87,8 +104,8 @@ fun HomeScreen(vpnState: ModeConnectionState, telegramState: ModeConnectionState
         ProductSettingLink("DNS", DnsCatalog.selectionLabel(dns), { showDns = true }, !locked)
         Text("DNS применяется к VPN для выбранных приложений.", style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant)
-        ProductSettingLink("Стратегия", StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
-        ProductSettingLink("Hosts", "Встроенный список и ваши домены", { onNavigate(9) })
+        ProductSettingLink("Режим доступа", if (automaticAccess) "Автоматически" else StrategyTestManager.getActiveStrategyName(context), { onNavigate(2) })
+        ProductSettingLink("Hosts", if (automaticAccess) "Домены для ручного режима и импорта" else "Встроенный список и ваши домены", { onNavigate(9) })
         TextButton(onBackground, Modifier.fillMaxWidth(), enabled = !StrategyTestManager.isTesting) { Text("Работать в фоне и выйти") }
     }
     MaffinetAppsSheet(showApps, { showApps = false }, R.drawable.ic_settings, "Выбрать приложения",

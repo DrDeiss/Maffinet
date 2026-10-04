@@ -35,23 +35,20 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   check does not prove a complete large download, authentication, API/media
   delivery or every feature of an application. The General base and explicit
   checking addresses are initial values and require maintenance.
-- **Alternative LinkedIn route:** the Strategies option is off by default and
-  can be changed only while the connection and Auto checks are stopped. It adds
-  a TLS:443 group for `www.linkedin.com` before the original normal strategy arguments;
-  VPN package routing remains limited to selected applications. Its official
-  endpoint `gcp-lb.www.linkedin.com` is resolved to IPv4 on the proxy worker at
-  startup, without a fixed production IP. DNS failure stops startup explicitly;
-  a STOP received during DNS prevents a late JNI start. A diagnostic command
-  worked in the browser and native LinkedIn app on the recorded OnePlus/network,
-  but the APK with the product toggle still requires device verification. Other
-  networks and all LinkedIn features are not certified by that result. Native
-  scope validation must separately cover `--group-pacing=20`, which replaces the
-  profile's global `-Z`/`-W20`, and `--group-redirect`, which avoids enabling the
-  global connection delay of legacy `-C`. Existing user global flags are preserved
-  in the original arguments. Route selection needs the first TLS bytes/SNI before connect
-  on port 443; other ports do not receive that delay. Initial timing on port 443
-  may still change for a hostname that ultimately uses its original destination;
-  unchanged arguments do not prove unchanged timing.
+- **Automatic Access:** the default mode now being implemented uses local TLS
+  strategies, bounded public Smart DNS checks and verified exact-host routes for
+  selected applications. It includes observable names outside General. There is
+  no per-service product switch; LinkedIn is an initial endpoint hint in a data
+  registry. The successful manual diagnostic on the OnePlus/network does not
+  certify the new automatic implementation; its integrated checks are pending.
+  Only new connections receive a learned route. Established TLS sessions and
+  application requests are never migrated or replayed. An application's own retry
+  can therefore be required after its first failed connection. The public `/`
+  probe carries no account data and does not prove every authenticated API works.
+  Route decisions expire and are scoped to the physical network and configuration.
+  DNS/DPI cannot guarantee recovery from arbitrary IP bans, account restrictions,
+  outages or geographic restrictions without a provider-supported alternate path.
+  ECH, QUIC and IPv6-only destinations are outside this first increment.
 - **Filtering:** observable supported hostnames can match ByeDPI domain lists;
   IP-only, encrypted-hostname and some UDP traffic may not. Package routing and
   domain filtering have different scopes.
@@ -67,7 +64,7 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   application explicitly; legacy service flags do not populate this selection.
 - **Probe history:** matrices show saved HTTP/TLS results for the tested hosts and
   independently configured checking addresses, not continuous availability.
-  Changing that configuration or the LinkedIn profile invalidates measured
+  Changing that configuration or the automatic access policy invalidates measured
   history. The body-check policy also invalidates older headers-only evidence;
   body failures retain their HTTP status and error. HTTP protection/rate limits
   can cause false failures.

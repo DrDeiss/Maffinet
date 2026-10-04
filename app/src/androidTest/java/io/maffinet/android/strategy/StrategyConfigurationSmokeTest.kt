@@ -37,7 +37,10 @@ class StrategyConfigurationSmokeTest {
     private val settings by lazy { MaffinetSettingsRepository(context) }
     private val probes by lazy { ProbeTargetRepository(context) }
 
-    @Before fun prepare() { assertTrue(directory.mkdirs()) }
+    @Before fun prepare() {
+        assertTrue(directory.mkdirs())
+        settings.setAutomaticAccessEnabled(false) // Existing strategy cases exercise expert/manual arguments.
+    }
 
     @After fun restore() {
         context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE).edit().clear().commit()
@@ -60,27 +63,27 @@ class StrategyConfigurationSmokeTest {
         assertEquals("App/profile/DNS/Telegram choices cannot change the SOCKS candidate check", before, probes.snapshot().fingerprint)
     }
 
-    @Test fun linkedInRouteWriteIsRejectedDuringStrategyGateAndAllowedAfterRelease() {
+    @Test fun automaticAccessWriteIsRejectedDuringStrategyGateAndAllowedAfterRelease() {
         val preferences = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
         val snapshot = preferences.all.mapValues { (_, value) -> if (value is Set<*>) value.toSet() else value }
         var session: ServiceManager.StrategyTestSession? = null
         try {
             settings.setRequested(false, false)
-            settings.setLinkedInAlternativeRouteEnabled(false)
+            settings.setAutomaticAccessEnabled(false)
             val heldSession = ServiceManager.beginStrategyTest(context)
             session = heldSession
             assertFalse("The write must be blocked even without a desired connection", settings.anyModeRequested())
             assertTrue(ServiceManager.isStrategyTestInProgress)
             assertTrue(ConnectionCoordinator.isConfigurationLocked())
-            assertThrows(IllegalStateException::class.java) { settings.setLinkedInAlternativeRouteEnabled(true) }
-            assertFalse("A rejected write must preserve the saved route", settings.linkedInAlternativeRouteEnabled())
+            assertThrows(IllegalStateException::class.java) { settings.setAutomaticAccessEnabled(true) }
+            assertFalse("A rejected write must preserve the saved mode", settings.automaticAccessEnabled())
 
             ServiceManager.finishStrategyTest(context, heldSession, nativeClean = true)
             session = null
             assertFalse(ServiceManager.isStrategyTestInProgress)
             assertFalse(ConnectionCoordinator.isConfigurationLocked())
-            settings.setLinkedInAlternativeRouteEnabled(true)
-            assertTrue("The route can change after the gate releases", settings.linkedInAlternativeRouteEnabled())
+            settings.setAutomaticAccessEnabled(true)
+            assertTrue("The mode can change after the gate releases", settings.automaticAccessEnabled())
         } finally {
             try { session?.let { ServiceManager.finishStrategyTest(context, it, nativeClean = true) } }
             finally {
