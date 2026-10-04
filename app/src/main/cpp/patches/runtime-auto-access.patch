@@ -102,7 +102,36 @@
  
  
  static int set_timeout(int fd, unsigned int s)
-@@ -345,13 +346,24 @@
+@@ -195,6 +196,19 @@
+ }
+ 
+ 
++static int ensure_auto_capacity(struct buffer **buffer, size_t capacity)
++{
++    if (!*buffer) return -1;
++    if ((*buffer)->size >= capacity) return 0;
++    /* buff_pop may return a smaller pooled buffer. Keep queued bytes and the
++     * original allocation on ENOMEM; its owning connection will clean up. */
++    struct buffer *grown = realloc(*buffer, sizeof(**buffer) + capacity);
++    if (!grown) return -1;
++    grown->size = capacity;
++    *buffer = grown;
++    return 0;
++}
++
+ static int reconnect(struct poolhd *pool, struct eval *val)
+ {
+     assert(val->flag == FLAG_CONN);
+@@ -204,6 +218,8 @@
+         if (!client->buff) {
+             client->buff = buff_pop(pool, client->sq_buff->size);
+         }
++        if (params.auto_access && ensure_auto_capacity(&client->buff,
++                client->sq_buff->lock) < 0) return -1;
+         client->buff->lock = client->sq_buff->lock;
+         memcpy(client->buff->data, client->sq_buff->data, client->buff->lock);
+         
+@@ -345,13 +361,24 @@
  int on_trigger(int type, struct poolhd *pool, struct eval *val, bool client_alive)
  {
      struct eval *lav = val->pair;
@@ -128,20 +157,31 @@
      if (!cache) {
          return -1;
      }
-@@ -441,6 +453,12 @@
-     }
-     set_timer(pool, val, params.ptimeout);
+@@ -443,6 +470,12 @@
      return 0;
-+}
-+
+ }
+ 
 +int on_auto_response_timeout(struct poolhd *pool, struct eval *val)
 +{
 +    val->auto_wait_response = false;
 +    return on_trigger(DETECT_TORST, pool, val, true);
- }
++}
++
  
- 
-@@ -596,11 +614,84 @@
+ int on_connerr(struct poolhd *pool, struct eval *val)
+ {
+@@ -453,6 +486,10 @@
+ static int on_response(struct poolhd *pool, struct eval *val, 
+         const char *resp, ssize_t sn)
+ {
++    /* A short first read is not evidence of a TLS error. Auto mode forwards
++     * this partial response and releases the saved Hello, rather than replaying
++     * a connection which has already started a potentially valid response. */
++    if (params.auto_access && sn < 6) return -1;
+     struct desync_params *dp = params.dp;
+     
+     char *req = val->pair->sq_buff->data;
+@@ -596,11 +633,80 @@
      return connect_hook(pool, val, &val->addr, &on_connect);
  }
  
@@ -171,7 +211,7 @@
 +    if (params.auto_reconnect && val->buff->lock) {
 +        if (val->sq_buff) buff_push(pool, val->sq_buff);
 +        val->sq_buff = buff_pop(pool, val->buff->size);
-+        if (!val->sq_buff) return -1;
++        if (ensure_auto_capacity(&val->sq_buff, val->buff->lock) < 0) return -1;
 +        val->sq_buff->lock = val->buff->lock;
 +        memcpy(val->sq_buff->data, val->buff->data, val->buff->lock);
 +    }
@@ -206,7 +246,7 @@
 +        val->addr = *dst;
 +        if (!val->buff) {
 +            val->buff = buff_pop(pool, ACCESS_HELLO_MAX);
-+            if (!val->buff) return -1;
++            if (ensure_auto_capacity(&val->buff, ACCESS_HELLO_MAX) < 0) return -1;
 +            if (resp_error(val->fd, 0, val->flag) < 0) return -1;
 +            val->auto_socks_replied = true;
 +            val->cb = &recv_auto_connect;
@@ -214,12 +254,8 @@
 +            return mod_etype(pool, val, POLLIN);
 +        }
 +        if (val->buff->size < ACCESS_HELLO_MAX) {
-+            struct buffer *large = buff_pop(pool, ACCESS_HELLO_MAX);
-+            if (!large || val->buff->lock > ACCESS_HELLO_MAX) return -1;
-+            large->lock = val->buff->lock;
-+            memcpy(large->data, val->buff->data, large->lock);
-+            buff_push(pool, val->buff);
-+            val->buff = large;
++            if (val->buff->lock > ACCESS_HELLO_MAX
++                    || ensure_auto_capacity(&val->buff, ACCESS_HELLO_MAX) < 0) return -1;
 +        }
 +        val->cb = &recv_auto_connect;
 +        set_timer(pool, val, ACCESS_HELLO_WAIT_MS);
@@ -229,7 +265,7 @@
          struct elem_i *e = cache_get(dst);
          if (e) {
              val->dp_mask = e->dp_mask;
-@@ -614,6 +705,12 @@
+@@ -614,6 +720,12 @@
          return -1;
      }
      val->dp = dp;
@@ -242,7 +278,7 @@
      
      if ((dp->hosts || dp->proto) && !val->buff
              && (params.delay_conn || dp->out_type)) {
-@@ -689,8 +786,9 @@
+@@ -689,8 +801,9 @@
          struct eval *remote, struct buffer *buff, ssize_t *n, bool *wait)
  {
      ssize_t sn = -1;
@@ -253,7 +289,7 @@
      
      if (!skip) {
          struct eval *client = remote->pair;
-@@ -725,6 +823,14 @@
+@@ -725,6 +838,14 @@
          sender->round_sent = 0;
          sender->part_sent = 0;
      }
@@ -268,7 +304,7 @@
      return sn;
  }
  
-@@ -744,6 +850,10 @@
+@@ -744,6 +865,10 @@
          return handle_err(pool, val, get_e());
      }
      val->recv_count += n;
@@ -279,7 +315,7 @@
      val->part_sent = 0;
      buff->desync_initialized = false;
      memset(&buff->desync_info, 0, sizeof(buff->desync_info));
-@@ -805,6 +915,12 @@
+@@ -805,6 +930,12 @@
              memcpy(val->sq_buff->data + val->sq_buff->lock - n, buff->data, n);
          }
      }

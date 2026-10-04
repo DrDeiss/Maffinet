@@ -10,6 +10,7 @@ import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.strategy.ServiceConnectivityResult
+import io.maffinet.android.core.strategy.DefaultStrategyCatalog
 import io.maffinet.android.core.strategy.StrategyEvaluation
 import io.maffinet.android.core.strategy.TargetConnectivityResult
 import io.maffinet.android.data.domains.DomainListRepository
@@ -128,6 +129,56 @@ class StrategyConfigurationSmokeTest {
         val targetFingerprint = probes.snapshot().fingerprint
         settings.setHostFilterOverride(true)
         assertNotEquals(targetFingerprint, probes.snapshot().fingerprint)
+    }
+
+    @Test fun persistedManualMatrixSurvivesAccessModeChangesButNotChangedProbeInputs() {
+        settings.setRequested(false, false)
+        settings.setAutomaticAccessEnabled(true)
+        assertTrue(probes.save("https://example.com").isValid)
+        val fingerprint = probes.snapshot().fingerprint
+        val command = DefaultStrategyCatalog.commands.first()
+        val result = StrategyEvaluation(0, command, listOf(ServiceConnectivityResult("probe_0", "example.com",
+            listOf(TargetConnectivityResult("https://example.com", true, 12, httpStatus = 200)))))
+        val store = StrategyMatrixStore(context)
+        store.save(fingerprint, listOf(result))
+        StrategyTestManager.init(context)
+
+        for (automatic in listOf(false, true)) {
+            settings.setAutomaticAccessEnabled(automatic)
+            assertEquals(fingerprint, probes.snapshot().fingerprint)
+            StrategyTestManager.refreshConfiguration(context)
+            assertEquals(result, StrategyTestManager.matrixResults[command])
+            assertFalse(StrategyTestManager.hasStaleResults)
+            // Process initialization must also retain the same persisted evidence.
+            StrategyTestManager.init(context)
+            assertEquals(result, StrategyTestManager.matrixResults[command])
+            assertEquals(listOf(result), store.load()!!.evaluations)
+        }
+
+        // Applying a checked manual command switches Auto off, and must keep its row.
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            StrategyTestManager.applyStrategy(context, 1, command)
+        }
+        assertFalse(settings.automaticAccessEnabled())
+        StrategyTestManager.refreshConfiguration(context)
+        assertEquals(result, StrategyTestManager.matrixResults[command])
+        assertFalse(StrategyTestManager.hasStaleResults)
+
+        assertTrue(DomainListRepository(context).saveUserDomains("changed-probe.example").isValid)
+        val changedHostsFingerprint = probes.snapshot().fingerprint
+        assertNotEquals(fingerprint, changedHostsFingerprint)
+        StrategyTestManager.refreshConfiguration(context)
+        assertTrue(StrategyTestManager.matrixResults.isEmpty())
+        assertTrue(StrategyTestManager.hasStaleResults)
+
+        store.save(changedHostsFingerprint, listOf(result))
+        StrategyTestManager.init(context)
+        assertEquals(result, StrategyTestManager.matrixResults[command])
+        assertTrue(probes.save("https://example.com/changed").isValid)
+        assertNotEquals(changedHostsFingerprint, probes.snapshot().fingerprint)
+        StrategyTestManager.init(context)
+        assertTrue(StrategyTestManager.matrixResults.isEmpty())
+        assertTrue(StrategyTestManager.hasStaleResults)
     }
 
     @Test fun deletedCandidateCannotReappearOrBeAppliedAndPreservesRemainingEvidence() {

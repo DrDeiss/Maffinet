@@ -126,7 +126,7 @@ class MaffinetUiSmokeTest {
         saveScreenshot("17-hosts-general")
         compose.onNodeWithText("Скрыть General").performScrollTo().performClick()
 
-        navigate("Стратегии", "Auto strategy")
+        navigate("Стратегии", "Автоматический доступ")
         compose.onNodeWithText("Проверить стратегии").performScrollTo().assertIsDisplayed()
         saveScreenshot("05-strategies")
 

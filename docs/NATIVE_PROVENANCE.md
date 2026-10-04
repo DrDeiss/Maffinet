@@ -130,13 +130,24 @@ records, including 0-RTT, never replay. After sending a complete replayable Hell
 two seconds without any peer TLS bytes advances the fallback chain. First peer
 data or later client application bytes cancel this automatic response timer.
 
-The 19 automatic Linux map/SOCKS/socket cases cover unknown host routing, a
+The 21 automatic Linux map/SOCKS/socket cases cover unknown host routing, a
 second hostname on the same IP, probe bypass, partial/multiple TLS records,
 bounded time/size, other-port server-first behavior, epoch/TTL and public-address
 guards, ECH, absent/duplicate SOCKS replies, safe Hello retries, real server EOF
 and ACKed-but-silent TLS, and cancellation/no replay after application bytes.
-Local clean patch preparation and Python syntax checks passed; compilation and
-execution of these new automatic cases remain pending the next CI snapshot.
+CI run [37198262561](https://github.com/DrDeiss/Maffinet/actions/runs/37198262561),
+commit `7659adf6ea0a40e960d846ca645f4d0165c12960`, passed the first 19 automatic
+cases, 12 streaming cases, four invalid-value checks and seven native-parser JVM
+tests, including the actual production automatic argument chain. The additional
+pooled-buffer case sends an 8 KiB Hello through reused 4 KiB buffers, pacing,
+route lookup and fallback. Automatic collection/replay explicitly checks actual
+buffer capacity and grows it without losing queued content or the allocation on
+ENOMEM. Local clean preparation/Python checks passed; this additional case and
+capacity fix await the next CI snapshot. A further partial-response case forwards
+the first server TLS bytes in two reads without a false `-As` retry. Automatic
+mode does not classify a first read shorter than the six-byte ServerHello prefix
+as a TLS failure; forwarding that partial response releases the saved Hello and
+prevents later replay of a connection which has already returned peer bytes.
 
 The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
 published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.

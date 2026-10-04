@@ -54,13 +54,11 @@ class ProbeTargetsTest {
         assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s2")))
     }
 
-    @Test fun automaticAndManualModesCannotReusePreviousMatrixEvidence() {
-        val urls = listOf("https://example.com")
-        val candidates = listOf("-o1", "-s1")
-        val automatic = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false, candidates = candidates)
-        val manual = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false,
-            candidates = candidates, automaticAccessEnabled = false)
-        assertNotEquals(automatic, manual)
-        assertEquals(fingerprint(), automatic)
+    @Test fun manualCandidateAndDomainOrderChangesPreserveOrInvalidateTheActualProbeInputs() {
+        assertEquals(fingerprint(active = listOf("example.com", "custom.org")),
+            fingerprint(active = listOf("custom.org", "example.com")))
+        // Candidate order determines tie-breaking and each row's stored index.
+        assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s1", "-o1")))
+        assertNotEquals(fingerprint(), fingerprint(hosts = "custom.org", mode = "blacklist"))
     }
 }

@@ -62,7 +62,7 @@ static int route_listener(void)
     return fd;
 }
 
-static struct tunnel pending_socks(bool probe, bool other_port, bool private_original)
+static struct tunnel pending_socks(bool probe, bool other_port, bool private_original, bool pooled_buffer)
 {
     struct tunnel t = tunnel_open();
     struct eval *old = t.client->pair;
@@ -83,6 +83,12 @@ static struct tunnel pending_socks(bool probe, bool other_port, bool private_ori
     REQUIRE(on_request(t.pool, t.client, POLLIN) == 0);
     unsigned char auth[2]; read_exact(t.tester, auth, sizeof(auth));
     REQUIRE(auth[0] == 5 && auth[1] == 0 && t.client->auto_probe == probe);
+    if (pooled_buffer) {
+        struct buffer *small = calloc(1, sizeof(*small) + 4096);
+        REQUIRE(small != NULL);
+        small->size = 4096;
+        buff_push(t.pool, small);
+    }
     unsigned char request[] = {5, 1, 0, 1, 93, 184, 216, 34, 1, 0xbb};
     if (private_original) { request[4] = 127; request[5] = request[6] = 0; request[7] = 1; }
     if (other_port) put16(request + 8, original_port);
@@ -93,6 +99,7 @@ static struct tunnel pending_socks(bool probe, bool other_port, bool private_ori
         unsigned char reply[10]; read_exact(t.tester, reply, sizeof(reply));
         REQUIRE(reply[0] == 5 && reply[1] == 0);
         REQUIRE(!t.client->pair && t.client->buff && t.client->tv_ms);
+        if (pooled_buffer) REQUIRE(t.client->buff->size >= ACCESS_HELLO_MAX);
         REQUIRE(connect_count == 0);
     }
     return t;
@@ -190,11 +197,21 @@ int main(int argc, char **argv)
         bool silent_response = !strcmp(mode, "silent-response");
         bool server_eof = !strcmp(mode, "server-eof");
         bool late_application = !strcmp(mode, "late-application");
+        bool pooled_buffer = !strcmp(mode, "pooled-buffer");
+        bool fragmented_response = !strcmp(mode, "fragmented-response");
         const char *host = second_host ? "second-shared-ip.example" : "unlisted.example";
         REQUIRE(access_update_route(77, "unlisted.example", 443, "93.184.216.35", 10));
         int alternate = route_listener();
-        struct tunnel t = pending_socks(probe, other, private_original);
-        unsigned char original[1796], wire[4096];
+        struct tunnel t = pending_socks(probe, other, private_original, pooled_buffer);
+        if (pooled_buffer) {
+            /* A second small allocation must also be grown before retaining
+             * the full raw handshake for fallback/replay. */
+            struct buffer *small = calloc(1, sizeof(*small) + 4096);
+            REQUIRE(small != NULL); small->size = 4096;
+            buff_push(t.pool, small);
+        }
+        size_t hello_size = pooled_buffer ? 8192 : 1796;
+        unsigned char original[hello_size], wire[16384];
         hello(original, sizeof(original), 1420, host);
         size_t sent_size = sizeof(original);
         memcpy(wire, original, sent_size);
@@ -254,6 +271,7 @@ int main(int argc, char **argv)
                 if (timeout) { expire_collection(&t); sent_size = 100; }
                 else collect(&t, wire + 100, sent_size - 100);
             } else collect(&t, wire, sent_size);
+            if (pooled_buffer) REQUIRE(t.client->sq_buff && t.client->sq_buff->size >= sent_size);
             bool routed = !probe && !timeout && !oversize && !plaintext && !second_host && !private_original && !ech;
             REQUIRE(t.client->pair && selected_address == (routed ? 35 : private_original ? 1 : 34));
             REQUIRE(observed == ((!probe && !timeout && !oversize && !plaintext && !private_original && !ech) ? 1 : 0));
@@ -287,7 +305,7 @@ int main(int argc, char **argv)
                 int before = connect_count;
                 REQUIRE(on_trigger(DETECT_TORST, t.pool, t.client->pair, true) == -1);
                 REQUIRE(connect_count == before && cache_get(&key) == 0);
-            } else if (retry || silent_response || server_eof) {
+            } else if (retry || silent_response || server_eof || pooled_buffer) {
                 REQUIRE(t.client->pair->auto_wait_response && t.client->pair->tv_ms);
                 if (silent_response) {
                     /* Backend has read and TCP-ACKed every ClientHello byte,
@@ -301,12 +319,37 @@ int main(int argc, char **argv)
                     close(t.backend); t.backend = -1;
                     ready(t.client->pair->fd, 0);
                     REQUIRE(on_tunnel(t.pool, t.client->pair, POLLIN) == 0);
-                } else REQUIRE(on_trigger(DETECT_TORST, t.pool, t.client->pair, true) == 0);
+                } else {
+                    if (pooled_buffer) {
+                        struct buffer *small = calloc(1, sizeof(*small) + 4096);
+                        REQUIRE(small != NULL); small->size = 4096;
+                        buff_push(t.pool, small);
+                    }
+                    REQUIRE(on_trigger(DETECT_TORST, t.pool, t.client->pair, true) == 0);
+                }
                 close(t.backend);
                 t.backend = accept_local(routed ? alternate : t.backend_listener);
                 drive_pending(&t);
                 receive_hello(&t, original, sizeof(original), 1);
                 REQUIRE(observed == 1 && cache_get(&key) == 0 && connect_count == 2);
+            } else if (fragmented_response) {
+                const unsigned char response[] = {0x16, 3, 3, 0, 1, 2};
+                unsigned char received[sizeof(response)];
+                int before = connect_count;
+                write_all(t.backend, response, 2);
+                ready(t.client->pair->fd, 0);
+                REQUIRE(on_tunnel(t.pool, t.client->pair, POLLIN) == 0);
+                read_exact(t.tester, received, 2);
+                REQUIRE(connect_count == before && !t.client->pair->auto_wait_response);
+                REQUIRE(!t.client->sq_buff);
+                write_all(t.backend, response + 2, sizeof(response) - 2);
+                ready(t.client->pair->fd, 0);
+                REQUIRE(on_tunnel(t.pool, t.client->pair, POLLIN) == 0);
+                read_exact(t.tester, received + 2, sizeof(response) - 2);
+                REQUIRE(!memcmp(received, response, sizeof(response)) && connect_count == before);
+                encrypted_tail(&t);
+                REQUIRE(on_trigger(DETECT_TORST, t.pool, t.client->pair, true) == -1);
+                REQUIRE(connect_count == before);
             } else if (late_application) {
                 REQUIRE(t.client->pair->auto_wait_response && t.client->pair->tv_ms);
                 const unsigned char app[] = {0x17, 3, 3, 0, 4, 1, 2, 3, 4};

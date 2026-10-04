@@ -38,7 +38,7 @@ object HostAccessRecovery {
         if (!available()) return interrupted()
         val direct = probe(observation.host, observation.port, observation.originalIp, remaining())
         if (!isCurrent()) return HostAccessRecoveryResult.Superseded
-        if (direct.directReachable) return HostAccessRecoveryResult.Direct
+        if (direct.directReachable && remaining() > 0) return HostAccessRecoveryResult.Direct
 
         // A deliberately configured local resolver is allowed; returned route
         // destinations still have to be public unicast addresses.
@@ -49,8 +49,10 @@ object HostAccessRecovery {
             sources += hint.endpointHost to null
             publicResolvers.firstOrNull()?.let { sources += hint.endpointHost to it }
         }
-        sources += observation.host to null
         publicResolvers.forEach { sources += observation.host to it }
+        // The observed address already came from the app's DNS. Prefer a selected
+        // or Smart DNS answer before spending the budget on another system CDN IP.
+        sources += observation.host to null
 
         val seen = hashSetOf(observation.originalIp)
         val extraAnswers = mutableListOf<String>()
@@ -60,7 +62,7 @@ object HostAccessRecovery {
             if (!available() || attempted >= HostAccessPolicy.MAX_CANDIDATE_IPS) return null
             attempted++
             val result = probe(observation.host, observation.port, ip, remaining())
-            return if (isCurrent() && result.acceptsRoute) HostAccessRecoveryResult.Route(ip) else null
+            return if (isCurrent() && remaining() > 0 && result.acceptsRoute) HostAccessRecoveryResult.Route(ip) else null
         }
 
         // Try one answer per source first so a large system/CDN answer cannot

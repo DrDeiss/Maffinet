@@ -71,7 +71,8 @@ access_arguments = ["--auto-access", "-Kt", "-s2", "-r2", "--group-pacing=1", "-
 access_cases = ("map", "route", "shared-ip", "probe", "partial", "tls-records", "timeout",
                 "oversize", "other-port", "plaintext", "early-data", "hello-retry",
                 "private-original", "ech", "empty-timeout", "upstream-error",
-                "silent-response", "server-eof", "late-application")
+                "silent-response", "server-eof", "late-application", "pooled-buffer",
+                "fragmented-response")
 for mode in access_cases:
     subprocess.run([str(access_fixture), mode, "byedpi", *access_arguments], check=True, timeout=15)
 print(f"Production native Automatic Access regressions: {len(access_cases)} map/SOCKS/socket cases passed")

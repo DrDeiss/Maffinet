@@ -1,9 +1,6 @@
 package io.maffinet.android.core.strategy
 
 import io.maffinet.android.core.domains.DomainList
-import io.maffinet.android.core.access.HostAccessPolicy
-import io.maffinet.android.core.access.RouteHintRegistry
-import io.maffinet.android.core.access.AutomaticAccessArguments
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Locale
@@ -49,7 +46,6 @@ object ProbeConfigurationFingerprint {
         urls: List<String>, lists: List<DomainList>, activeDomains: List<String>,
         hostFilterOverride: Boolean, advancedHostsMode: String = "disable", advancedHosts: String = "",
         candidates: List<String> = DefaultStrategyCatalog.commands,
-        automaticAccessEnabled: Boolean = true,
     ): String {
         val digest = MessageDigest.getInstance("SHA-256")
         fun add(value: String) {
@@ -57,11 +53,9 @@ object ProbeConfigurationFingerprint {
             digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8))
             digest.update(bytes)
         }
-        add("maffinet-http-probes-v3-body64k")
-        add(HostAccessPolicy.VERSION)
-        add(RouteHintRegistry.VERSION)
-        add(AutomaticAccessArguments.POLICY_VERSION)
-        add(automaticAccessEnabled.toString())
+        // StrategyTester compiles these manual candidates in either application
+        // mode. Automatic Access has its own independent policy/session cache.
+        add("maffinet-http-probes-v4-manual-body64k")
         urls.forEach(::add)
         add("lists")
         lists.sortedBy { it.id }.forEach { list ->

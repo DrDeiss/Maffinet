@@ -28,6 +28,7 @@ kotlin {
                 "io/maffinet/android/core/access/HostAccessDecisionCache.kt",
                 "io/maffinet/android/core/access/HostAccessRecovery.kt",
                 "io/maffinet/android/core/access/HostAccessWorkQueue.kt",
+                "io/maffinet/android/core/access/AccessSessionLifecycle.kt",
                 "io/maffinet/android/core/access/AutomaticAccessArguments.kt",
                 "io/maffinet/android/core/access/AutomaticAccessStatus.kt",
                 "io/maffinet/android/core/access/DnsProbeResolver.kt",

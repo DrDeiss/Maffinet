@@ -6,38 +6,41 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.SystemClock
 import io.maffinet.android.core.debug.AppDebugManager as Log
 import io.maffinet.android.core.dns.DnsCatalog
 import io.maffinet.android.core.dpibypass.ByeDpiProxy
 import io.maffinet.android.data.settings.MaffinetSettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.net.Inet4Address
 import java.io.IOException
+import java.net.Inet4Address
 import java.security.MessageDigest
 import java.util.concurrent.Executors
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Learns from public TLS hosts actually observed in the selected applications.
- * Initial observations trigger a bounded public GET, because the native engine
- * can see handshake failures but cannot diagnose a stalled encrypted response.
- * No original application request, credentials or TLS session is replayed.
+ * Initial observations trigger a bounded public GET: encrypted response stalls
+ * cannot be diagnosed by native handshake detection. Application payloads and
+ * credentials are never replayed. Network monitoring continues while work is idle.
  */
 object AutomaticAccessController {
     private const val TAG = "AutomaticAccess"
+    private const val MONITOR_INTERVAL_MS = 500L
     private val lock = Any()
-    private val epochs = AtomicLong()
-    private val cache = HostAccessDecisionCache()
+    private val lifecycle = AccessSessionLifecycle()
+    private val cache = HostAccessDecisionCache(clockMs = { monotonicMs() })
     private val workerDispatcher by lazy {
         Executors.newSingleThreadExecutor { task ->
             Thread(task, "Maffinet-AutomaticAccess").apply { isDaemon = true }
@@ -45,9 +48,9 @@ object AutomaticAccessController {
     }
     private val mutableStatus = MutableStateFlow(AutomaticAccessStatus())
     val status: StateFlow<AutomaticAccessStatus> = mutableStatus.asStateFlow()
-    val currentEpoch: Long get() = epochs.get()
+    val currentEpoch: Long get() = lifecycle.currentEpoch
+    private var connection: ConnectionRun? = null
     private var active: Session? = null
-    private var preparedEpoch: Long? = null
 
     private data class NetworkSnapshot(
         val network: Network,
@@ -56,15 +59,21 @@ object AutomaticAccessController {
         val resolvers: List<String>,
     )
 
-    private class Session(
-        val epoch: Long,
+    /** Lives until proxy STOP. Losing a physical network only replaces its Session. */
+    private class ConnectionRun(
+        val owner: Long,
         val connectivity: ConnectivityManager,
         val preferences: SharedPreferences,
-        val snapshot: NetworkSnapshot,
         val proxy: ByeDpiProxy,
         val listenerIp: String,
         val listenerPort: Int,
     ) {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        // TLS factory initialization is outside the native callback lock.
+        val probe = GenericHttpsProbe()
+    }
+
+    private class Session(val epoch: Long, val run: ConnectionRun, val snapshot: NetworkSnapshot) {
         val scope = CoroutineScope(SupervisorJob() + workerDispatcher)
         val queue = HostAccessWorkQueue()
         val signal = Channel<Unit>(Channel.CONFLATED)
@@ -72,73 +81,53 @@ object AutomaticAccessController {
             bindUdp = { snapshot.network.bindSocket(it) },
             bindTcp = { snapshot.network.bindSocket(it) },
         )
-        val probe = GenericHttpsProbe()
-        var nextNetworkCheckMs = 0L // Read/write only on the single recovery worker.
+        var nextNetworkCheckMs = 0L // Only the single recovery worker accesses this.
     }
 
-    /** Reserve before JNI startup; old workers can never write into this new epoch. */
+    /** Reserve before JNI startup. Old workers/monitors cannot own this proxy epoch. */
     fun prepareStart(): Long = synchronized(lock) {
-        cancelSessionLocked()
-        epochs.incrementAndGet().also {
-            preparedEpoch = it
-            mutableStatus.value = AutomaticAccessStatus()
-        }
+        clearOwnedNativeRoutesLocked()
+        cancelConnectionLocked()
+        lifecycle.reserve().also { mutableStatus.value = AutomaticAccessStatus() }
     }
 
-    /** Starts only the epoch already reserved by prepareStart, after SOCKS is ready. */
+    /** Starts only the reserved epoch, after SOCKS is ready and before TUN startup. */
     fun start(context: Context, proxy: ByeDpiProxy, listenerIp: String, listenerPort: Int): Long {
         require(listenerPort in 1..65535)
-        val epoch = synchronized(lock) { preparedEpoch } ?: return currentEpoch
+        val epoch = lifecycle.reservedEpoch() ?: return currentEpoch
         val app = context.applicationContext
         val preferences = app.getSharedPreferences(app.packageName + "_preferences", Context.MODE_PRIVATE)
         val connectivity = app.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkSnapshot = snapshot(connectivity, preferences)
-        // The diagnostic marker is intentionally unavailable to remote SOCKS clients.
-        val loopback = listenerIp in setOf("127.0.0.1", "::1")
-        val session = if (networkSnapshot != null && loopback) {
-            Session(epoch, connectivity, preferences, networkSnapshot, proxy, listenerIp, listenerPort)
-        } else null
-        // TLS factory initialization and Binder reads happen outside the callback lock.
-        val networkStillCurrent = session != null && snapshot(connectivity, preferences)?.identity == session.snapshot.identity
+        val run = ConnectionRun(epoch, connectivity, preferences, proxy, listenerIp, listenerPort)
+        // The private diagnostic marker is unavailable to remote SOCKS clients.
+        val supportedListener = listenerIp in setOf("127.0.0.1", "::1")
+        val initial = if (supportedListener) snapshot(connectivity, preferences) else null
         synchronized(lock) {
-            if (epoch != currentEpoch || preparedEpoch != epoch) {
-                session?.scope?.cancel()
-                return epoch
-            }
-            preparedEpoch = null
-            cancelSessionLocked()
-            if (session == null || !networkStillCurrent) {
-                session?.scope?.cancel()
+            if (!lifecycle.claim(epoch)) { run.scope.cancel(); return epoch }
+            cancelConnectionLocked()
+            if (!supportedListener) {
+                run.scope.cancel()
+                proxy.setAccessEpoch(0)
                 mutableStatus.value = AutomaticAccessStatus(AutomaticAccessPhase.UNRESOLVED)
-                Log.w(TAG, "Automatic checks unavailable: no physical network or loopback listener")
+                Log.w(TAG, "Automatic checks need a loopback SOCKS listener")
                 return epoch
             }
-            cache.retainNetwork(session.snapshot.identity)
-            active = session
-            // Pure, bounded JNI memory writes complete before returning to TUN
-            // startup; no DNS or public HTTP warm-up is performed for unused hosts.
-            for ((key, decision) in cache.positives(session.snapshot.identity)) {
-                if (!isSessionActive(session)) break
-                val remaining = (decision.expiresAtMs - monotonicMs()) / 1_000
-                if (decision.ipv4 != null && remaining > 0) {
-                    session.proxy.updateHostRoute(epoch, key.host, key.port, decision.ipv4, remaining.toInt())
-                }
-            }
-            publishLocked(session, AutomaticAccessPhase.OBSERVING)
-            session.scope.launch { runWorker(session) }
+            connection = run
+            installSessionLocked(run, initial, epoch)
+            run.scope.launch { monitor(run) }
         }
         return epoch
     }
 
-    /** Invalidate synchronously before closing native resources; cache retains its network scope. */
+    /** Synchronous invalidation precedes native cleanup. Evidence retains its network scope. */
     fun stop() = synchronized(lock) {
-        epochs.incrementAndGet()
-        preparedEpoch = null
-        cancelSessionLocked()
+        clearOwnedNativeRoutesLocked()
+        lifecycle.stop()
+        cancelConnectionLocked()
         mutableStatus.value = AutomaticAccessStatus()
     }
 
-    /** Native callback: only normalization, bounded enqueue and a nonblocking wake-up. */
+    /** Native callback: normalization, bounded enqueue and a nonblocking wake-up only. */
     @JvmStatic
     fun onNativeHostObserved(epoch: Long, host: String, originalIp: String, port: Int) {
         if (epoch != currentEpoch || port != 443) return
@@ -146,14 +135,55 @@ object AutomaticAccessController {
         synchronized(lock) {
             val session = active?.takeIf { it.epoch == epoch && it.scope.isActive } ?: return
             val key = HostAccessKey(session.snapshot.identity, observation.host, observation.port)
-            // Direct proof/backoff stay cheap. A cached route is reinserted by the
-            // worker if native's smaller bounded table evicted it; no probe is needed.
-            val decision = cache.get(key)
+            val decision = cache.getForObservation(key, observation.originalIp)
             if (decision is HostAccessDecision.Negative || decision is HostAccessDecision.Positive && decision.ipv4 == null) return
+            // Cached routes are reinserted if native's smaller table evicted them.
             if (!session.queue.offer(observation)) return
             session.signal.trySend(Unit)
             mutableStatus.value = mutableStatus.value.copy(queuedHosts = session.queue.size())
         }
+    }
+
+    /** Independent of the probe queue: also sees same-handle DNS/LinkProperties changes. */
+    private suspend fun monitor(run: ConnectionRun) {
+        while (run.scope.isActive) {
+            delay(MONITOR_INTERVAL_MS)
+            val fresh = try { snapshot(run.connectivity, run.preferences) }
+            catch (error: Exception) { Log.w(TAG, "Physical network snapshot unavailable", error); null }
+            synchronized(lock) {
+                if (!isRunActive(run)) return
+                val session = active
+                if ((fresh == null && session == null) ||
+                    (fresh != null && session?.scope?.isActive == true && session.snapshot.identity == fresh.identity)) {
+                    return@synchronized
+                }
+                val epoch = lifecycle.nextEpoch(run.owner) ?: return
+                installSessionLocked(run, fresh, epoch)
+            }
+        }
+    }
+
+    /** Caller holds lock after a fresh snapshot read; these are bounded memory/JNI writes. */
+    private fun installSessionLocked(run: ConnectionRun, snapshot: NetworkSnapshot?, epoch: Long) {
+        cancelSessionLocked()
+        run.proxy.setAccessEpoch(if (snapshot == null) 0 else epoch)
+        if (snapshot == null) {
+            mutableStatus.value = AutomaticAccessStatus(AutomaticAccessPhase.UNRESOLVED)
+            return // The connection monitor stays alive and retries without a VPN restart.
+        }
+        cache.retainNetwork(snapshot.identity)
+        val session = Session(epoch, run, snapshot)
+        active = session
+        // Same-network validated hints are restored before returning to TUN startup.
+        for ((key, decision) in cache.positives(snapshot.identity)) {
+            if (!isSessionActive(session)) break
+            val remaining = (decision.expiresAtMs - monotonicMs()) / 1_000
+            if (decision.ipv4 != null && remaining > 0) {
+                run.proxy.updateHostRoute(epoch, key.host, key.port, decision.ipv4, remaining.toInt())
+            }
+        }
+        publishLocked(session, AutomaticAccessPhase.OBSERVING)
+        session.scope.launch { runWorker(session) }
     }
 
     private suspend fun runWorker(session: Session) {
@@ -172,8 +202,7 @@ object AutomaticAccessController {
                             }
                         }
                         Log.w(TAG, "Public host check failed for ${observation.host}", error)
-                    }
-                    finally {
+                    } finally {
                         session.queue.complete(observation)
                         synchronized(lock) {
                             if (active === session) mutableStatus.value = mutableStatus.value.copy(queuedHosts = session.queue.size())
@@ -182,28 +211,29 @@ object AutomaticAccessController {
                 }
             }
         } catch (_: CancellationException) {
-            // Session invalidation is expected on STOP, policy/network changes and restart.
-            synchronized(lock) {
-                if (active === session && session.epoch == currentEpoch) {
-                    // A changed network/policy must also invalidate already learned
-                    // native routes. Ordinary STOP has already removed active here.
-                    session.proxy.setAccessEpoch(0)
-                    cancelSessionLocked()
-                    mutableStatus.value = AutomaticAccessStatus(AutomaticAccessPhase.UNRESOLVED)
-                }
-            }
+            invalidateSession(session)
         } catch (error: Exception) {
             Log.w(TAG, "Automatic worker stopped", error)
-            synchronized(lock) {
-                if (active === session) publishLocked(session, AutomaticAccessPhase.UNRESOLVED)
-            }
+            invalidateSession(session)
+        }
+    }
+
+    /** Old worker cancellation can never clear a replacement session/native epoch. */
+    private fun invalidateSession(session: Session) = synchronized(lock) {
+        if (active === session && isRunActive(session.run) &&
+            lifecycle.isCurrent(session.run.owner, session.epoch)) {
+            lifecycle.nextEpoch(session.run.owner)
+            session.run.proxy.setAccessEpoch(0)
+            cancelSessionLocked()
+            mutableStatus.value = AutomaticAccessStatus(AutomaticAccessPhase.UNRESOLVED)
+            // The owning monitor installs a fresh session even if the same network returns.
         }
     }
 
     private fun process(session: Session, observation: HostObservation) {
         checkCurrent(session)
         val key = HostAccessKey(session.snapshot.identity, observation.host, observation.port)
-        when (val cached = cache.get(key)) {
+        when (val cached = cache.getForObservation(key, observation.originalIp)) {
             is HostAccessDecision.Positive -> {
                 if (cached.ipv4 != null && updateRoute(session, key, cached.ipv4, cached.expiresAtMs)) {
                     synchronized(lock) { if (active === session) publishLocked(session, AutomaticAccessPhase.ROUTE_APPLIED, observation.host) }
@@ -227,27 +257,26 @@ object AutomaticAccessController {
                     if (available <= 0) break
                     try {
                         answers += session.resolver.lookup(host, dns, timeoutMs = available, checkCancelled = { checkSessionActive(session) })
-                    } catch (_: IOException) {
-                        // Resolver timeouts/bad replies are failed candidates, not a dead worker.
-                    }
+                    } catch (_: IOException) { /* A timeout/bad DNS reply is a failed candidate. */ }
                     if (answers.isNotEmpty()) break
                 }
                 answers.toList()
             },
             probe = { host, port, ip, remaining ->
-                val result = session.probe.probe(host, port, ip,
-                    localSocksPort = session.listenerPort, timeoutMs = remaining.coerceAtMost(5_000),
-                    checkCancelled = { checkSessionActive(session) }, localSocksIp = session.listenerIp)
-                AccessProbeEvidence(result.statusCode, result.bodyComplete)
+                val evidence = session.run.probe.probe(host, port, ip,
+                    localSocksPort = session.run.listenerPort, timeoutMs = remaining.coerceAtMost(5_000),
+                    checkCancelled = { checkSessionActive(session) }, localSocksIp = session.run.listenerIp)
+                AccessProbeEvidence(evidence.statusCode, evidence.bodyComplete)
             },
             isCurrent = { isCurrent(session) },
+            clockMs = { monotonicMs() },
         )
         checkCurrent(session)
         when (result) {
             HostAccessRecoveryResult.Direct -> synchronized(lock) {
                 if (!isSessionActive(session)) return@synchronized
-                if (session.proxy.updateHostRoute(session.epoch, observation.host, observation.port, null, 0)) {
-                    cache.putPositive(key, null)
+                if (session.run.proxy.updateHostRoute(session.epoch, observation.host, observation.port, null, 0)) {
+                    cache.putDirect(key, observation.originalIp)
                     publishLocked(session, AutomaticAccessPhase.OBSERVING)
                 }
             }
@@ -277,7 +306,7 @@ object AutomaticAccessController {
             if (!isSessionActive(session)) return false
             val remaining = (expiresAtMs - monotonicMs()).coerceAtLeast(0)
             if (remaining < 1_000) return false
-            session.proxy.updateHostRoute(session.epoch, key.host, key.port, ipv4, (remaining / 1_000).toInt())
+            session.run.proxy.updateHostRoute(session.epoch, key.host, key.port, ipv4, (remaining / 1_000).toInt())
         }
     }
 
@@ -290,30 +319,28 @@ object AutomaticAccessController {
         val now = monotonicMs()
         if (now >= session.nextNetworkCheckMs) {
             session.nextNetworkCheckMs = now + 250
-            if (snapshot(session.connectivity, session.preferences)?.identity != session.snapshot.identity) {
+            if (snapshot(session.run.connectivity, session.run.preferences)?.identity != session.snapshot.identity) {
                 throw CancellationException("Automatic Access network or policy changed")
             }
         }
     }
 
-    // Socket parsers call this frequently: no Binder/network queries per received byte.
+    private fun isRunActive(run: ConnectionRun): Boolean =
+        connection === run && run.scope.isActive && lifecycle.isOwner(run.owner)
+
+    // Socket parsers use cheap checks; Binder reads stay outside the callback lock.
     private fun isSessionActive(session: Session): Boolean {
-        if (session.epoch != currentEpoch || !session.scope.isActive) return false
-        synchronized(lock) { if (active !== session) return false }
-        return true
+        if (!lifecycle.isCurrent(session.run.owner, session.epoch) || !session.scope.isActive) return false
+        synchronized(lock) { return active === session && isRunActive(session.run) }
     }
 
-    private fun isCurrent(session: Session): Boolean {
-        if (!isSessionActive(session)) return false
-        return snapshot(session.connectivity, session.preferences)?.identity == session.snapshot.identity
-    }
+    private fun isCurrent(session: Session): Boolean = isSessionActive(session) &&
+        snapshot(session.run.connectivity, session.run.preferences)?.identity == session.snapshot.identity
 
     private fun snapshot(connectivity: ConnectivityManager, preferences: SharedPreferences): NetworkSnapshot? {
         if (!preferences.getBoolean(MaffinetSettingsRepository.AUTOMATIC_ACCESS, true)) return null
         val network = connectivity.activeNetwork ?: return null
         val caps = connectivity.getNetworkCapabilities(network) ?: return null
-        // Maffinet's own UID is excluded from the application VPN. Never bind DNS
-        // to a tunnel that could recursively feed these probes back into itself.
         if (caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return null
         val properties = connectivity.getLinkProperties(network) ?: return null
         val systemResolvers = properties.dnsServers.filterIsInstance<Inet4Address>().mapNotNull { it.hostAddress }
@@ -322,7 +349,8 @@ object AutomaticAccessController {
         val smartResolvers = listOf("geohide", "xbox", "comss").mapNotNull { id ->
             DnsCatalog.presets.firstOrNull { it.id == id }?.ipv4?.firstOrNull()
         }
-        val resolvers = (selected.ipv4.take(2) + smartResolvers).distinct().take(5)
+        // Try a distinct provider before a selected provider's second address.
+        val resolvers = (selected.ipv4.take(1) + smartResolvers + selected.ipv4.drop(1).take(1)).distinct().take(5)
         val policy = listOf(HostAccessPolicy.VERSION, RouteHintRegistry.VERSION,
             AutomaticAccessArguments.POLICY_VERSION, selected.id, selected.ipv4.joinToString(","),
             systemResolvers.joinToString(","), properties.interfaceName.orEmpty(),
@@ -343,13 +371,19 @@ object AutomaticAccessController {
     }
 
     private fun cancelSessionLocked() {
-        active?.let { session ->
-            session.scope.cancel()
-            session.signal.close()
-            session.queue.clear()
-        }
+        active?.let { it.scope.cancel(); it.signal.close(); it.queue.clear() }
         active = null
     }
 
-    private fun monotonicMs(): Long = System.nanoTime() / 1_000_000
+    private fun cancelConnectionLocked() {
+        connection?.scope?.cancel()
+        connection = null
+        cancelSessionLocked()
+    }
+
+    private fun clearOwnedNativeRoutesLocked() {
+        connection?.takeIf { lifecycle.isOwner(it.owner) }?.proxy?.setAccessEpoch(0)
+    }
+
+    private fun monotonicMs(): Long = SystemClock.elapsedRealtime()
 }

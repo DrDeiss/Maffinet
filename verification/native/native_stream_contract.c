@@ -205,7 +205,7 @@ static void hello(unsigned char *data, size_t length, size_t host_pos, const cha
 static void check_records(const unsigned char *wire, size_t wire_size,
         const unsigned char *original, size_t original_size, int expected_records)
 {
-    unsigned char payload[4096];
+    unsigned char payload[16384];
     size_t offset = 0, written = 0;
     int records = 0;
     while (offset < wire_size) {
@@ -227,7 +227,7 @@ static void check_records(const unsigned char *wire, size_t wire_size,
 static void receive_hello(struct tunnel *t, const unsigned char *original,
         size_t original_size, int records)
 {
-    unsigned char wire[4096];
+    unsigned char wire[16384];
     size_t size = original_size + (records - 1) * 5;
     read_exact(t->backend, wire, size);
     check_records(wire, size, original, original_size, records);

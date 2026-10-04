@@ -4,7 +4,7 @@ import io.maffinet.android.core.domains.DomainParser
 import java.net.InetAddress
 
 object HostAccessPolicy {
-    const val VERSION = "auto-access-v1"
+    const val VERSION = "auto-access-v2-network-monitor"
     const val MAX_PENDING_HOSTS = 16
     const val MAX_CACHE_ENTRIES = 256
     const val MAX_CANDIDATE_IPS = 8

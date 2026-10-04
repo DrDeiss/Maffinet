@@ -21,7 +21,7 @@ class HostAccessRecoveryTest {
             }, isCurrent = { true })
         assertTrue(RouteHintRegistry.forHost(unknown.host, unknown.port).isEmpty())
         assertEquals(HostAccessRecoveryResult.Route("9.9.9.9"), result)
-        assertEquals(listOf(unknown.host to null, unknown.host to "193.233.112.67"), queries)
+        assertEquals(listOf(unknown.host to "193.233.112.67"), queries)
         assertEquals(listOf(Triple(unknown.host, 443, "1.1.1.1"), Triple(unknown.host, 443, "9.9.9.9")), attempts)
     }
 
@@ -87,5 +87,37 @@ class HostAccessRecoveryTest {
             }, isCurrent = { true })
         assertEquals(listOf("gcp-lb.www.linkedin.com"), queried)
         assertEquals(HostAccessRecoveryResult.Route("130.211.32.14"), result)
+    }
+
+    @Test fun smartDnsIsTriedBeforeAnotherSystemCdnAddressCanSpendTheBudget() {
+        var now = 0L
+        val queries = mutableListOf<String?>()
+        val attempts = mutableListOf<String>()
+        val result = HostAccessRecovery.recover(unknown, listOf("8.8.8.8", "193.233.112.67"),
+            resolve = { _, dns, remaining ->
+                queries += dns
+                now += remaining.coerceAtMost(2_000)
+                when (dns) {
+                    "193.233.112.67" -> listOf("9.9.9.9")
+                    else -> listOf("11.0.0.1")
+                }
+            }, probe = { _, _, ip, remaining ->
+                attempts += ip
+                now += if (ip == "9.9.9.9") 50 else remaining.coerceAtMost(5_000)
+                if (ip == "9.9.9.9") good else stalled
+            }, isCurrent = { true }, clockMs = { now }, budgetMs = 15_000)
+        assertEquals(HostAccessRecoveryResult.Route("9.9.9.9"), result)
+        assertEquals(listOf("8.8.8.8", "193.233.112.67"), queries)
+        assertEquals(listOf("1.1.1.1", "11.0.0.1", "9.9.9.9"), attempts)
+    }
+
+    @Test fun successfulEvidenceAfterTheHostDeadlineCannotBecomeARoute() {
+        var now = 0L
+        val result = HostAccessRecovery.recover(unknown, listOf("8.8.8.8"),
+            resolve = { _, _, _ -> listOf("9.9.9.9") },
+            probe = { _, _, ip, remaining ->
+                if (ip == unknown.originalIp) stalled else good.also { now += remaining }
+            }, isCurrent = { true }, clockMs = { now })
+        assertEquals(HostAccessRecoveryResult.Unavailable, result)
     }
 }
