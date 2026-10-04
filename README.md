@@ -10,7 +10,7 @@ NOTICE and source provenance remain in the repository in both cases.
 
 ## Status and requirements
 
-Development version: **0.3.1-alpha**. [PLAN.md](PLAN.md) records implementation
+Development version: **0.3.2-alpha**. [PLAN.md](PLAN.md) records implementation
 phases and actual checks; [known limitations](docs/KNOWN_LIMITATIONS.md) documents
 release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
@@ -21,8 +21,13 @@ Private DNS configuration. Home exposes bounded plain-DNS and hostname-verified
 HTTPS control checks, with explicit unknown app-owned DoH/DoT. Configuration or
 network changes invalidate old evidence even when resolver addresses match.
 These checks do not yet intercept application DNS or recover NXDOMAIN before TLS.
-New build evidence is in [0.3.1 APK metadata](docs/build-info-0.3.1-alpha.json);
-the 0.3.0 validation records below remain the preceding baseline.
+Version 0.3.2 fixes the control host rejected by the HTTPS policy and exposes the
+HTTPS failure reason. Both configured GeoHide resolvers passed the corrected
+control on the OnePlus. Native diagnostics confirmed ECH extensions in LinkedIn
+connections: the automatic route works for an ordinary SNI probe, but LinkedIn
+itself still fails in Auto. The saved manual strategy loaded its feed.
+Build and device evidence: [0.3.2 APK metadata](docs/build-info-0.3.2-alpha.json).
+The 0.3.0 validation records below remain the preceding baseline.
 
 The app now targets Android 16/API36 while retaining Android 8/API26 as its
 minimum. This fixes the inherited old-target configuration; notification

@@ -1,5 +1,31 @@
 # Maffinet — audit and implementation plan
 
+## Physical follow-up — 0.3.2-alpha, 2026-10-04
+
+Installed 0.3.1 and 0.3.2 on the OnePlus with the existing signer. Fixed a real
+control-probe defect: example.com was rejected before TLS by the hostname policy.
+The shared www.iana.org control and bounded HTTPS errors have regression coverage.
+Both GeoHide resolvers now pass DNS/UDP plus certificate/body verification on the
+phone. Added metadata-only native ECH diagnostics; routing policy is unchanged.
+
+The saved manual strategy loaded LinkedIn's feed. Auto learned a route and an
+ordinary-SNI anonymous request loaded all 140059 bytes (547 ms on 0.3.2), but the
+application's ECH-bearing connections skip exact-host routing. A cold restart
+after route learning still showed a feed error. ECH versus GREASE and additional
+causes are unresolved. This is not successful app acceptance.
+
+Source: 33a144bfeac63a5eeaa22924b3b523751203f400; tree:
+5d56cf0bedaa6310bb5e49b318907a0f20fe720a. CI 37206767773 passed: 161 standalone
+JVM/native-parser tests, 159 Android JVM tests, native 21 automatic + 12 stream +
+4 invalid-value cases, ASan/UBSan/leak detection, API29 25 passed/1 skipped,
+API36 26 passed plus notification-denied case, Lint 0 errors/140 warnings/5 hints.
+APK and signer metadata: docs/build-info-0.3.2-alpha.json.
+
+Auto=true restored; VPN/Telegram stopped; GeoHide, Private DNS and manual command
+preserved. Stay-awake=0, no ADB forwards, test UI XML removed. The old Chrome tab
+has no recorded unique ID and could not be safely identified for closing.
+DNS interception, ECH-safe recovery, QUIC and IPv6 remain open work.
+
 ## DNS configuration follow-up — 0.3.1-alpha sources, 2026-10-04
 
 Implemented separate saved/VPN-assigned/physical/Private DNS snapshots, explicit
@@ -32,8 +58,8 @@ disappeared before APK installation. Later wireless ADB returned and 0.3.1-alpha
 was installed successfully with `adb install -r`; versionCode4/target36 confirmed.
 Selected LinkedIn/Chrome, GeoHide, manual strategy and system Private DNS survived.
 The phone then showed system UI and Maffinet's exit history recorded REMOVE TASK,
-not a crash. Auto network acceptance awaits an unlocked idle device; no success
-of Auto/LinkedIn is claimed yet. The old Chrome test tab has not been identified/
+not a crash. The later physical findings are recorded above; Auto/LinkedIn did
+not pass acceptance. The old Chrome test tab has not been identified/
 closed and should not be confused with user tabs.
 
 DNS interception before TLS, ECH/GREASE, QUIC and IPv6 recovery remain unimplemented;

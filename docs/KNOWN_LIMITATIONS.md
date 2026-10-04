@@ -52,7 +52,11 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   certify the new automatic implementation. Integrated native/JVM, focused
   ASan/UBSan/leak and Android API29/API36 checks passed for `8266a409` in
   [CI run 37199682071](https://github.com/DrDeiss/Maffinet/actions/runs/37199682071);
-  physical-device acceptance of the new automatic APK remains open.
+  physical-device acceptance remains open. The 0.3.2 OnePlus test confirmed that
+  ordinary-SNI Auto probes load LinkedIn, while the actual application's
+  ECH-bearing connections skip exact-host routes and its feed fails to load.
+  The saved manual strategy loaded the feed in the same device session. This
+  proves a route exclusion, not that ECH is the only cause of every app failure.
   Only new connections receive a learned route. Established TLS sessions and
   application requests are never migrated or replayed. An application's own retry
   can therefore be required after its first failed connection. The public `/`

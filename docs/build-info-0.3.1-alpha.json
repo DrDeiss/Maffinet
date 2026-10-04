@@ -56,13 +56,13 @@
     "lintErrors": 0,
     "lintWarnings": 140,
     "lintHints": 5,
-    "physicalDeviceAcceptance": "APK installed successfully on OnePlus CPH2747 Android 16; versionCode 4 confirmed; Auto network acceptance still pending an unlocked idle device"
+    "physicalDeviceAcceptance": "Installed on OnePlus CPH2747 Android 16; manual strategy loaded LinkedIn feed, ordinary-SNI Auto probe loaded full anonymous response, but actual app remained loading; control example.com rejected before TLS. Follow-up 0.3.2 records ECH exclusion and fixes control host."
   },
   "scope": {
     "defaultMode": "Automatic Access",
     "dnsEvidence": "saved / assigned-to-VPN / physical / active Private DNS separated; app-owned DoH/DoT and actual query resolver unknown",
     "dnsProbe": "direct plaintext IPv4 A query over physical-network UDP; TCP only after truncated UDP; example.com control plus observed recovery hostname evidence",
-    "controlHttpsProbe": "original hostname and certificate; first public DNS address; 64 KiB or full smaller body; not proof of app availability",
+    "controlHttpsProbe": "Intended hostname/certificate/body check did not run for example.com: hostname policy rejected it before TLS. Fixed in 0.3.2; this artifact retains the defect.",
     "dnsSettings": "never rewritten automatically",
     "externalServer": false
   },
@@ -73,7 +73,7 @@
     "DNS NXDOMAIN/sinkhole recovery before TLS is not implemented",
     "ECH including GREASE is excluded from host-route learning; QUIC is forwarded unchanged",
     "Routes apply to subsequent connections without replaying app requests",
-    "Real OnePlus automatic-access acceptance remains pending",
+    "Real OnePlus LinkedIn automatic-access acceptance failed; control-host defect present in this artifact",
     "Complete 16 KiB-page runtime compatibility remains unverified"
   ],
   "artifactNote": "CI's internal APK filename retained 0.3.0; compiled manifest is 0.3.1 (4). Delivered file renamed; archive basename corrected separately without changing runtime payload."
