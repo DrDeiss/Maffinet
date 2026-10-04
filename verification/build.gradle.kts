@@ -22,7 +22,10 @@ kotlin {
                 "io/maffinet/android/core/strategy/StrategyEvaluation.kt",
                 "io/maffinet/android/core/strategy/DefaultStrategyCatalog.kt",
                 "io/maffinet/android/core/strategy/ProbeTargets.kt",
+                "io/maffinet/android/core/strategy/HttpProbeBodyValidator.kt",
+                "io/maffinet/android/core/strategy/LinkedInAlternativeRoute.kt",
                 "io/maffinet/android/core/connection/ConnectionModes.kt",
+                "io/maffinet/android/core/tgproxy/ProxyLifecycleState.kt",
                 "io/maffinet/android/core/dns/**",
                 "io/maffinet/android/ui/components/DnsPresets.kt",
             )
@@ -38,7 +41,10 @@ kotlin {
                 "io/maffinet/android/core/services/**",
                 "io/maffinet/android/core/strategy/StrategyScorerTest.kt",
                 "io/maffinet/android/core/strategy/ProbeTargetsTest.kt",
+                "io/maffinet/android/core/strategy/HttpProbeBodyValidatorTest.kt",
+                "io/maffinet/android/core/strategy/LinkedInAlternativeRouteTest.kt",
                 "io/maffinet/android/core/connection/ConnectionModesTest.kt",
+                "io/maffinet/android/core/tgproxy/ProxyLifecycleStateTest.kt",
                 "io/maffinet/verification/**",
             )
         }

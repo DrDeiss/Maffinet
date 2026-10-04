@@ -161,7 +161,8 @@ class TgProxyService : LifecycleService() {
             .notify(FOREGROUND_SERVICE_ID, createNotification())
         // Legacy appStatus is used by the VPN strategy wizard. Telegram has its own
         // StateFlow and sender broadcasts and must not overwrite the VPN status.
-        sendBroadcast(Intent(action).putExtra(SENDER, Sender.Proxy.ordinal))
+        // Android 14+ filters implicit intents to non-exported runtime receivers.
+        sendBroadcast(Intent(action).setPackage(packageName).putExtra(SENDER, Sender.Proxy.ordinal))
     }
 
     private fun acquireWakeLock() {

@@ -6,7 +6,7 @@
 #include <setjmp.h>
 #include <stdlib.h>
 
-#include "byedpi/error.h"
+#include "error.h"
 #include "main.h"
 
 extern int server_fd;

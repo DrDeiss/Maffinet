@@ -5,6 +5,8 @@ import android.content.ContextWrapper
 import android.content.SharedPreferences
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.maffinet.android.core.connection.ConnectionCoordinator
+import io.maffinet.android.core.dpibypass.ServiceManager
 import io.maffinet.android.core.dpibypass.StrategyTestManager
 import io.maffinet.android.core.services.ServiceCatalog
 import io.maffinet.android.core.strategy.ServiceConnectivityResult
@@ -56,6 +58,47 @@ class StrategyConfigurationSmokeTest {
         settings.setString("custom_dns_preset", "cloudflare")
         settings.setTelegramEnabled(false)
         assertEquals("App/profile/DNS/Telegram choices cannot change the SOCKS candidate check", before, probes.snapshot().fingerprint)
+    }
+
+    @Test fun linkedInRouteWriteIsRejectedDuringStrategyGateAndAllowedAfterRelease() {
+        val preferences = context.getSharedPreferences(context.packageName + "_preferences", Context.MODE_PRIVATE)
+        val snapshot = preferences.all.mapValues { (_, value) -> if (value is Set<*>) value.toSet() else value }
+        var session: ServiceManager.StrategyTestSession? = null
+        try {
+            settings.setRequested(false, false)
+            settings.setLinkedInAlternativeRouteEnabled(false)
+            val heldSession = ServiceManager.beginStrategyTest(context)
+            session = heldSession
+            assertFalse("The write must be blocked even without a desired connection", settings.anyModeRequested())
+            assertTrue(ServiceManager.isStrategyTestInProgress)
+            assertTrue(ConnectionCoordinator.isConfigurationLocked())
+            assertThrows(IllegalStateException::class.java) { settings.setLinkedInAlternativeRouteEnabled(true) }
+            assertFalse("A rejected write must preserve the saved route", settings.linkedInAlternativeRouteEnabled())
+
+            ServiceManager.finishStrategyTest(context, heldSession, nativeClean = true)
+            session = null
+            assertFalse(ServiceManager.isStrategyTestInProgress)
+            assertFalse(ConnectionCoordinator.isConfigurationLocked())
+            settings.setLinkedInAlternativeRouteEnabled(true)
+            assertTrue("The route can change after the gate releases", settings.linkedInAlternativeRouteEnabled())
+        } finally {
+            try { session?.let { ServiceManager.finishStrategyTest(context, it, nativeClean = true) } }
+            finally {
+                val edit = preferences.edit().clear()
+                snapshot.forEach { (key, value) ->
+                    when (value) {
+                        is Boolean -> edit.putBoolean(key, value)
+                        is Float -> edit.putFloat(key, value)
+                        is Int -> edit.putInt(key, value)
+                        is Long -> edit.putLong(key, value)
+                        is String -> edit.putString(key, value)
+                        is Set<*> -> edit.putStringSet(key, value.filterIsInstance<String>().toSet())
+                        null -> edit.remove(key)
+                    }
+                }
+                assertTrue("Could not restore the route settings snapshot", edit.commit())
+            }
+        }
     }
 
     @Test fun savedMatrixIsHiddenAfterHostsTargetsOrOverrideChange() {

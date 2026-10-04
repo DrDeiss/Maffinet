@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import io.maffinet.android.core.dpibypass.StrategyTestManager
@@ -25,6 +26,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     var editTargets by remember { mutableStateOf(false) }
     var targetText by remember { mutableStateOf("") }
     var targetError by remember { mutableStateOf<String?>(null) }
+    var routeError by remember { mutableStateOf<String?>(null) }
     val locked = rememberConfigurationLocked()
     DisposableEffect(preferences) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> revision++ }
@@ -33,6 +35,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
     }
     LaunchedEffect(revision) { StrategyTestManager.refreshConfiguration(context) }
     val urls = remember(revision) { targets.urls() }
+    val linkedInRoute = remember(revision) { settings.linkedInAlternativeRouteEnabled() }
     val applied = settings.getString("byedpi_cmd_args", "")
         .takeIf { settings.getBoolean("byedpi_enable_cmd_settings", false) }
     val current = StrategyTestManager.historyMatchesCurrentConfiguration(context)
@@ -66,6 +69,24 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
 
     ProductScreen("Стратегии", focusRequester, subtitle = "Auto применяет стратегию, только если все заданные адреса прошли проверку с текущими Hosts.") {
         ProductCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Альтернативный маршрут LinkedIn", Modifier.weight(1f), style = MaterialTheme.typography.titleLarge)
+                Switch(checked = linkedInRoute, onCheckedChange = { enabled ->
+                    try {
+                        settings.setLinkedInAlternativeRouteEnabled(enabled)
+                        routeError = null
+                        StrategyTestManager.refreshConfiguration(context)
+                    } catch (error: Exception) { routeError = error.message ?: "Не удалось сохранить маршрут" }
+                }, enabled = !locked)
+            }
+            Text("Использует альтернативный сервер LinkedIn для HTTPS-соединений с www.linkedin.com. Может помочь, если сайт или приложение не загружаются; результат зависит от сети.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Для VPN действует в выбранных приложениях. Обычная стратегия и Hosts сохраняются. Auto проверяет адреса с этим маршрутом, если он включён.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (locked) Text("Остановите подключение и проверку стратегий, чтобы изменить маршрут.", style = MaterialTheme.typography.bodySmall)
+            routeError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+        ProductCard {
             Text("Auto strategy", style = MaterialTheme.typography.titleLarge)
             Text("Проверочных адресов: ${urls.size}")
             urls.forEach { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -90,7 +111,7 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
             }
             Text("Выбор приложений и режима Telegram не меняет проверку. Каждый адрес проверяется через локальный SOCKS/ByeDPI; DNS-пресет относится к VPN.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Это HTTP/TLS-проверки сайтов, а не всех функций приложения. Успех требует HTTP 200–399; защита сайта может давать ложный отрицательный результат.",
+            Text("Успех требует HTTP 200–399 и загрузки первых 64 КиБ тела либо всего меньшего ответа. Ответы без тела и редиректы допустимы. Проверка сайта не подтверждает работу всех API и функций приложения; защита сайта может давать ложный отрицательный результат.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (StrategyTestManager.hasStaleResults || !current) {
@@ -113,7 +134,8 @@ fun StrategiesScreen(focusRequester: FocusRequester, onNavigate: (Int) -> Unit) 
                             color = if (targetGroup.passed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
                     }
                     targetGroup.targets.filter { !it.reachable || expandedCommand == evaluation.command }.forEach { target ->
-                        Text("${target.url}\n${target.httpStatus?.let { "HTTP $it" } ?: target.error ?: "Ответ не получен"}",
+                        val details = listOfNotNull(target.httpStatus?.let { "HTTP $it" }, target.error).joinToString(" · ")
+                        Text("${target.url}\n${details.ifBlank { "Ответ не получен" }}",
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }

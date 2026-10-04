@@ -46,6 +46,7 @@ object ProbeConfigurationFingerprint {
         urls: List<String>, lists: List<DomainList>, activeDomains: List<String>,
         hostFilterOverride: Boolean, advancedHostsMode: String = "disable", advancedHosts: String = "",
         candidates: List<String> = DefaultStrategyCatalog.commands,
+        linkedInAlternativeRouteEnabled: Boolean = false,
     ): String {
         val digest = MessageDigest.getInstance("SHA-256")
         fun add(value: String) {
@@ -53,7 +54,9 @@ object ProbeConfigurationFingerprint {
             digest.update("${bytes.size}:".toByteArray(Charsets.UTF_8))
             digest.update(bytes)
         }
-        add("maffinet-http-probes-v2")
+        add("maffinet-http-probes-v3-body64k")
+        add(LinkedInAlternativeRoute.POLICY_VERSION)
+        add(linkedInAlternativeRouteEnabled.toString())
         urls.forEach(::add)
         add("lists")
         lists.sortedBy { it.id }.forEach { list ->

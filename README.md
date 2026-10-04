@@ -20,8 +20,16 @@ The app now targets Android 16/API36 while retaining Android 8/API26 as its
 minimum. This fixes the inherited old-target configuration; notification
 permission, quick-settings launch and background recovery are adapted for modern
 Android. Auto strategy selection now requires every configured checking address
-to pass before replacing the active strategy. See
+to pass before replacing the active strategy. HTTP success also requires the first
+64KiB of a successful body, or its complete body when smaller. See
 [Android compatibility and LinkedIn investigation](docs/ANDROID36_AND_LINKEDIN.md).
+
+Strategies includes an optional **Alternative LinkedIn route**, disabled by default.
+It resolves LinkedIn's `gcp-lb.www.linkedin.com` endpoint at startup and routes only
+TLS traffic for `www.linkedin.com:443` there, preserving the original TLS hostname
+and ordinary strategy groups. The diagnostic route loaded LinkedIn's feed in its
+app and Chrome on the connected Android16 phone; the integrated build still needs
+CI and device validation.
 
 ## Interface
 
@@ -112,13 +120,15 @@ unrestricted legacy behavior. IP-only and encrypted-hostname traffic may not mat
 
 ## Build and tests
 
-Required: JDK17+, SDK Platform36, Build Tools36.0.0, NDK30.0.14904198 (r30 beta1),
+Required: JDK17+, SDK Platform36, Build Tools36.0.0, NDK29.0.14206865,
 CMake3.22.1. The checksum-pinned Gradle9.1.0 wrapper is included.
+The commands below use the stable NDK validated in CI; the inherited build default
+is30.0.14904198, so the version override is explicit.
 
 ```sh
 git submodule update --init app/src/main/cpp/byedpi
-sdkmanager --channel=3 "platforms;android-36" "build-tools;36.0.0" "ndk;30.0.14904198" "cmake;3.22.1"
-./gradlew :app:assembleDebug :app:testDebugUnitTest
+sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;29.0.14206865" "cmake;3.22.1"
+./gradlew :app:assembleDebug :app:testDebugUnitTest -Pmaffinet.ndkVersion=29.0.14206865
 ```
 
 Set JAVA_HOME and ANDROID_HOME, or sdk.dir in ignored local.properties. Review

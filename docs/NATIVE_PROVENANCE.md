@@ -7,7 +7,7 @@ files have a deterministic JNI class-name rebind recorded in
 
 | Component | Imported source | License | Build behavior |
 | --- | --- | --- | --- |
-| ByeDPI | ba532298de7b28cfe854aea83d061369d13ca290; version 17.3 | MIT, hufrea | CMake rebuild |
+| ByeDPI | ba532298de7b28cfe854aea83d061369d13ca290; version 17.3 + tracked Maffinet patch | MIT, hufrea | CMake rebuild from prepared sources |
 | HEV tunnel | c26333ae1d9a0e69f1ab567ef0a46094bdfadcf1 unavailable | Declared upstream MIT, hev | Preserve engine bytes; rebind JNI to Maffinet |
 | Telegram Rust proxy | native/tgproxy-rust, crate 1.0.0, Cargo.lock | Inherited Android integration GPLv3; Flowseal MIT | Retain prebuilts |
 
@@ -53,6 +53,48 @@ JNI class lookup/registration follows the
 and configured NDK. Normal builds never invoke it or overwrite shipped HEV files.
 Rust uses JNA C exports and is independent of the Kotlin package. ByeDPI JNI
 symbols are rebuilt to match the new package.
+
+### Pinned ByeDPI preparation and streaming regression
+
+The ByeDPI gitlink stays at `ba532298de7b28cfe854aea83d061369d13ca290`.
+`tools/prepare-byedpi.py` reads committed C/header files from that exact pin into
+a generated build directory, checks and applies the tracked patches under
+`app/src/main/cpp/patches`, and prints their SHA-256 hashes. It neither changes
+nor resets the submodule checkout. CMake and `tools/build-native-contract.py`
+both use this preparation, so APK and Linux fixtures compile the same sources.
+Preparing/building ByeDPI requires host Python 3 and Git, in addition to the
+configured C/NDK toolchain.
+
+`paced-tls-buffer.patch` retains parsing metadata and a transformation marker
+with each pending TCP buffer. A retry after pacing, EAGAIN or a short write does
+not insert TLS headers into the same buffer twice. An early server response
+defers resetting client round/part progress until its pending bytes are sent;
+the next client exchange then advances beyond `-R1`. The patch also skips empty
+cuts and accounts for actual partial send lengths. This addresses the repeated
+TLS-header insertion observed in the physical-phone log; it does not implement
+ClientHello reassembly or claim that every LinkedIn/network failure has the
+same cause.
+
+Two additional native options isolate the optional LinkedIn route:
+`--group-pacing=20` enables pacing with a 20 ms timer for the current group only
+(valid interval 1–60000 ms), and `--group-redirect=tcp://IP:443` sets that group's
+destination without enabling global delayed connect. Host/protocol filters on
+the selected redirect group still require reading client bytes/SNI before
+connecting. Groups outside its port/protocol scope retain their connection
+behavior. Existing `-Z`, `-W` and `-C` keep their global semantics; other group
+filters, parts, redirect destinations and round limits are not inherited across
+`-A` boundaries.
+
+The Linux regression includes real loopback TCP sockets and production tunnel,
+send/receive, reconnect and timer callbacks. It replays the early-response
+ordering, injects EAGAIN/short writes only into the outbound socket, checks exact
+TLS-record payload bytes for large/partial ClientHello buffers, and checks
+encrypted follow-up data, zero cuts, raw fallback and server-first normal groups.
+Parser checks cover scoped options and preservation of legacy global flags.
+These hermetic checks validate forwarding/state behavior, not an external TLS
+handshake or a DPI bypass in a particular network. Local patch preparation and
+Python syntax checks passed on Windows; Linux compilation/runtime results are
+pending CI.
 
 The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
 published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.

@@ -173,10 +173,8 @@ object AppDebugManager {
             sb.append("Режим Telegram: ${settings.telegramEnabled()}, состояние: ${io.maffinet.android.core.tgproxy.TgProxyController.status.value}\n")
             if (settings.applicationsEnabled()) {
                 val manualMode = prefs.getBoolean("strategy_manual_mode", false)
-                val byedpiArgs = prefs.getString("byedpi_cmd_args", "")
                 sb.append("Стратегия: ${if (manualMode) "Вручную" else "Авто"}\n")
                 sb.append("DNS для VPN: ${prefs.getString("custom_dns_preset", "Стандартный (Отключено)")}\n")
-                sb.append("Аргументы ByeDpi: \"$byedpiArgs\"\n")
                 val commandMode = prefs.getBoolean("byedpi_enable_cmd_settings", false)
                 sb.append("Источник стратегии: ${if (commandMode) "команда" else "параметры обхода"}\n")
                 val effectiveArguments = runCatching {
@@ -189,7 +187,12 @@ object AppDebugManager {
                         if (index > 0 && arguments[index - 1] == "-H") "<список доменов>" else argument
                     }.joinToString(" ")
                 }.getOrElse { "Не удалось собрать аргументы: ${it.message}" }
-                sb.append("Эффективные аргументы ByeDPI: $effectiveArguments\n")
+                sb.append("Аргументы основной стратегии ByeDPI: $effectiveArguments\n")
+                val linkedInRoute = settings.linkedInAlternativeRouteEnabled()
+                sb.append("Альтернативный маршрут LinkedIn: ${if (linkedInRoute) "включён" else "выключен"}\n")
+                if (linkedInRoute) {
+                    sb.append("LinkedIn endpoint: ${io.maffinet.android.core.strategy.LinkedInAlternativeRoute.ENDPOINT_HOST}, последний IPv4: ${io.maffinet.android.core.dpibypass.ByeDpiProxy.lastResolvedLinkedInAddress ?: "ещё не определён"}\n")
+                }
                 val allowedApps = prefs.getStringSet("selected_apps", null)
                 if (allowedApps != null) {
                     sb.append("Выбранные приложения для VPN (${allowedApps.size}): ${allowedApps.joinToString(", ")}\n")

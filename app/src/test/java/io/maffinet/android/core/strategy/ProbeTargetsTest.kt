@@ -53,4 +53,14 @@ class ProbeTargetsTest {
         assertNotEquals(fingerprint(), fingerprint(mode = "whitelist", hosts = "custom.org"))
         assertNotEquals(fingerprint(), fingerprint(candidates = listOf("-s2")))
     }
+
+    @Test fun alternativeLinkedInRouteInvalidatesPreviousMatrixEvidence() {
+        val urls = listOf("https://example.com")
+        val candidates = listOf("-o1", "-s1")
+        val disabled = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false, candidates = candidates)
+        val enabled = ProbeConfigurationFingerprint.create(urls, lists, listOf("example.com"), false,
+            candidates = candidates, linkedInAlternativeRouteEnabled = true)
+        assertNotEquals(disabled, enabled)
+        assertEquals(fingerprint(), disabled)
+    }
 }

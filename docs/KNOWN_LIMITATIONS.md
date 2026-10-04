@@ -26,9 +26,32 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   unverified for the complete APK; LOAD alignment alone does not certify all
   dependencies. The retained HEV binaries have16KB-aligned LOAD segments on all
   four ABIs.
-- **Connectivity checks:** HTTP/TLS reachability does not prove authentication,
-  media delivery or every feature of an application. The General base and explicit
+- **Connectivity checks:** a successful body-bearing response requires HTTP 200–399
+  and the first 64 KiB, or the complete smaller body. A known Content-Length that
+  ends before the checked amount is rejected; socket read timeouts and an elapsed
+  body deadline reject stalled/slow delivery. Cancellation of an already blocked
+  read can wait up to its 2.5 s read timeout. Empty responses and redirects are
+  accepted without a mandatory body; redirects are not followed. This prefix
+  check does not prove a complete large download, authentication, API/media
+  delivery or every feature of an application. The General base and explicit
   checking addresses are initial values and require maintenance.
+- **Alternative LinkedIn route:** the Strategies option is off by default and
+  can be changed only while the connection and Auto checks are stopped. It adds
+  a TLS:443 group for `www.linkedin.com` before the original normal strategy arguments;
+  VPN package routing remains limited to selected applications. Its official
+  endpoint `gcp-lb.www.linkedin.com` is resolved to IPv4 on the proxy worker at
+  startup, without a fixed production IP. DNS failure stops startup explicitly;
+  a STOP received during DNS prevents a late JNI start. A diagnostic command
+  worked in the browser and native LinkedIn app on the recorded OnePlus/network,
+  but the APK with the product toggle still requires device verification. Other
+  networks and all LinkedIn features are not certified by that result. Native
+  scope validation must separately cover `--group-pacing=20`, which replaces the
+  profile's global `-Z`/`-W20`, and `--group-redirect`, which avoids enabling the
+  global connection delay of legacy `-C`. Existing user global flags are preserved
+  in the original arguments. Route selection needs the first TLS bytes/SNI before connect
+  on port 443; other ports do not receive that delay. Initial timing on port 443
+  may still change for a hostname that ultimately uses its original destination;
+  unchanged arguments do not prove unchanged timing.
 - **Filtering:** observable supported hostnames can match ByeDPI domain lists;
   IP-only, encrypted-hostname and some UDP traffic may not. Package routing and
   domain filtering have different scopes.
@@ -44,8 +67,10 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   application explicitly; legacy service flags do not populate this selection.
 - **Probe history:** matrices show saved HTTP/TLS results for the tested hosts and
   independently configured checking addresses, not continuous availability.
-  Changing that configuration invalidates measured history. HTTP protection/rate
-  limits can cause false failures.
+  Changing that configuration or the LinkedIn profile invalidates measured
+  history. The body-check policy also invalidates older headers-only evidence;
+  body failures retain their HTTP status and error. HTTP protection/rate limits
+  can cause false failures.
 - **Independent Telegram/DNS:** the standalone Telegram proxy and VPN have
   separate runtime/desired states; all three combinations and failed partial starts
   need physical-device/background verification. VPN DNS does not configure the

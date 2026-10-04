@@ -13,10 +13,20 @@ partial results remain visible for manual selection, with failed URLs reported.
 The onboarding text now directs users to the actual application picker and
 diagnostic reports show the effective native arguments with host contents omitted.
 
-LinkedIn's root domains and their subdomains already match General. Its actual
-network failure remains unproven until the offered USB phone is connected and
-tested. The default DPI recipe, host list and native transport code are unchanged.
-Local verification passed63 JVM tests; six Linux native checks remain CI-only.
+LinkedIn's root domains and their subdomains already match General. On the connected
+Android16 phone, both usual Cloudflare endpoints return HTTP200 but stall after
+13,781 body bytes. LinkedIn's alternative `gcp-lb.www.linkedin.com` endpoint completes
+a certificate-verified response of140,059 bytes and loads the native app and Chrome
+feed; a VPN restart and cold app launch also passed. An optional default-off route
+now resolves this endpoint at startup and applies only to TLS `www.linkedin.com:443`.
+The integrated profile still needs CI and physical-device validation.
+
+HTTP probes now require64KiB of body or the complete smaller response, preventing
+this observed header-only false success. A paced native TLS buffer was also observed
+being transformed twice after an early server response; a bounded patch and native
+regressions are being verified. Telegram state ownership/publication is atomic, and
+internal status broadcasts explicitly target the app package for modern Android.
+Local verification passed84 JVM tests; six Linux native checks remain CI-only.
 The revised CI builds one app/test APK pair and tests it on API29 andAPI36,
 including notification denial onAPI36. Updated CI/runtime results are pending.
 See [investigation notes](docs/ANDROID36_AND_LINKEDIN.md).

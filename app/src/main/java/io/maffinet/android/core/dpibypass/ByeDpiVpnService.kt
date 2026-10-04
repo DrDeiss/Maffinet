@@ -37,6 +37,7 @@ import kotlinx.coroutines.NonCancellable
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicReference
 import java.io.File
 import io.maffinet.android.core.services.ApplicationRouting
 import io.maffinet.android.core.dns.DnsCatalog
@@ -380,13 +381,15 @@ class ByeDpiVpnService : LifecycleVpnService() {
         }
 
         val stopping = AtomicBoolean(false)
+        val startupFailure = AtomicReference<Exception?>(null)
         proxyStopping = stopping
         nativeProxyActive = true
         val worker = Thread({
             try {
-                val code = byeDpiProxy.startProxy(preferences)
+                val code = byeDpiProxy.startProxy(preferences) { !stopping.get() }
                 if (!stopping.get()) Log.e(TAG, "Proxy exited unexpectedly with code $code")
             } catch (e: Exception) {
+                startupFailure.set(e)
                 Log.e(TAG, "Native proxy failed", e)
             } finally {
                 nativeProxyActive = false
@@ -406,7 +409,9 @@ class ByeDpiVpnService : LifecycleVpnService() {
 
         withContext(Dispatchers.IO) {
             repeat(40) {
-                check(worker.isAlive) { "ByeDPI exited before its SOCKS listener became ready" }
+                check(worker.isAlive) {
+                    startupFailure.get()?.message ?: "ByeDPI exited before its SOCKS listener became ready"
+                }
                 try {
                     Socket().use { it.connect(InetSocketAddress(listenerIp, port.toInt()), 100) }
                     return@withContext
@@ -560,6 +565,7 @@ class ByeDpiVpnService : LifecycleVpnService() {
             }
         )
         intent.putExtra(SENDER, Sender.VPN.ordinal)
+        intent.setPackage(packageName)
         sendBroadcast(intent)
     }
 
