@@ -19,8 +19,8 @@ installation alongside NetFix Mobile.
 The app now targets Android 16/API36 while retaining Android 8/API26 as its
 minimum. This fixes the inherited old-target configuration; notification
 permission, quick-settings launch and background recovery are adapted for modern
-Android. Auto strategy selection now requires every configured checking address
-to pass before replacing the active strategy. HTTP success also requires the first
+Android. Manual strategy comparison requires every configured checking address
+to pass before automatically replacing the manual strategy. HTTP success also requires the first
 64KiB of a successful body, or its complete body when smaller. See
 [Android compatibility and LinkedIn investigation](docs/ANDROID36_AND_LINKEDIN.md).
 
@@ -35,7 +35,7 @@ The implementation still needs CI and device validation. See
 ## Interface
 
 Home retains Maffinet's large connection button and exposes Applications,
-installed-app selection, Telegram, DNS, Strategy and Hosts. The main navigation
+installed-app selection, Telegram, DNS, access mode and Hosts. The main navigation
 contains Home, Strategies and Settings; the former Services destination is retired.
 [CI run 37157372931](https://github.com/DrDeiss/Maffinet/actions/runs/37157372931)
 passed the expanded Hosts/Smart DNS implementation: debug/release assembly,
@@ -64,21 +64,22 @@ Telegram proxy.
 
 No accounts, remote VPN servers, backend, telemetry or ML selector are added.
 Connectivity probes establish HTTP/TLS reachability rather than guaranteeing every
-feature of an application. Auto ranks successful configured target coverage before
-latency using deterministic rules.
+feature of an application. Manual diagnostics rank configured target coverage
+before latency; the default automatic mode learns from observed traffic without
+scanning the diagnostic address list.
 
 1. Enable **Applications** and use **Choose applications** on Home to select the
    installed Android apps to route through VPN/ByeDPI. Enable **Telegram** for
    its independent MTProto proxy, with direct access to the existing settings.
-2. Open **Hosts** to inspect the built-in General base, edit and save User domains,
-   or merge/import and export them with Android's document picker. User can be
-   enabled or disabled without discarding its saved domains.
-3. Choose a **DNS** preset or custom IPv4 resolvers for VPN and a **Strategy**, or run the strategy
-   comparison against separately configured HTTP/TLS checking addresses. Results
-   are invalidated when hosts, checking addresses or relevant filters change.
-4. Use the common button on **Home**, granting VPN consent when Applications is
-   enabled. Settings remain locked while engines are requested/running or testing;
-   strategy tests coordinate stopping and restoring an active VPN.
+2. Use the common button on **Home**, granting VPN consent when Applications is
+   enabled. Automatic Access is enabled by default. It tries local DPI strategies
+   and checks public Smart DNS alternatives when an observed HTTPS host fails.
+3. Optionally choose a **DNS** preset or custom IPv4 resolvers. Settings remain
+   locked while engines are requested/running or testing.
+4. For manual operation, open **Strategies** or Advanced. **Hosts** supports
+   General/User inspection, editing, file/URL import and export. Manual comparison
+   uses separately configured HTTP/TLS targets; changing targets or filters
+   invalidates its results. Changing the access mode preserves the manual matrix.
 
 General is a curated base of 130 domains in eight categories plus the enabled User
 extension. App selection and legacy service flags never affect that union.

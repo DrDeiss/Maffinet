@@ -75,7 +75,7 @@ TLS-header insertion observed in the physical-phone log; it does not implement
 ClientHello reassembly or claim that every LinkedIn/network failure has the
 same cause.
 
-Two additional native options isolate the optional LinkedIn route:
+Two additional native options support scoped manual diagnostic commands:
 `--group-pacing=20` enables pacing with a 20 ms timer for the current group only
 (valid interval 1–60000 ms), and `--group-redirect=tcp://IP:443` sets that group's
 destination without enabling global delayed connect. Host/protocol filters on
@@ -138,16 +138,21 @@ and ACKed-but-silent TLS, and cancellation/no replay after application bytes.
 CI run [37198262561](https://github.com/DrDeiss/Maffinet/actions/runs/37198262561),
 commit `7659adf6ea0a40e960d846ca645f4d0165c12960`, passed the first 19 automatic
 cases, 12 streaming cases, four invalid-value checks and seven native-parser JVM
-tests, including the actual production automatic argument chain. The additional
+tests, including the actual production automatic argument chain. CI run
+[37198766246](https://github.com/DrDeiss/Maffinet/actions/runs/37198766246),
+commit `020173eaaa10baffa40a7dba38cae6114837f551`, passed all 21 automatic cases
+and 141 JVM/native-parser tests. The additional
 pooled-buffer case sends an 8 KiB Hello through reused 4 KiB buffers, pacing,
 route lookup and fallback. Automatic collection/replay explicitly checks actual
 buffer capacity and grows it without losing queued content or the allocation on
-ENOMEM. Local clean preparation/Python checks passed; this additional case and
-capacity fix await the next CI snapshot. A further partial-response case forwards
+ENOMEM. A further partial-response case forwards
 the first server TLS bytes in two reads without a false `-As` retry. Automatic
 mode does not classify a first read shorter than the six-byte ServerHello prefix
 as a TLS failure; forwarding that partial response releases the saved Hello and
 prevents later replay of a connection which has already returned peer bytes.
+The runner also builds a separately instrumented production fixture and executes
+the pooled-buffer case with ASan, UBSan and leak detection; this sanitizer check
+awaits the next CI snapshot.
 
 The default inherited NDK is 30.0.14904198 (beta). CI builds ByeDPI with officially
 published stable NDK 29.0.14206865 using `-Pmaffinet.ndkVersion=29.0.14206865`.

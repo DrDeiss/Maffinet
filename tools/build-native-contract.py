@@ -3,6 +3,7 @@ from pathlib import Path
 import platform
 import subprocess
 import importlib.util
+import os
 
 root = Path(__file__).resolve().parents[1]
 source = root / "app/src/main/cpp/byedpi"
@@ -76,3 +77,22 @@ access_cases = ("map", "route", "shared-ip", "probe", "partial", "tls-records", 
 for mode in access_cases:
     subprocess.run([str(access_fixture), mode, "byedpi", *access_arguments], check=True, timeout=15)
 print(f"Production native Automatic Access regressions: {len(access_cases)} map/SOCKS/socket cases passed")
+
+# The pooled-buffer regression specifically covers the corrected allocation
+# boundary. Instrument every production translation unit, including renamed
+# main.c, and leave memory/undefined-behavior/leak failures fatal.
+sanitizer_flags = [*flags, "-g", "-fno-omit-frame-pointer",
+                   "-fsanitize=address,undefined", "-fno-sanitize-recover=all"]
+sanitizer_main = build / "main-sanitized.o"
+subprocess.run(["cc", *sanitizer_flags, "-Dmain=ciadpi_main", "-c", str(source / "main.c"),
+                "-o", str(sanitizer_main)], check=True)
+sanitizer_fixture = build / "native-access-contract-sanitized"
+subprocess.run(["cc", *sanitizer_flags, str(root / "verification/native/native_access_contract.c"),
+                str(sanitizer_main), *(str(path) for path in sources),
+                "-Wl,--wrap=send", "-Wl,--wrap=connect", "-o", str(sanitizer_fixture)], check=True)
+sanitizer_environment = {**os.environ,
+                         "ASAN_OPTIONS": "detect_leaks=1:halt_on_error=1",
+                         "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1"}
+subprocess.run([str(sanitizer_fixture), "pooled-buffer", "byedpi", *access_arguments],
+               check=True, timeout=15, env=sanitizer_environment)
+print("Production pooled-buffer socket regression: ASan + UBSan + leak detection passed")

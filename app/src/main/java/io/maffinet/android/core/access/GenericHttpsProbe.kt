@@ -83,7 +83,9 @@ class GenericHttpsProbe internal constructor(private val tlsFactory: SSLSocketFa
                 it.startHandshake()
                 remainingMs()
                 val authority = if (port == 443) originalHost else "$originalHost:$port"
-                val request = "GET / HTTP/1.1\r\nHost: $authority\r\nAccept: */*\r\n" +
+                // Use the same anonymous browser-style request as the endpoint
+                // diagnostic. Some sites reject a request without any User-Agent.
+                val request = "GET / HTTP/1.1\r\nHost: $authority\r\nUser-Agent: Mozilla/5.0\r\nAccept: */*\r\n" +
                     "Accept-Encoding: identity\r\nConnection: close\r\n\r\n"
                 it.getOutputStream().apply { write(request.toByteArray(StandardCharsets.US_ASCII)); flush() }
                 val bodyInput = object : InputStream() {

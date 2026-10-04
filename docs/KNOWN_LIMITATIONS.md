@@ -64,8 +64,9 @@ See [the recorded scope](DEVICE_VALIDATION.md); physical acceptance remains open
   application explicitly; legacy service flags do not populate this selection.
 - **Probe history:** matrices show saved HTTP/TLS results for the tested hosts and
   independently configured checking addresses, not continuous availability.
-  Changing that configuration or the automatic access policy invalidates measured
-  history. The body-check policy also invalidates older headers-only evidence;
+  Changing manual targets, candidates or relevant filters invalidates measured
+  history; switching Automatic Access on or off preserves that manual evidence.
+  The body-check policy also invalidates older headers-only evidence;
   body failures retain their HTTP status and error. HTTP protection/rate limits
   can cause false failures.
 - **Independent Telegram/DNS:** the standalone Telegram proxy and VPN have
