@@ -141,5 +141,5 @@ tasks.register<Exec>("rebuildHevTunnel") {
 }
 
 base {
-    archivesName.set("Maffinet-0.3.0-alpha")
+    archivesName.set("Maffinet-0.3.1-alpha")
 }

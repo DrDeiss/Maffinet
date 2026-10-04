@@ -3,6 +3,15 @@
 This is an alpha development checkout. PLAN.md records completed phases and
 actual validation. Product intent does not imply successful device tests.
 
+0.3.1 adds DNS configuration/evidence diagnostics. Its direct IPv4 A queries
+use physical-network UDP and TCP on truncation; these do not establish the actual
+resolver used by selected apps, the VPN DNS packet path, or DoH/DoT reachability.
+The example.com control probe is scoped to that host only. Private answers and
+NXDOMAIN are reported without assuming censorship; no pre-TLS DNS recovery is
+implemented yet. Research for DNS interception, ECH/GREASE, QUIC and IPv6 is in
+[NETWORK_RECOVERY_RESEARCH.md](NETWORK_RECOVERY_RESEARCH.md). Physical acceptance
+of the new APK remains pending after another wireless ADB disconnect.
+
 The clarified Applications/Telegram/Hosts model supersedes service profiles.
 [CI run 37153332402](https://github.com/DrDeiss/Maffinet/actions/runs/37153332402)
 passed the updated integrated checks and produced 19 inspected emulator captures.

@@ -1,5 +1,39 @@
 # Maffinet — audit and implementation plan
 
+## DNS configuration follow-up — 0.3.1-alpha sources, 2026-10-04
+
+Implemented separate saved/VPN-assigned/physical/Private DNS snapshots, explicit
+unknown app DoH/DoT, plain UDP/TCP DNS outcomes, bounded control-domain DNS/HTTPS
+checks and Home diagnostics. Network handle, interface addresses, routes and all
+DNS assignments scope evidence; stale UI evidence is hidden even when two networks
+have identical resolver lists. A preference/assignment mismatch requests reconnect
+and never silently changes the saved resolver. See docs/AUTOMATIC_ACCESS.md.
+
+Local standalone verification: 158 cases, 151 passed, zero failures, seven
+Linux-native fixture cases skipped. After explicit upload confirmation, the source
+commit `f596fe954c5fbafea40f270ec3bc4251f6a4847a` was pushed to the authorized
+branch. [CI run 37205002273](https://github.com/DrDeiss/Maffinet/actions/runs/37205002273)
+passed: 158 standalone JVM/native-parser and 156 Android JVM tests; 21 automatic
+native socket cases, 12 stream cases and four invalid-value checks; focused
+ASan/UBSan/leak detection; debug/release/test APK assembly; zero Lint errors,
+140 warnings and five hints. API29 passed 25 instrumentation cases with one
+Android13+ case skipped; API36 passed all 26 and a separate notification-denied
+invocation. Signed APK: `build/apk/Maffinet-0.3.1-alpha-debug.apk`, versionCode4,
+same certificate as previous builds. Hash and scope: docs/build-info-0.3.1-alpha.json.
+The inherited archive filename in CI was still 0.3.0; the manifest and delivered
+filename are 0.3.1. A subsequent packaging-only correction updates archivesName.
+Local snapshot tree in `.toolchain/apk-build.git`: `abe84685372f9377a21e121ffcbcc4abebf84bb1`.
+Main checkout/index and all prior uncommitted changes remain intact.
+
+OnePlus wireless ADB briefly returned: installed version was 0.2.0-alpha,
+Android16 and Private DNS xbox-dns.ru. Set stay_on_while_plugged_in to 0 and
+removed /data/local/tmp/maffinet-ui.xml; forward list was empty. Connection then
+disappeared before APK installation; device remains offline. The old Chrome test
+tab has not been identified/closed and should not be confused with user tabs.
+
+DNS interception before TLS, ECH/GREASE, QUIC and IPv6 recovery remain unimplemented;
+concrete code/protocol research is in docs/NETWORK_RECOVERY_RESEARCH.md.
+
 ## Current requirement — automatic access, 2026-10-04
 
 The user clarified that LinkedIn is a diagnostic example, and the product must

@@ -10,11 +10,19 @@ NOTICE and source provenance remain in the repository in both cases.
 
 ## Status and requirements
 
-Development version: **0.3.0-alpha**. [PLAN.md](PLAN.md) records implementation
+Development version: **0.3.1-alpha**. [PLAN.md](PLAN.md) records implementation
 phases and actual checks; [known limitations](docs/KNOWN_LIMITATIONS.md) documents
 release gates. Android 8.0/API26 and newer; four inherited native ABIs:
 arm64-v8a, armeabi-v7a, x86, x86_64. Application ID `io.maffinet.android` allows
 installation alongside NetFix Mobile.
+
+The 0.3.1 increment separates saved, VPN-assigned, physical-network and active
+Private DNS configuration. Home exposes bounded plain-DNS and hostname-verified
+HTTPS control checks, with explicit unknown app-owned DoH/DoT. Configuration or
+network changes invalidate old evidence even when resolver addresses match.
+These checks do not yet intercept application DNS or recover NXDOMAIN before TLS.
+New build evidence is in [0.3.1 APK metadata](docs/build-info-0.3.1-alpha.json);
+the 0.3.0 validation records below remain the preceding baseline.
 
 The app now targets Android 16/API36 while retaining Android 8/API26 as its
 minimum. This fixes the inherited old-target configuration; notification
