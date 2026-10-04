@@ -280,8 +280,13 @@ class MaffinetUiSmokeTest {
     }
 
     private fun navigate(label: String, destinationText: String) {
+        compose.waitUntil(timeoutMillis = 20_000) {
+            // The navigation entrance starts after the splash; semantics can exist at alpha zero.
+            compose.mainClock.advanceTimeByFrame()
+            compose.onNodeWithContentDescription(label).isDisplayed()
+        }
         compose.onNodeWithContentDescription(label).assertIsDisplayed().performClick()
-        waitForText(destinationText)
+        waitForDisplayedText(destinationText)
         compose.onNodeWithText(destinationText).assertIsDisplayed()
     }
 
