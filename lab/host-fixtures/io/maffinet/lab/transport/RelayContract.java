@@ -80,12 +80,50 @@ public final class RelayContract {
         for (int i = 0; i < 100; i++) {
             LabSocksServer relay = new LabSocksServer(new PhysicalSockets(false), new LabEvents());
             try (Socket blocked = new Socket("127.0.0.1", relay.port())) {
-                blocked.setSoTimeout(2500); long start = System.nanoTime(); relay.close();
+                blocked.setSoTimeout(2500); long start = System.nanoTime();
+                check(relay.stop(), "STOP reaps blocked client worker");
                 try { check(blocked.getInputStream().read() == -1, "STOP closes blocked client"); }
                 catch (SocketException closedBeforeAccept) { /* OS resets a not-yet-accepted connection. */ }
                 check((System.nanoTime() - start) < 2_100_000_000L, "STOP bounded host wait");
-            } finally { relay.close(); }
+            } finally { check(relay.stop(), "Repeated STOP confirms reap"); }
         }
+    }
+    private static void retainedWorker() throws Exception {
+        try (ServerSocket target = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"))) {
+            target.setSoTimeout(300);
+            PhysicalSockets factory = new PhysicalSockets(false, true);
+            LabSocksServer relay = new LabSocksServer(factory, new LabEvents());
+            try (Socket client = connect(relay, 1, new InetSocketAddress("127.0.0.1", target.getLocalPort()))) {
+                check(factory.entered.await(2, TimeUnit.SECONDS), "Worker entered platform preparation");
+                long start = System.nanoTime();
+                check(!relay.stop(), "Unreaped worker must retain STOP ownership");
+                check(System.nanoTime() - start < 1_500_000_000L, "Single bounded STOP deadline");
+                check(client.getInputStream().read() == -1, "Timeout still closes client");
+                Thread.currentThread().interrupt();
+                check(!relay.stop(), "Interrupted STOP cannot certify reap");
+                check(Thread.interrupted(), "Caller interrupt preserved");
+                factory.resume();
+                check(relay.stop(), "Repeated STOP reaps previously retained worker");
+                check(relay.stop(), "Reaped STOP is idempotent");
+                try { target.accept().close(); throw new AssertionError("Late connect after STOP"); }
+                catch (SocketTimeoutException expected) { }
+            } finally { factory.resume(); relay.close(); }
+        }
+    }
+    private static void activeStops() throws Exception {
+        PhysicalSockets factory = new PhysicalSockets(false);
+        LabSocksServer relay = new LabSocksServer(factory, new LabEvents());
+        try (ServerSocket tcpTarget = new ServerSocket(0, 4, InetAddress.getByName("127.0.0.1"));
+             Socket tcpClient = connect(relay, 1, new InetSocketAddress("127.0.0.1", tcpTarget.getLocalPort()));
+             Socket tcpPeer = tcpTarget.accept();
+             Socket udpControl = connect(relay, 3, new InetSocketAddress("127.0.0.1", 1))) {
+            tcpPeer.setSoTimeout(2000);
+            reply(tcpClient); reply(udpControl);
+            check(relay.stop(), "STOP reaps active TCP and UDP associations");
+            check(tcpClient.getInputStream().read() == -1, "TCP client closed");
+            check(tcpPeer.getInputStream().read() == -1, "TCP target closed");
+            check(udpControl.getInputStream().read() == -1, "UDP control closed");
+        } finally { relay.close(); }
     }
     private static void deniedUdp() throws Exception {
         try (DatagramSocket target = new DatagramSocket(new InetSocketAddress("127.0.0.1", 0))) {
@@ -104,6 +142,7 @@ public final class RelayContract {
     }
     public static void main(String[] args) throws Exception {
         tcp("127.0.0.1"); udp("127.0.0.1"); tcp("::1"); udp("::1"); denied(); deniedUdp(); stops();
-        System.out.println("{\"status\":\"passed\",\"tcpFamilies\":2,\"udpFamilies\":2,\"preConnectDenial\":true,\"relayStopCycles\":100,\"androidTun\":\"not-tested\"}");
+        retainedWorker(); activeStops();
+        System.out.println("{\"status\":\"passed\",\"tcpFamilies\":2,\"udpFamilies\":2,\"preConnectDenial\":true,\"relayStopCycles\":100,\"retainedWorkerReaped\":true,\"activeTcpUdpStop\":true,\"androidTun\":\"not-tested\"}");
     }
 }

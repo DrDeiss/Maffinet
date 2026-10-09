@@ -34,8 +34,12 @@ fresh `--output` and the matching property to prepare again.
 `-Pmaffinet.python=<absolute Python executable>` resolves CMake's Python on hosts
 with a broken Store alias. CMake3.22.1/SDK36/NDK29 must already be provisioned
 with appropriate agreements. Four ABI filters are configured; **none built yet**.
-The above build attempt stops while configuring `:app`, before lab task
-resolution, on `SDK location not found`. These module/NDK recipes are uncompiled.
+The initial 4 October build stopped at `SDK location not found`. SDK packages
+were subsequently provisioned with explicit consent for `android-sdk-license`;
+later attempts failed before compilation on NDK configuration and file reads.
+Recheck local SDK paths before using the build recipes above and in
+[NEXT_CHAT.md](../docs/rebuild/NEXT_CHAT.md). These module/NDK recipes remain
+uncompiled; package installation alone does not close the Android build gate.
 
 CMake mirrors the pinned `Android.mk`, `build.mk` and `configs.mk` source/define
 sets with quoted paths, accommodating spaces in this workspace. Stock JNI and
@@ -80,6 +84,12 @@ readiness. STOP during initialization is remembered until the event pipe is
 ready; the bridge disables quit before HEV closes the pipe. A one-second timeout
 returns a failure and retains ownership, refusing restart; it does not claim Idle.
 Failure/restart behavior still requires native runtime and T02 evidence.
+The Java relay also reports whether its listener, workers and sockets were
+reaped. A single one-second wait budget bounds listener/worker waiting. A timed-out
+relay stays owned, the original TUN stays open and restart is refused. Repeated
+STOP can complete the reap later; native STOP is still requested when relay STOP
+times out. Idle requires both owners to finish. Android service/TUN behavior
+still needs device validation.
 Java START admission now captures a cancellation ticket. STOP/revoke invalidate
 all older queued STARTs; cleanup cannot resurrect them, and destroy is terminal.
 An explicit START after STOP may restart after serialized cleanup. Repeated START
@@ -193,7 +203,10 @@ py -3.11 tools/test-transport-lab-tools.py
 
 The first compiles the actual relay Java11 code with host fault seams, exercises
 real TCP/UDP IPv4/IPv6 sockets, pre-connect/pre-send rejection and 100 relay
-close cycles. It proves neither Android binding nor native/TUN lifecycle. The
+close cycles. It also exercises active TCP/UDP STOP, a platform call that
+outlives interruption, timeout ownership, later reap, caller interruption and
+absence of a late target connection. It proves neither Android binding nor
+native/TUN lifecycle. The
 new Java contract tool compiles the actual ticket/validation classes at Java11
 and tests queued START/STOP/restart, revoke/destroy, numeric addresses and HTTP/DNS
 malformed/truncated fixture rejection (55 negative inputs). It does not compile

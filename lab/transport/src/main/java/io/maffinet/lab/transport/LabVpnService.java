@@ -112,14 +112,17 @@ public final class LabVpnService extends VpnService {
     }
     private void stopLab() {
         state("Stopping", "STOP/revoke/cleanup");
-        if (relay != null) { relay.close(); relay = null; }
+        boolean relayStopped = relay == null || relay.stop();
+        if (relayStopped) relay = null;
         int result = transport == null ? 0 : transport.stop();
-        if (result == -20) {
+        if (result != -20) transport = null;
+        if (!relayStopped || result == -20) {
             failedStop = true;
-            state("Failed", "Native STOP timeout; TUN/worker retained, restart refused");
+            state("Failed", "STOP timeout; " + (!relayStopped ? "relay " : "") +
+                    (result == -20 ? "native " : "") + "ownership/TUN retained, restart refused");
             return;
         }
-        failedStop = false; transport = null;
+        failedStop = false;
         if (tun != null) { try { tun.close(); } catch (Exception e) { EVENTS.add("tun-close-error"); } tun = null; }
         state("Idle", "Native reaped, TUN closed; outcome " + result);
         stopForeground(STOP_FOREGROUND_REMOVE);

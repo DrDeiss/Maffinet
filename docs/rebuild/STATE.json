@@ -34,7 +34,7 @@
     "P09": "pending"
   },
   "lastSessionReport": "sessions/P01.md",
-  "lastCheckpointCommit": "56da2f39f8efbfd33686f4b91ceab4c8241739e0",
+  "lastCheckpointCommit": "2dee5a3f40e26ef8fdb6210788f579a8bf4b7560",
   "blockingIssues": [
     {
       "id": "ENV-SDK",
@@ -77,11 +77,11 @@
     "independentApplicationLayer": true,
     "automaticPublication": false
   },
-  "updatedAt": "2026-10-04",
+  "updatedAt": "2026-10-10",
   "completionCommitSubject": "docs(rebuild): complete P00 audit cleanup and implementation plan",
-  "checkpointResolution": "lastCheckpointCommit is the existing initial P01 scaffold; resolve the continuation by checkpointCommitSubject plus the dated sessions/P01.md continuation in git log. completionCommitSubject retains historical P00 subject.",
-  "implementationStatus": "Legacy production app/runtime/binaries unchanged. Opt-in P01 lab START admission and helper fixture/evidence contracts repaired and host-tested; Android service/JNI/native not compiled, no source-built ABI/APK/TUN or production transport adoption claim.",
-  "checkpointCommitSubject": "fix(lab): fence P01 starts and validate helper evidence",
+  "checkpointResolution": "lastCheckpointCommit is the existing 4 October continuation; resolve the 10 October checkpoint by checkpointCommitSubject and sessions/P01.md. GitHub push/main fast-forward explicitly requested by user; verify actual remote refs. Historical 4 October environment blockers need fresh inventory; no new Android compilation performed.",
+  "implementationStatus": "P01 relay STOP ownership/reap changes preserved and host-tested, including timeout/later reap and active TCP/UDP STOP. Android service/JNI/native and actual TUN remain unverified; P01 in_progress. Publication does not close stage exit criteria.",
+  "checkpointCommitSubject": "fix(lab): retain relay ownership until STOP completes",
   "p01Checkpoint": {
     "sourceLock": "../../lab/transport/source-lock.json",
     "sourceLockSha256": "97e0a9d357a8880271aacab6fc166c096f6e23f449326b840d257c7321cd4b75",

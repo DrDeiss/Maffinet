@@ -312,6 +312,40 @@
         "JVM154 passed/7 skipped",
         "Java relay TCP/UDP families/100 close cycles"
       ]
+    },
+    {
+      "date": "2026-10-10",
+      "sourceCheckpoint": "2dee5a3f40e26ef8fdb6210788f579a8bf4b7560",
+      "status": "in_progress",
+      "purpose": "Preserve existing relay STOP changes before user-authorized GitHub push and main fast-forward",
+      "checks": [
+        {
+          "id": "host-relay",
+          "exitCode": 0,
+          "result": "TCP/UDP IPv4/IPv6; pre-connect/send denial; 100 STOP cycles; active TCP/UDP STOP; retained worker timeout, caller interruption, later reap, no late target connect"
+        },
+        {
+          "id": "host-java-contracts",
+          "exitCode": 0,
+          "result": "Actual START admission and helper validation passed; 55 invalid inputs rejected"
+        },
+        {
+          "id": "host-python-tools",
+          "exitCode": 0,
+          "result": "18 tests passed, including optimized-interpreter rejection"
+        },
+        {
+          "id": "rebuild-docs",
+          "exitCode": 0,
+          "result": "JSON/local links/historical archive/checkpoint verified; existing JVM XML are historical, not a new test run"
+        }
+      ],
+      "executionLimitation": "Socket and subprocess checks hung in restricted sandbox; completed successfully with managed escalation. Hung test/fetch processes terminated. No approval rejection.",
+      "androidArtifacts": "not_built_this_session",
+      "realTun": "not_executed",
+      "nativeLifecycle": "not_executed",
+      "transportAdoption": "candidate_only",
+      "sdkInventory": "Not rechecked; 4 October missing-SDK inventory is historical. Existing dirty README records later provisioning. No SDK agreement accepted this session."
     }
   ]
 }

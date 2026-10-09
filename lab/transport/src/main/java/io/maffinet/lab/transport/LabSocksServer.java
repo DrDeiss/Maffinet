@@ -142,16 +142,27 @@ final class LabSocksServer implements AutoCloseable {
             catch (Exception e) { if (!closed) events.add("udp-error", "reason", e.getClass().getSimpleName()); }
         }
     }
-    @Override public void close() {
+    /** STOP is complete only after the listener and all workers have been reaped. */
+    boolean stop() {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(1);
         synchronized (this) {
-            if (closed) return;
-            closed = true;
+            if (!closed) {
+                closed = true;
+                release(listener);
+                for (Closeable socket : sockets) release(socket);
+                workers.shutdownNow();
+            }
         }
-        release(listener);
-        for (Closeable socket : sockets) release(socket);
-        workers.shutdownNow();
-        try { acceptor.join(1000); workers.awaitTermination(1, TimeUnit.SECONDS); }
-        catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        events.add("relay-closed", "workers", workers.getActiveCount(), "sockets", sockets.size());
+        try {
+            long remaining = deadline - System.nanoTime();
+            if (remaining > 0) TimeUnit.NANOSECONDS.timedJoin(acceptor, remaining);
+            remaining = deadline - System.nanoTime();
+            if (remaining > 0) workers.awaitTermination(remaining, TimeUnit.NANOSECONDS);
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        boolean reaped = !acceptor.isAlive() && workers.isTerminated() && sockets.isEmpty();
+        events.add(reaped ? "relay-closed" : "relay-stop-timeout", "workers", workers.getActiveCount(),
+                "sockets", sockets.size(), "listenerAlive", acceptor.isAlive(), "reaped", reaped);
+        return reaped;
     }
+    @Override public void close() { stop(); }
 }

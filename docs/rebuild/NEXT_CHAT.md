@@ -1,5 +1,26 @@
 # Автономное продолжение: P01 остаётся in_progress
 
+## Checkpoint перед отправкой на GitHub: 10 октября 2026 года
+
+По прямому запросу пользователя подготовлена последняя локальная версия для
+отправки в `DrDeiss/Maffinet` и fast-forward `main`. Предыдущий checkpoint —
+`2dee5a3`, новый subject — `fix(lab): retain relay ownership until STOP completes`.
+Сверяй фактические remote refs и status; ниже сохранён handoff от 4 октября.
+P01 по-прежнему `in_progress`, P02 pending; отправка кода не закрывает exit criteria.
+
+Пять ранее незакоммиченных lab files сохранены: relay STOP подтверждает завершение
+listener/workers/sockets в пределах одного общего бюджета ожидания; при timeout
+service удерживает relay/TUN, запрашивает native STOP и запрещает restart.
+Повторный STOP может завершить reap. Host relay TCP/UDP IPv4/IPv6, denial,
+100 STOP cycles, active TCP/UDP STOP, retained worker/later reap/interruption
+прошли повторно. Java admission/helper validation и 18 Python tests также passed.
+Android compilation/device/native lifecycle в этой сессии не выполнялись.
+SDK inventory ниже исторический: lab README отмечает более позднее provisioning;
+перепроверь фактические paths/packages/agreements, не принимай новые соглашения.
+Проверки с сокетами/дочерними процессами прошли вне ограниченного sandbox;
+зависшие sandbox attempts завершены, они не считаются passed.
+
+
 Работай только в `E:\maffinet android`. Прочитай AGENTS.md, START_HERE/STATE/
 ROADMAP, sessions/P01.md целиком (initial scaffold + dated continuation),
 sessions/P00.md (история), NEXT_SESSION_PROMPT, product/ARCHITECTURE/research/
